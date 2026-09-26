@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm'
 import { getDb, type Database } from '../db/client'
-import { ACTIVE_USER_STATUS, sysuser } from '../db/schema'
+import { sysuser } from '../db/schema'
 import { computeFingerprint, verifyLegacyPassword } from '../auth/credentials'
 import { serverEnv } from '../env'
 import type {
@@ -28,7 +28,6 @@ export async function loginOnline(input: LoginInput, db: Database = getDb()): Pr
         password: sysuser.password,
         fullName: sysuser.fullName,
         companyId: sysuser.companyId,
-        userStatus: sysuser.userStatus,
       })
       .from(sysuser)
       .where(eq(sysuser.loginId, input.loginId))
@@ -41,14 +40,6 @@ export async function loginOnline(input: LoginInput, db: Database = getDb()): Pr
         ok: false,
         code: 'INVALID_CREDENTIALS',
         message: 'ID atau password salah.',
-      }
-    }
-
-    if (match.userStatus !== ACTIVE_USER_STATUS) {
-      return {
-        ok: false,
-        code: 'INACTIVE',
-        message: 'User tidak aktif. Hubungi admin.',
       }
     }
 
@@ -75,7 +66,9 @@ export async function loginOnline(input: LoginInput, db: Database = getDb()): Pr
 }
 
 /**
- * BR-19 / FR-1.6: deteksi kredensial yang berubah / hilang / non-aktif.
+ * BR-19 / FR-1.6: deteksi kredensial yang berubah / hilang.
+ * Catatan: status aktif (user_status) sengaja TIDAK dicek lagi (lihat rencana
+ * perubahan "abaikan user_status"); user non-aktif tetap dianggap valid.
  * Berlaku untuk SEMUA user yang ter-cache di device, bukan hanya yang login.
  */
 export async function checkCredentialRevocations(
@@ -90,7 +83,6 @@ export async function checkCredentialRevocations(
       userId: sysuser.userId,
       loginId: sysuser.loginId,
       password: sysuser.password,
-      userStatus: sysuser.userStatus,
     })
     .from(sysuser)
     .where(inArray(sysuser.userId, ids))
@@ -105,10 +97,6 @@ export async function checkCredentialRevocations(
     const row = byId.get(credential.userId)
     if (!row) {
       revoked.push({ userId: credential.userId, reason: 'MISSING' })
-      continue
-    }
-    if (row.userStatus !== ACTIVE_USER_STATUS) {
-      revoked.push({ userId: credential.userId, reason: 'INACTIVE' })
       continue
     }
     const loginChanged = (row.loginId ?? '') !== credential.loginId

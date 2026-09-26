@@ -41,7 +41,7 @@ export const loginResultSchema = z.discriminatedUnion('ok', [
   }),
   z.object({
     ok: z.literal(false),
-    code: z.enum(['INVALID_CREDENTIALS', 'INACTIVE', 'SERVER_ERROR']),
+    code: z.enum(['INVALID_CREDENTIALS', 'SERVER_ERROR']),
     message: z.string(),
   }),
 ])
@@ -64,7 +64,7 @@ export const checkCredentialsResultSchema = z.object({
   revoked: z.array(
     z.object({
       userId: bigintString,
-      reason: z.enum(['CHANGED', 'MISSING', 'INACTIVE']),
+      reason: z.enum(['CHANGED', 'MISSING']),
     }),
   ),
 })

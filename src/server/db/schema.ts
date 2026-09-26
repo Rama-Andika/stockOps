@@ -116,9 +116,5 @@ export const sysuser = mysqlTable('sysuser', {
   loginId: varchar('login_id', { length: 20 }),
   password: varchar('password', { length: 32 }),
   fullName: varchar('full_name', { length: 64 }),
-  userStatus: int('user_status'),
   companyId: bigint('company_id', { mode: 'bigint' }),
 })
-
-/** user_status = 1 berarti user aktif (lihat FR-1.1). */
-export const ACTIVE_USER_STATUS = 1

@@ -65,15 +65,15 @@ describe('auth-service', () => {
       expect(result.code).toBe('INVALID_CREDENTIALS')
     })
 
-    it('menolak user yang tidak aktif walau password benar (FR-1.1)', async () => {
+    it('mengizinkan user non-aktif login karena user_status diabaikan', async () => {
       const result = await loginOnline({
         loginId: CREDENTIALS.INACTIVE.loginId,
         password: CREDENTIALS.INACTIVE.password,
         deviceId: 'device-a',
       })
-      expect(result.ok).toBe(false)
-      if (result.ok) return
-      expect(result.code).toBe('INACTIVE')
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.user.userId).toBe(FIXTURE.user.INACTIVE)
     })
   })
 
@@ -121,7 +121,7 @@ describe('auth-service', () => {
       expect(revoked).toEqual([{ userId: '999999', reason: 'MISSING' }])
     })
 
-    it('mencabut user yang dinonaktifkan (INACTIVE)', async () => {
+    it('TIDAK mencabut user non-aktif (user_status diabaikan)', async () => {
       const revoked = await checkCredentialRevocations([
         {
           userId: FIXTURE.user.INACTIVE,
@@ -129,7 +129,7 @@ describe('auth-service', () => {
           fingerprint: computeFingerprint(CREDENTIALS.INACTIVE.password),
         },
       ])
-      expect(revoked).toEqual([{ userId: FIXTURE.user.INACTIVE, reason: 'INACTIVE' }])
+      expect(revoked).toEqual([])
     })
 
     it('memeriksa SEMUA user ter-cache, bukan hanya satu', async () => {
