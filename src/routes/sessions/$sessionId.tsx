@@ -220,11 +220,18 @@ function SessionDetailPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <input
-                    className={`${inputClass} max-w-[140px]`}
+                    className={`${inputClass} max-w-35`}
                     inputMode="decimal"
+                    aria-label={`Qty ${item?.name ?? line.itemMasterId}`}
                     value={String(line.qty)}
                     disabled={!editable}
-                    onChange={(event) => void localRepo.setLineQty(line.lineId, Number(event.target.value))}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      if (raw.trim() === '') return
+                      const parsed = Number(raw)
+                      if (!Number.isFinite(parsed) || parsed <= 0) return
+                      void localRepo.setLineQty(line.lineId, parsed)
+                    }}
                   />
                   <span className="text-slate-400">
                     → {formatQty(line.qty * line.convQty)}{' '}

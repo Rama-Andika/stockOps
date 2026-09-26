@@ -9,3 +9,6 @@ coverage/
 !.env.example
 .vite/
 .tanstack/
+
+# Rencana implementasi internal (tidak di-commit ke repository)
+/plans/

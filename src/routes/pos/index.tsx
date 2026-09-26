@@ -36,6 +36,7 @@ function PosListPage() {
       <Card title="Daftar PO (CHECKED)">
         <input
           className={inputClass}
+          aria-label="Cari PO"
           placeholder="Cari nomor PO atau vendor…"
           value={term}
           onChange={(event) => setTerm(event.target.value)}

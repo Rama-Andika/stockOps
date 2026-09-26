@@ -41,12 +41,17 @@ function SettingsPage() {
   const sessionCount = useLive(() => localRepo.db.sessions.count(), [], 0)
 
   useEffect(() => {
+    let cancelled = false
     void (async () => {
-      if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
-        const estimate = await navigator.storage.estimate()
+      if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return
+      const estimate = await navigator.storage.estimate()
+      if (!cancelled) {
         setUsage({ usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 })
       }
     })()
+    return () => {
+      cancelled = true
+    }
   }, [counts])
 
   const handleDownload = async () => {

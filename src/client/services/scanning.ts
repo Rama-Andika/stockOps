@@ -32,8 +32,10 @@ export async function resolveScan(
     }
   }
 
-  const purchase = await repo.getPurchase(purchaseId)
-  const purchaseItems = await repo.getPurchaseItems(purchaseId)
+  const [purchase, purchaseItems] = await Promise.all([
+    repo.getPurchase(purchaseId),
+    repo.getPurchaseItems(purchaseId),
+  ])
   const purchaseItem = purchaseItems.find((row) => row.itemMasterId === item.itemMasterId)
   if (!purchaseItem || !purchase) {
     return {
