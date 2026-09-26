@@ -23,7 +23,7 @@ import {
   isOverReceiveMemo,
   parseOverReceiveMemo,
 } from '~/shared/memo'
-import { computeQtyPurchase, resolveConvQty, type VendorItemRow } from '~/shared/uom'
+import { resolveConvQty, type VendorItemRow } from '~/shared/uom'
 import { evaluateSession, type LineEvaluation } from '~/shared/over-receive'
 import { sanitizeReceiveDate } from '~/shared/receive-date'
 import {
@@ -427,7 +427,6 @@ async function processSession(
             itemMasterId: input.itemMasterId,
             uomPurchaseId,
           })
-          const qtyPurchase = computeQtyPurchase(line.sessionQty, conv.convQty)
           const memo = line.overReceive
             ? buildOverReceiveMemo({
                 orderedQty: line.orderedQty,
@@ -444,8 +443,8 @@ async function processSession(
             qty: String(line.sessionQty),
             uomId: stockUomByItem.get(input.itemMasterId) ?? BigInt(0),
             uomPurchaseId: BigInt(uomPurchaseId),
-            qtyPurchase: String(qtyPurchase),
-            convUnit: String(conv.convQty),
+            qtyPurchase: String(conv.convQty),
+            convUnit: '1',
             memo,
             status: RECEIVE_STATUS_DRAFT,
             companyId: BigInt(session.companyId),

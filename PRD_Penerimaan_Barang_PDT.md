@@ -274,7 +274,7 @@ Setiap kebutuhan fungsional diberi ID `FR-<fitur>.<nomor>` dan ditulis dalam ben
 **Kriteria penerimaan:**
 - Setelah barang teridentifikasi, operator memasukkan qty **dalam satuan PO** (purchase UOM) langsung.
 - qty yang tersimpan pada item penerimaan (`qty`) menggunakan **satuan yang sama dengan `pos_purchase_item.uom_id`**.
-- Sistem otomatis menghitung konversi ke satuan stok (`qty_purchase`) menggunakan faktor `conv_qty` dari data vendor-item lokal. Bila data konversi tidak ditemukan, dipakai faktor 1 dan diberi tanda peringatan.
+- Sistem otomatis mengambil faktor konversi `conv_qty` dari data vendor-item lokal dan menyimpannya pada `qty_purchase` (dengan `conv_unit` = 1). Bila data konversi tidak ditemukan, dipakai faktor 1 dan diberi tanda peringatan.
 
 #### FR-4.5 — Daftar item dalam sesi
 **Cerita pengguna:** Sebagai operator gudang, saya ingin melihat daftar barang yang sudah saya scan dalam sesi ini, sehingga saya bisa memastikan tidak ada yang salah.
@@ -457,7 +457,7 @@ Setiap kebutuhan fungsional diberi ID `FR-<fitur>.<nomor>` dan ditulis dalam ben
 | BR-4 | **Satu PO boleh dikerjakan oleh banyak PDT secara bersamaan.** Perbandingan kuantitas dihitung terpusat (agregat) di server saat sinkronisasi. |
 | BR-5 | Over-receive (total diterima > dipesan) **tidak ditolak**, tetapi ditandai dan menunggu persetujuan admin. Saat ini **tanpa toleransi**. |
 | BR-6 | Perbandingan over-receive: `jumlah total qty semua item penerimaan untuk satu item PO ≤ qty dipesan` — keduanya dalam **satuan yang sama (satuan PO)**. |
-| BR-7 | Operator menginput qty **langsung dalam satuan PO**. Konversi ke satuan stok (`qty_purchase`) dihitung otomatis menggunakan `conv_qty` dari `pos_vendor_item`. Bila data konversi tidak ada, dipakai faktor 1. |
+| BR-7 | Operator menginput qty **langsung dalam satuan PO**. Faktor konversi `conv_qty` dari `pos_vendor_item` disimpan sebagai `qty_purchase` (dengan `conv_unit` = 1). Bila data konversi tidak ada, dipakai faktor 1. |
 | BR-8 | `receive_id`, `receive_item_id`, `number`, `counter`, dan `prefix_number` dibuat **di server saat sinkronisasi**. Device memakai ID sementara (UUID) sebelum sinkronisasi. |
 | BR-9 | `invoice_number` dan `do_number` **wajib diisi** di device sebelum sesi difinalisasi. |
 | BR-10 | Login offline maksimal **7 hari** sejak login online terakhir; setelah itu wajib login online. |
@@ -537,9 +537,10 @@ Aplikasi membaca/menulis tabel-tabel yang sudah ada di database admin. Ringkasan
 | `qty` | **Qty diterima dalam satuan PO** (sama dengan `pos_purchase_item.uom_id`). Dipakai untuk perbandingan over-receive. |
 | `uom_id` | Satuan stok terkecil (dari `pos_item_master.uom_stock_id`). |
 | `uom_purchase_id` | Menyimpan `pos_purchase_item.uom_id` — penanda bahwa satuan PO berbeda dari satuan stok terkecil. |
-| `qty_purchase` | Konversi qty ke satuan stok (hasil `conv_qty` dari `pos_vendor_item`), untuk keperluan stok. |
+| `qty_purchase` | Faktor konversi `conv_qty` dari `pos_vendor_item` (bukan hasil kali `qty`). Dipakai untuk pembukuan stok. |
+| `conv_unit` | Selalu `1` (pembilang rasio "1 satuan PO = `conv_qty` satuan stok"). |
 
-> **Penting (semantik UOM):** `qty` dan `qty_purchase` bukan duplikat. `qty` = jumlah dalam satuan PO (dipakai validasi vs pesanan); `qty_purchase` = jumlah dalam satuan stok (dipakai pembukuan stok). Contoh: PO pesan 1 karton (purchase UOM); 1 karton = 12 pcs (stock UOM); maka `qty = 1`, `uom_purchase_id = karton`, `uom_id = pcs`, `qty_purchase = 12`.
+> **Penting (semantik UOM):** `qty` dan `qty_purchase` bukan duplikat. `qty` = jumlah diterima dalam satuan PO (dipakai validasi vs pesanan). `conv_unit` dan `qty_purchase` menyimpan RASIO konversi dari `pos_vendor_item`: `conv_unit = 1` (selalu) dan `qty_purchase = conv_qty` (faktor konversi). Contoh: PO memakai karton (purchase UOM); 1 karton = 12 pcs (stock UOM); maka untuk item tersebut `qty_purchase = 12` dan `conv_unit = 1`, terlepas dari berapa pun `qty` yang diterima.
 
 ### 12.5 `pos_item_master` — Master Barang (dibaca saja)
 
@@ -560,7 +561,7 @@ Dipakai untuk nama vendor pada tampilan PO/penerimaan.
 | Kolom Penting | Keterangan |
 | --- | --- |
 | `vendor_id`, `item_master_id`, `uom_purchase` | Kunci pencocokan konversi. |
-| `conv_qty` | Faktor konversi satuan PO → satuan stok. **Wajib tersedia offline** untuk menghitung `qty_purchase`. |
+| `conv_qty` | Faktor konversi satuan PO → satuan stok. **Wajib tersedia offline** untuk mengisi `qty_purchase` (dan `conv_unit` = 1). |
 
 ### 12.8 `pos_unit` (dibaca saja)
 

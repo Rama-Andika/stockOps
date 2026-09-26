@@ -88,8 +88,9 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
 - **Hanya PO `CHECKED`** yang ditarik & diproses (BR-1, BR-13 tanpa filter lokasi).
 - **PDT hanya membuat `DRAFT`** (BR-2).
 - **Satu sesi = satu `pos_receive`** (BR-3); satu PO boleh banyak sesi/device (BR-4).
-- **qty diinput dalam satuan PO**; `qty_purchase` dihitung dari `conv_qty` vendor-item,
-  default 1 dengan penanda bila konversi tidak ditemukan (BR-7, PRD 12.4).
+- **qty diinput dalam satuan PO**; `qty_purchase` disimpan = `conv_qty` vendor-item dan
+  `conv_unit` = 1 (rasio konversi), default 1 dengan penanda bila konversi tidak ditemukan
+  (BR-7, PRD 12.4).
 - **ID & nomor dibuat server saat sinkronisasi** (BR-8, BR-17):
   `receive_id = (millis + 2^56 × appIdx) × 10 + digitAcak`, **appIdx PDT = 2**
   (admin = 1) sehingga tidak mungkin bertabrakan. Nomor `IN<MMYY><0001>` memakai
@@ -177,7 +178,7 @@ Contoh perilaku yang diuji secara eksplisit:
 - Mengirim ulang sesi yang sama **tidak** menghasilkan dokumen ganda (Skenario C).
 - Dua device menerima 6 dan 5 dari 10 → item ditandai over-receive sebesar 1, dokumen tetap `DRAFT`, muncul di worklist (Skenario B).
 - Bila satu item gagal disimpan, **seluruh** dokumen dibatalkan (FR-5.7).
-- `conv_qty` 12 → `qty_purchase` 6×12 = 72 (BR-7).
+- `conv_qty` 12 → `qty_purchase` = 12 dan `conv_unit` = 1 (BR-7).
 - ID yang dibuat berada di namespace appIdx 2 dan **tidak pernah** masuk rentang appIdx 1 (BR-17).
 
 ---

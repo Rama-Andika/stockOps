@@ -260,6 +260,10 @@ describe('LocalRepository (Dexie)', () => {
       await repo.markSynced(session.sessionId, { receiveId: '1', number: 'IN1', overReceive: false, excessTotal: 0 })
       const progress = await repo.getPurchaseProgress('P1')
       expect(progress.items.get('PI1')?.localPendingQty).toBe(0)
+      // Regresi bug "Diterima": setelah sinkron, qty sesi harus pindah ke snapshot server
+      // (receivedQty seed = 4, ditambah qty sesi 3 => 7), sehingga total tidak turun.
+      expect(progress.items.get('PI1')?.serverReceivedQty).toBe(7)
+      expect(progress.items.get('PI1')?.totalReceivedQty).toBe(7)
     })
   })
 

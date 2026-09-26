@@ -506,6 +506,26 @@ export class LocalRepository {
       lastError: null,
       updatedAt: nowIso(),
     })
+
+    // Perbaikan bug "Diterima": sesi yang baru tersinkron sebelumnya dihitung sebagai
+    // "belum terkirim" (localPending). Setelah status berubah menjadi SYNCED, qty sesi
+    // dikeluarkan dari localPending, tetapi snapshot receivedQty dari server belum diperbarui.
+    // Akibatnya angka "Diterima" turun. Solusi: naikkan receivedQty lokal sebesar qty sesi
+    // yang baru tersinkron. Nilai ini akan ditimpa oleh pull berikutnya (tidak double-count).
+    const lines = await this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
+    if (lines.length > 0) {
+      await this.db.transaction('rw', this.db.purchaseItems, async () => {
+        for (const line of lines) {
+          const purchaseItem = await this.db.purchaseItems.get(line.purchaseItemId)
+          if (!purchaseItem) continue
+          const current = Number(purchaseItem.receivedQty ?? 0)
+          await this.db.purchaseItems.put({
+            ...purchaseItem,
+            receivedQty: String(dec2(current + line.qty)),
+          })
+        }
+      })
+    }
   }
 
   /** FR-5.6: gagal -> tetap di antrian, data tidak dihapus. */

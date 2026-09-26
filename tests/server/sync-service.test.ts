@@ -60,7 +60,8 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(items).toHaveLength(1)
       const item = items[0]!
       expect(Number(item.qty)).toBe(6)
-      expect(Number(item.qty_purchase)).toBe(72) // 6 x conv 12 (BR-7)
+      expect(Number(item.qty_purchase)).toBe(12) // conv_qty (BR-7), bukan qty x conv
+      expect(Number(item.conv_unit)).toBe(1)
       expect(item.uom_purchase_id).toBe(FIXTURE.uom.KARTON)
       expect(item.uom_id).toBe(FIXTURE.uom.PCS)
       expect(item.memo).toBeNull()
@@ -84,7 +85,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(String(headers[0]?.date)).toContain('2025-10-25')
     })
 
-    it('menyimpan qty_purchase = qty x conv_qty dari data vendor-item', async () => {
+    it('menyimpan qty_purchase = conv_qty dan conv_unit = 1 dari data vendor-item', async () => {
       await syncPush(
         pushInput([
           session({
@@ -105,7 +106,8 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
         { now: NOW },
       )
       const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
-      expect(Number(items[0]?.qty_purchase)).toBe(12) // 2 x 6
+      expect(Number(items[0]?.qty_purchase)).toBe(6) // conv_qty, bukan 2 x 6
+      expect(Number(items[0]?.conv_unit)).toBe(1)
     })
   })
 
@@ -433,7 +435,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       )
       const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
       expect(Number(items[0]?.conv_unit)).toBe(1)
-      expect(Number(items[0]?.qty_purchase)).toBe(3)
+      expect(Number(items[0]?.qty_purchase)).toBe(1) // conv_qty default = 1, bukan qty (3)
     })
   })
 
