@@ -148,7 +148,7 @@ src/
     auth/offline-auth.ts  Hash PBKDF2 + verifikasi offline + kedaluwarsa
     sync/                 transport (server functions) + engine (pull/push)
     services/scanning.ts  Scan → item + baris PO + konversi
-    state/app-context.tsx Status aplikasi (login, online, antrian, sinkron)
+    state/store/           Store Zustand (slice auth, sync, app) + provider SSR-safe
     hooks/use-live.ts     Pembungkus useLiveQuery yang aman untuk SPA
     pwa.ts                Registrasi service worker
   components/             UI (keypad-first) + form login

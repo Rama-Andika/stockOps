@@ -1,7 +1,7 @@
 ---
 description: Audits React code for correctness, performance, security, accessibility, and maintainability using React Doctor
 mode: subagent
-model: anthropic/claude-sonnet-4-5#high
+model: opencode-go/kimi-k2.7-code
 permissions:
   - action: edit
     resource: "*"

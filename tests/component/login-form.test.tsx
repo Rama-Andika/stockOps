@@ -1,53 +1,47 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { AppContext, type AppContextValue } from '~/client/state/app-context'
+import { createAppStore } from '~/client/state/store/app-store'
+import { AppStoreProvider } from '~/client/state/store/app-store-provider'
+import type { AppState } from '~/client/state/store/types'
 import { LoginForm } from '~/components/login-form'
 
-function makeContext(overrides: Partial<AppContextValue> = {}): AppContextValue {
-  return {
-    ready: true,
-    user: null,
-    deviceId: 'device-test',
-    online: true,
-    pendingCount: 0,
-    syncing: false,
-    pulling: { running: false, kind: '', fetched: 0, total: 0 },
-    lastPullAt: null,
-    credentials: [],
-    sessionTtlDaysLeft: null,
-    refreshState: async () => {},
-    loginOnline: async () => ({ ok: true, message: 'Login berhasil.' }),
-    loginOffline: async () => ({ ok: true, message: 'Login offline berhasil.' }),
-    logout: async () => {},
-    downloadData: async () => ({ ok: true, message: 'ok' }),
-    syncNow: async () => ({ ok: true, message: 'ok' }),
-    refreshPurchasesNow: async () => ({ ok: true, message: 'ok' }),
-    ...overrides,
-  }
+const baseState = {
+  ready: true,
+  user: null,
+  deviceId: 'device-test',
+  online: true,
+  pendingCount: 0,
+  syncing: false,
+  pullProgress: { running: false, kind: '', fetched: 0, total: 0 },
+  lastPullAt: null,
+  credentials: [],
+  sessionTtlDaysLeft: null,
 }
 
-function renderLogin(context: AppContextValue) {
+function renderLogin(overrides: Partial<AppState> = {}) {
+  const store = createAppStore()
+  store.setState({ ...baseState, ...overrides })
   return render(
-    <AppContext.Provider value={context}>
+    <AppStoreProvider store={store}>
       <LoginForm />
-    </AppContext.Provider>,
+    </AppStoreProvider>,
   )
 }
 
 describe('LoginForm', () => {
   it('default mode online saat perangkat online', () => {
-    renderLogin(makeContext({ online: true }))
+    renderLogin({ online: true })
     expect(screen.getByRole('button', { name: 'Masuk Online' })).toBeInTheDocument()
   })
 
   it('default mode offline saat perangkat offline', () => {
-    renderLogin(makeContext({ online: false }))
+    renderLogin({ online: false })
     expect(screen.getByRole('button', { name: 'Masuk Offline' })).toBeInTheDocument()
   })
 
   it('tombol kirim nonaktif sebelum ID & password diisi', () => {
-    renderLogin(makeContext())
+    renderLogin()
     expect(screen.getByRole('button', { name: 'Masuk Online' })).toBeDisabled()
     fireEvent.change(screen.getByLabelText('ID Pengguna'), { target: { value: 'pdt' } })
     expect(screen.getByRole('button', { name: 'Masuk Online' })).toBeDisabled()
@@ -57,7 +51,7 @@ describe('LoginForm', () => {
 
   it('memanggil loginOnline dengan kredensial yang diisi', async () => {
     const loginOnline = vi.fn(async () => ({ ok: true, message: 'Login berhasil.' }))
-    renderLogin(makeContext({ loginOnline }))
+    renderLogin({ loginOnline })
     fireEvent.change(screen.getByLabelText('ID Pengguna'), { target: { value: ' pdt ' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pdt123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Masuk Online' }))
@@ -67,7 +61,7 @@ describe('LoginForm', () => {
 
   it('berpindah ke mode offline memanggil loginOffline & menampilkan batas 7 hari', async () => {
     const loginOffline = vi.fn(async () => ({ ok: true, message: 'Login offline berhasil.' }))
-    renderLogin(makeContext({ loginOffline }))
+    renderLogin({ loginOffline })
 
     fireEvent.click(screen.getByRole('button', { name: 'Offline' }))
     expect(screen.getByText(/maks\. 7 hari/i)).toBeInTheDocument()
@@ -81,7 +75,7 @@ describe('LoginForm', () => {
 
   it('menampilkan pesan kegagalan login', async () => {
     const loginOnline = vi.fn(async () => ({ ok: false, message: 'ID atau password salah.' }))
-    renderLogin(makeContext({ loginOnline }))
+    renderLogin({ loginOnline })
     fireEvent.change(screen.getByLabelText('ID Pengguna'), { target: { value: 'pdt' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'salah' } })
     fireEvent.click(screen.getByRole('button', { name: 'Masuk Online' }))

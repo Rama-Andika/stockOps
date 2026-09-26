@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { localRepo, useApp } from '~/client/state/app-context'
+import { localRepo } from '~/client/db/local-repo'
+import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { Badge, Button, Card, EmptyState, Loading, Notice, Progress } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
@@ -19,7 +20,8 @@ function toneFor(progress: ProgressStatus): 'neutral' | 'info' | 'success' | 'da
 
 function PosDetailPage() {
   const { purchaseId } = Route.useParams()
-  const { user, deviceId } = useApp()
+  const user = useAppStore((state) => state.user)
+  const deviceId = useAppStore((state) => state.deviceId)
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
 

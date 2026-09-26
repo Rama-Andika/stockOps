@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useApp } from '~/client/state/app-context'
+import { useEffect, useRef, useState } from 'react'
+import { useAppStore } from '~/client/state/store/app-store'
 import { Button, Card, Field, Notice, inputClass } from './ui'
 
 export interface LoginFormProps {
@@ -7,13 +7,20 @@ export interface LoginFormProps {
 }
 
 export function LoginForm({ initialMode }: LoginFormProps) {
-  const { online, loginOnline, loginOffline, ready } = useApp()
+  const online = useAppStore((state) => state.online)
+  const ready = useAppStore((state) => state.ready)
+  const loginOnline = useAppStore((state) => state.loginOnline)
+  const loginOffline = useAppStore((state) => state.loginOffline)
   const [mode, setMode] = useState<'online' | 'offline'>(initialMode ?? (online ? 'online' : 'offline'))
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const idRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    idRef.current?.focus()
+  }, [])
 
   const submit = async () => {
     setBusy(true)
@@ -64,10 +71,10 @@ export function LoginForm({ initialMode }: LoginFormProps) {
 
           <Field label="ID Pengguna">
             <input
+              ref={idRef}
               aria-label="ID Pengguna"
               className={inputClass}
               value={loginId}
-              autoFocus
               autoComplete="username"
               onChange={(event) => setLoginId(event.target.value)}
             />
@@ -81,26 +88,7 @@ export function LoginForm({ initialMode }: LoginFormProps) {
                 : 'Login online memerlukan koneksi ke server & database pusat.'
             }
           >
-            <div className="relative">
-              <input
-                aria-label="Password"
-                className={`${inputClass} pr-12`}
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                autoComplete="current-password"
-                onChange={(event) => setPassword(event.target.value)}
-              />
-              <button
-                type="button"
-                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                aria-pressed={showPassword}
-                title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-                onClick={() => setShowPassword((value) => !value)}
-                className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-400 transition hover:text-slate-100 focus:text-slate-100"
-              >
-                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-              </button>
-            </div>
+            <PasswordField value={password} onChange={setPassword} />
           </Field>
 
           {result ? <Notice tone={result.ok ? 'success' : 'danger'}>{result.message}</Notice> : null}
@@ -111,6 +99,32 @@ export function LoginForm({ initialMode }: LoginFormProps) {
         </form>
       </Card>
     </main>
+  )
+}
+
+function PasswordField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [showPassword, setShowPassword] = useState(false)
+  return (
+    <div className="relative">
+      <input
+        aria-label="Password"
+        className={`${inputClass} pr-12`}
+        type={showPassword ? 'text' : 'password'}
+        value={value}
+        autoComplete="current-password"
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+        aria-pressed={showPassword}
+        title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+        onClick={() => setShowPassword((value) => !value)}
+        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-400 transition hover:text-slate-100 focus:text-slate-100"
+      >
+        {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
+    </div>
   )
 }
 

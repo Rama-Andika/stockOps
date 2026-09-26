@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
-import { useApp } from '~/client/state/app-context'
+import { useAppStore } from '~/client/state/store/app-store'
 import { registerServiceWorker } from '~/client/pwa'
 import { Badge, Button, Loading } from './ui'
 import { SESSION_STATUS_LABEL, SESSION_STATUS } from '~/shared/constants'
@@ -12,7 +12,11 @@ const NAV_ITEMS = [
 ] as const
 
 function TopBar() {
-  const { online, pendingCount, syncing, syncNow, user } = useApp()
+  const online = useAppStore((state) => state.online)
+  const pendingCount = useAppStore((state) => state.pendingCount)
+  const syncing = useAppStore((state) => state.syncing)
+  const sync = useAppStore((state) => state.sync)
+  const user = useAppStore((state) => state.user)
   return (
     <header className="sticky top-0 z-10 border-b border-slate-700 bg-slate-950/95 px-3 py-2 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -29,7 +33,7 @@ function TopBar() {
             variant="secondary"
             className="!px-3 !py-2 text-sm"
             disabled={!online || syncing}
-            onClick={() => void syncNow()}
+            onClick={() => void sync()}
           >
             {syncing ? 'Mengirim…' : 'Sinkron'}
           </Button>
@@ -59,7 +63,8 @@ function BottomNav() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { ready, user } = useApp()
+  const ready = useAppStore((state) => state.ready)
+  const user = useAppStore((state) => state.user)
   const location = useLocation()
   const navigate = useNavigate()
   const isLogin = location.pathname === '/login'

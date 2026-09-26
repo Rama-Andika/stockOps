@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { localRepo, useApp } from '~/client/state/app-context'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { localRepo } from '~/client/db/local-repo'
+import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { addScannedItem } from '~/client/services/scanning'
 import { Badge, Button, Card, EmptyState, Field, Loading, Notice, inputClass } from '~/components/ui'
@@ -29,7 +30,9 @@ function toneFor(status: SessionStatus): 'neutral' | 'info' | 'success' | 'warn'
 
 function SessionDetailPage() {
   const { sessionId } = Route.useParams()
-  const { syncNow, syncing, online } = useApp()
+  const sync = useAppStore((state) => state.sync)
+  const syncing = useAppStore((state) => state.syncing)
+  const online = useAppStore((state) => state.online)
   const navigate = useNavigate()
 
   const session = useLive(() => localRepo.getSession(sessionId), [sessionId], undefined)
@@ -138,7 +141,7 @@ function SessionDetailPage() {
       receiveDate: session.receiveDate || toLocalDateTime(new Date()),
     })
     setNotice({ tone: 'info', text: 'Sesi difinalisasi & masuk antrian sinkronisasi.' })
-    await syncNow()
+    await sync()
   }
 
   const handleCancel = async () => {
@@ -168,36 +171,14 @@ function SessionDetailPage() {
       {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
 
       {editable ? (
-        <Card title="Scan Barang">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
-            <Field label="Barcode / Kode Barang" hint="Scanner PDT mengisi field ini lalu menekan Enter otomatis.">
-              <input
-                ref={scanRef}
-                className={inputClass}
-                value={scan}
-                autoFocus
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void handleAdd()
-                  }
-                }}
-                onChange={(event) => setScan(event.target.value)}
-              />
-            </Field>
-            <Field label="Qty (satuan PO)">
-              <input
-                className={inputClass}
-                inputMode="decimal"
-                value={qty}
-                onChange={(event) => setQty(event.target.value)}
-              />
-            </Field>
-          </div>
-          <Button className="mt-3 w-full" disabled={!scan.trim()} onClick={() => void handleAdd()}>
-            Tambah ke Sesi
-          </Button>
-        </Card>
+        <ScanCard
+          scan={scan}
+          qty={qty}
+          scanRef={scanRef}
+          onScanChange={setScan}
+          onQtyChange={setQty}
+          onAdd={() => void handleAdd()}
+        />
       ) : null}
 
       <Card title={`Item dalam Sesi (${lines.length})`}>
@@ -259,26 +240,13 @@ function SessionDetailPage() {
         </ul>
       </Card>
 
-      <Card title="Dokumen Vendor">
-        <div className="flex flex-col gap-3">
-          <Field label="Nomor Invoice (wajib)">
-            <input
-              className={inputClass}
-              value={invoice}
-              disabled={!editable}
-              onChange={(event) => setInvoice(event.target.value)}
-            />
-          </Field>
-          <Field label="Nomor Surat Jalan / DO (wajib)">
-            <input
-              className={inputClass}
-              value={doNumber}
-              disabled={!editable}
-              onChange={(event) => setDoNumber(event.target.value)}
-            />
-          </Field>
-        </div>
-      </Card>
+      <VendorDocCard
+        invoice={invoice}
+        doNumber={doNumber}
+        editable={editable}
+        onInvoiceChange={setInvoice}
+        onDoNumberChange={setDoNumber}
+      />
 
       {editable ? (
         <div className="flex flex-col gap-2">
@@ -292,7 +260,7 @@ function SessionDetailPage() {
       ) : (
         <div className="flex flex-col gap-2">
           {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
-            <Button className="w-full" disabled={!online || syncing} onClick={() => void syncNow()}>
+            <Button className="w-full" disabled={!online || syncing} onClick={() => void sync()}>
               {syncing ? 'Mengirim…' : 'Sinkronkan Sekarang'}
             </Button>
           ) : null}
@@ -304,5 +272,91 @@ function SessionDetailPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function ScanCard({
+  scan,
+  qty,
+  scanRef,
+  onScanChange,
+  onQtyChange,
+  onAdd,
+}: {
+  scan: string
+  qty: string
+  scanRef: RefObject<HTMLInputElement | null>
+  onScanChange: (value: string) => void
+  onQtyChange: (value: string) => void
+  onAdd: () => void
+}) {
+  return (
+    <Card title="Scan Barang">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
+        <Field label="Barcode / Kode Barang" hint="Scanner PDT mengisi field ini lalu menekan Enter otomatis.">
+          <input
+            ref={scanRef}
+            className={inputClass}
+            value={scan}
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                onAdd()
+              }
+            }}
+            onChange={(event) => onScanChange(event.target.value)}
+          />
+        </Field>
+        <Field label="Qty (satuan PO)">
+          <input
+            className={inputClass}
+            inputMode="decimal"
+            value={qty}
+            onChange={(event) => onQtyChange(event.target.value)}
+          />
+        </Field>
+      </div>
+      <Button className="mt-3 w-full" disabled={!scan.trim()} onClick={onAdd}>
+        Tambah ke Sesi
+      </Button>
+    </Card>
+  )
+}
+
+function VendorDocCard({
+  invoice,
+  doNumber,
+  editable,
+  onInvoiceChange,
+  onDoNumberChange,
+}: {
+  invoice: string
+  doNumber: string
+  editable: boolean
+  onInvoiceChange: (value: string) => void
+  onDoNumberChange: (value: string) => void
+}) {
+  return (
+    <Card title="Dokumen Vendor">
+      <div className="flex flex-col gap-3">
+        <Field label="Nomor Invoice (wajib)">
+          <input
+            className={inputClass}
+            value={invoice}
+            disabled={!editable}
+            onChange={(event) => onInvoiceChange(event.target.value)}
+          />
+        </Field>
+        <Field label="Nomor Surat Jalan / DO (wajib)">
+          <input
+            className={inputClass}
+            value={doNumber}
+            disabled={!editable}
+            onChange={(event) => onDoNumberChange(event.target.value)}
+          />
+        </Field>
+      </div>
+    </Card>
   )
 }

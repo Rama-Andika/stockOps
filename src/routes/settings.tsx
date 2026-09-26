@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-import { localRepo, useApp } from '~/client/state/app-context'
+import { localRepo } from '~/client/db/local-repo'
+import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { Badge, Button, Card, EmptyState, Notice } from '~/components/ui'
 import { formatDateTime } from '~/shared/format'
@@ -23,17 +24,16 @@ function formatBytes(bytes: number | undefined): string {
 }
 
 function SettingsPage() {
-  const {
-    online,
-    downloadData,
-    pulling,
-    lastPullAt,
-    refreshPurchasesNow,
-    logout,
-    credentials,
-    refreshState,
-    deviceId,
-  } = useApp()
+  const online = useAppStore((state) => state.online)
+  const downloadData = useAppStore((state) => state.downloadData)
+  const pullProgress = useAppStore((state) => state.pullProgress)
+  const lastPullAt = useAppStore((state) => state.lastPullAt)
+  const refreshPurchases = useAppStore((state) => state.refreshPurchases)
+  const logout = useAppStore((state) => state.logout)
+  const credentials = useAppStore((state) => state.credentials)
+  const refresh = useAppStore((state) => state.refresh)
+  const deviceId = useAppStore((state) => state.deviceId)
+  const now = new Date()
   const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null)
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null)
 
@@ -60,13 +60,13 @@ function SettingsPage() {
   }
 
   const handleRefreshPo = async () => {
-    const result = await refreshPurchasesNow()
+    const result = await refreshPurchases()
     setMessage({ tone: result.ok ? 'success' : 'danger', text: result.message })
   }
 
   const handleCleanup = async () => {
     const removed = await localRepo.deleteSyncedSessions()
-    await refreshState()
+    await refresh()
     setMessage({ tone: 'info', text: `${removed} sesi tersinkron dibersihkan. Data master dipertahankan.` })
   }
 
@@ -98,13 +98,13 @@ function SettingsPage() {
 
       <Card title="Sinkronisasi Data">
         <div className="flex flex-col gap-2">
-          <Button disabled={!online || pulling.running} onClick={() => void handleDownload()}>
-            {pulling.running ? 'Mengunduh…' : 'Unduh Ulang Data (PO & Master)'}
+          <Button disabled={!online || pullProgress.running} onClick={() => void handleDownload()}>
+            {pullProgress.running ? 'Mengunduh…' : 'Unduh Ulang Data (PO & Master)'}
           </Button>
-          {pulling.running ? (
+          {pullProgress.running ? (
             <p className="text-sm text-slate-400">
-              {pulling.kind}: {pulling.fetched}
-              {pulling.total ? ` / ${pulling.total}` : ''}
+              {pullProgress.kind}: {pullProgress.fetched}
+              {pullProgress.total ? ` / ${pullProgress.total}` : ''}
             </p>
           ) : null}
           <Button variant="secondary" disabled={!online} onClick={() => void handleRefreshPo()}>
@@ -122,8 +122,8 @@ function SettingsPage() {
         ) : (
           <ul className="flex flex-col divide-y divide-slate-800">
             {credentials.map((credential) => {
-              const expired = isCredentialExpired(credential, new Date())
-              const days = remainingDays(credential, new Date())
+              const expired = isCredentialExpired(credential, now)
+              const days = remainingDays(credential, now)
               return (
                 <li key={credential.key} className="flex items-center justify-between gap-3 py-2">
                   <div>

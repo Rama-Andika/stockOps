@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { localRepo, useApp } from '~/client/state/app-context'
+import { localRepo } from '~/client/db/local-repo'
+import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { Badge, Button, Card, EmptyState } from '~/components/ui'
 import { SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
@@ -25,7 +26,9 @@ function toneFor(status: SessionStatus): 'neutral' | 'info' | 'success' | 'warn'
 }
 
 function SessionsPage() {
-  const { syncNow, syncing, online } = useApp()
+  const sync = useAppStore((state) => state.sync)
+  const syncing = useAppStore((state) => state.syncing)
+  const online = useAppStore((state) => state.online)
   const sessions = useLive(() => localRepo.listSessions(), [], [])
   const purchases = useLive(() => localRepo.db.purchases.toArray(), [], [])
   const purchaseMap = new Map(purchases.map((row) => [row.purchaseId, row]))
@@ -35,7 +38,7 @@ function SessionsPage() {
       <Card
         title="Sesi Penerimaan"
         actions={
-          <Button className="!px-3 !py-2 text-sm" disabled={!online || syncing} onClick={() => void syncNow()}>
+          <Button className="!px-3 !py-2 text-sm" disabled={!online || syncing} onClick={() => void sync()}>
             {syncing ? 'Mengirim…' : 'Sinkronkan'}
           </Button>
         }

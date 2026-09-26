@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
-import { localRepo } from '~/client/state/app-context'
+import { localRepo } from '~/client/db/local-repo'
 import { useLive } from '~/client/hooks/use-live'
 import { Badge, Button, Card, EmptyState, Progress, inputClass } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'

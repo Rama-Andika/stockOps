@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { AppProvider } from '~/client/state/app-context'
+import { AppStoreProvider } from '~/client/state/store/app-store-provider'
 import { AppShell } from '~/components/app-shell'
 import appCss from '~/styles/app.css?url'
 
@@ -25,11 +25,11 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <AppProvider>
+      <AppStoreProvider>
         <AppShell>
           <Outlet />
         </AppShell>
-      </AppProvider>
+      </AppStoreProvider>
     </RootDocument>
   )
 }
