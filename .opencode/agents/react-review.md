@@ -42,7 +42,7 @@ memverifikasi, dan melaporkan.
 1. Jalankan pemindaian deterministik pada SELURUH proyek (whole-project):
 
    ```bash
-   npx --yes react-doctor@latest --verbose
+   npx react-doctor@latest --verbose
    ```
 
    Jangan pakai `--scope changed`; ini adalah audit baseline seluruh proyek.
