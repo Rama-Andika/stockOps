@@ -1,0 +1,27 @@
+{
+  "name": "StockOps - Penerimaan Barang",
+  "short_name": "StockOps",
+  "description": "Pencatatan penerimaan barang berbasis Purchase Order (offline-first) untuk perangkat PDT",
+  "lang": "id",
+  "dir": "ltr",
+  "theme_color": "#0f172a",
+  "background_color": "#0b1220",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

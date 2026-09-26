@@ -1,0 +1,57 @@
+{
+  "name": "stock-ops",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "StockOps - Aplikasi Penerimaan Barang berbasis PO (Offline-First) untuk perangkat PDT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite dev --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "start": "node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:server": "vitest run tests/server",
+    "test:client": "vitest run tests/client",
+    "test:coverage": "vitest run --coverage",
+    "db:test:setup": "node scripts/setup-test-db.mjs",
+    "db:test:teardown": "node scripts/teardown-test-db.mjs",
+    "db:seed": "node scripts/seed-demo.mjs",
+    "db:seed:clean": "node scripts/seed-demo.mjs --clean"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.170.39",
+    "@tanstack/react-start": "^1.168.58",
+    "dexie": "^4.4.6",
+    "dexie-react-hooks": "^4.4.0",
+    "drizzle-orm": "^0.45.3",
+    "mysql2": "^3.24.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.2",
+    "dotenv": "^18.0.4",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}
