@@ -54,6 +54,9 @@ export const PROGRESS_LABEL: Record<ProgressStatus, string> = {
 /** Ukuran chunk saat unduh data master (NF-4). */
 export const DEFAULT_PULL_CHUNK_SIZE = 500
 
+/** Batas umur data master (jam) sebelum dianggap kedaluwarsa & diunduh ulang saat login online (FR-2.1). */
+export const MASTER_DATA_STALE_HOURS = 12
+
 /** Batas panjang kolom memo (pos_receive_item.memo = varchar(120)). */
 export const MEMO_MAX_LENGTH = 120
 
