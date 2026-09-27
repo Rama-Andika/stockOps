@@ -1,7 +1,7 @@
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'] as const
 
 function keyClass(wide: boolean): string {
-  return `touch-target select-none rounded-lg border border-slate-600 bg-slate-800 text-xl font-bold text-slate-100 transition active:bg-slate-600 ${
+  return `touch-target touch-none select-none rounded-lg border border-slate-600 bg-slate-800 text-xl font-bold text-slate-100 transition active:bg-slate-600 ${
     wide ? 'col-span-3' : ''
   }`
 }
@@ -40,6 +40,7 @@ export function NumericPad({
             type="button"
             aria-label={key === '⌫' ? 'Hapus digit terakhir' : key}
             className={keyClass(false)}
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => press(key)}
           >
             {key}
@@ -47,7 +48,12 @@ export function NumericPad({
         ))}
       </div>
       {showIncrement ? (
-        <button type="button" className={keyClass(true)} onClick={increment}>
+        <button
+          type="button"
+          className={keyClass(true)}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={increment}
+        >
           +1 (satuan PO)
         </button>
       ) : null}

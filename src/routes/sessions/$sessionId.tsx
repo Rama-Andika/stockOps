@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
@@ -61,16 +61,20 @@ function SessionDetailPage() {
     [sessionId],
     [],
   )
+  const itemIds = useMemo(
+    () => [...new Set(lines.map((line) => line.itemMasterId))].sort(),
+    [lines],
+  )
+  const itemIdsKey = useMemo(() => JSON.stringify(itemIds), [itemIds])
   const items = useLive(
     async () => {
-      const sessionLines = await localRepo.sessionItems(sessionId)
-      const ids = [...new Set(sessionLines.map((line) => line.itemMasterId))]
+      if (itemIds.length === 0) return {}
       const entries = await Promise.all(
-        ids.map(async (id) => [id, await localRepo.getItemMaster(id)] as const),
+        itemIds.map(async (id) => [id, await localRepo.getItemMaster(id)] as const),
       )
       return Object.fromEntries(entries) as Record<string, { name: string; code: string | null } | undefined>
     },
-    [sessionId, lines.length],
+    [itemIdsKey],
     {},
   )
   const units = useLive(() => localRepo.db.units.toArray(), [], [])
@@ -101,7 +105,7 @@ function SessionDetailPage() {
       setInvoice(session.invoiceNumber)
       setDoNumber(session.doNumber)
     }
-  }, [session?.sessionId, session?.invoiceNumber, session?.doNumber, session])
+  }, [session?.invoiceNumber, session?.doNumber])
 
   useEffect(() => {
     setPreferences(loadPreferences())
@@ -115,18 +119,26 @@ function SessionDetailPage() {
 
   const dismissScanFeedback = useCallback(() => setScanFeedback(null), [])
 
+  const totalOver = useMemo(() => {
+    const qtyByPurchaseItem = new Map<string, number>()
+    for (const line of lines) {
+      qtyByPurchaseItem.set(
+        line.purchaseItemId,
+        (qtyByPurchaseItem.get(line.purchaseItemId) ?? 0) + line.qty,
+      )
+    }
+    return lines.filter((line) => {
+      const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
+      if (!purchaseItem) return false
+      const received = Number(purchaseItem.receivedQty ?? 0)
+      const localQty = qtyByPurchaseItem.get(line.purchaseItemId) ?? 0
+      return received + localQty > Number(purchaseItem.qty ?? 0)
+    })
+  }, [lines, purchaseItemMap])
+
   if (!session) return <Loading label="Memuat sesi…" />
 
   const editable = session.status === SESSION_STATUS.RUNNING
-  const totalOver = lines.filter((line) => {
-    const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-    if (!purchaseItem) return false
-    const received = Number(purchaseItem.receivedQty ?? 0)
-    const localQty = lines
-      .filter((other) => other.purchaseItemId === line.purchaseItemId)
-      .reduce((acc, other) => acc + other.qty, 0)
-    return received + localQty > Number(purchaseItem.qty ?? 0)
-  })
   const editingLine = editingLineId
     ? (lines.find((line) => line.lineId === editingLineId) ?? null)
     : null
@@ -380,7 +392,6 @@ function ScanCard({
             ref={scanRef}
             className={inputClass}
             value={scan}
-            autoFocus
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
@@ -402,14 +413,7 @@ function ScanCard({
       </div>
       {qtyInput === 'pad' ? (
         <div className="mt-3">
-          <NumericPad
-            value={qtyTouched ? qty : ''}
-            onChange={(value) => {
-              onQtyChange(value)
-              // Kembalikan fokus ke scanner agar scan berikutnya langsung diterima.
-              window.setTimeout(() => scanRef.current?.focus(), 0)
-            }}
-          />
+          <NumericPad value={qtyTouched ? qty : ''} onChange={onQtyChange} />
         </div>
       ) : null}
       <Button className="mt-3 w-full" disabled={!scan.trim()} onClick={onAdd}>
@@ -476,10 +480,12 @@ function LineEditSheet({
   onClose: () => void
 }) {
   const [draftQty, setDraftQty] = useState(String(line.qty))
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const qtyInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setDraftQty(String(line.qty))
-  }, [line.lineId, line.qty])
+    qtyInputRef.current?.focus()
+  }, [])
 
   const commit = () => {
     const parsed = Number(draftQty)
@@ -500,17 +506,44 @@ function LineEditSheet({
     onQtyChange(next)
   }
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      close()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled])',
+    )
+    if (!focusables || focusables.length === 0) return
+    const list = Array.from(focusables)
+    const first = list[0]
+    const last = list[list.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
+
   return (
-    <div
-      className="fixed inset-0 z-40 flex flex-col justify-end bg-slate-950/60"
-      onClick={close}
-    >
+    <div className="fixed inset-0 z-40 flex flex-col justify-end">
+      <button
+        type="button"
+        aria-label="Tutup editor qty"
+        className="absolute inset-0 bg-slate-950/60"
+        onClick={close}
+      />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${itemName}`}
-        className="rounded-t-2xl border-t border-slate-700 bg-slate-900 p-4 pb-[env(safe-area-inset-bottom)]"
-        onClick={(event) => event.stopPropagation()}
+        className="relative rounded-t-2xl border-t border-slate-700 bg-slate-900 p-4 pb-[env(safe-area-inset-bottom)]"
+        onKeyDown={handleKeyDown}
       >
         <p className="text-lg font-bold text-slate-100">{itemName}</p>
         <p className="text-sm text-slate-400">
@@ -526,6 +559,7 @@ function LineEditSheet({
             −1
           </Button>
           <input
+            ref={qtyInputRef}
             className={`${inputClass} text-center text-xl font-bold tabular-nums`}
             inputMode="decimal"
             aria-label={`Qty ${itemName}`}

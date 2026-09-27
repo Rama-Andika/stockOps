@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useMemo } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
@@ -33,7 +34,10 @@ function SessionsPage() {
   const online = useAppStore((state) => state.online)
   const sessions = useLive(() => localRepo.listSessions(), [], [])
   const purchases = useLive(() => localRepo.db.purchases.toArray(), [], [])
-  const purchaseMap = new Map(purchases.map((row) => [row.purchaseId, row]))
+  const purchaseMap = useMemo(
+    () => new Map(purchases.map((row) => [row.purchaseId, row])),
+    [purchases],
+  )
 
   return (
     <div className="flex flex-col gap-3">
@@ -77,13 +81,13 @@ function SessionsPage() {
               </div>
               <Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>
             </div>
-            <div className="mt-3">
-              <Link to="/sessions/$sessionId" params={{ sessionId: session.sessionId }}>
-                <Button variant="secondary" className="w-full">
-                  Buka Sesi
-                </Button>
-              </Link>
-            </div>
+            <Link
+              to="/sessions/$sessionId"
+              params={{ sessionId: session.sessionId }}
+              className="touch-target mt-3 flex w-full items-center justify-center rounded-lg bg-slate-700 px-5 py-3 font-semibold text-slate-100 transition hover:bg-slate-600"
+            >
+              Buka Sesi
+            </Link>
           </Card>
         )
       })}
