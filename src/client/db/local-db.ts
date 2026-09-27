@@ -82,6 +82,10 @@ export interface LocalCredential {
 export interface LocalSession {
   sessionId: string
   purchaseId: string
+  /** Nomor PO (denormalisasi) agar tetap tampil walau PO sudah dihapus/CLOSED. */
+  purchaseNumber: string | null
+  /** Nama vendor (denormalisasi). */
+  vendorName: string | null
   userId: string
   deviceId: string
   status: SessionStatus

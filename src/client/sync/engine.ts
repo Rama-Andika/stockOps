@@ -95,8 +95,9 @@ export async function refreshPurchases(
   repo: LocalRepository,
   transport: SyncTransport = serverTransport,
   options: { chunkSize?: number; onProgress?: (event: PullProgressEvent) => void } = {},
-): Promise<{ purchases: number; purchaseItems: number }> {
+): Promise<{ purchases: number; purchaseItems: number; removedCount: number; removedNumbers: string[] }> {
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
+  const before = await repo.listPurchases()
   await repo.clearPurchases()
   let purchases = 0
   let purchaseItems = 0
@@ -115,7 +116,16 @@ export async function refreshPurchases(
       offset = result.nextOffset
     }
   }
-  return { purchases, purchaseItems }
+
+  const after = await repo.listPurchases()
+  const afterIds = new Set(after.map((purchase) => purchase.purchaseId))
+  const removed = before.filter((purchase) => !afterIds.has(purchase.purchaseId))
+  return {
+    purchases,
+    purchaseItems,
+    removedCount: removed.length,
+    removedNumbers: removed.map((purchase) => purchase.number ?? purchase.purchaseId),
+  }
 }
 
 /** Mengubah sesi lokal menjadi payload sinkronisasi (FR-5.2, BR-8/BR-12). */

@@ -77,9 +77,9 @@ describe('preferensi perangkat', () => {
     window.localStorage.removeItem('stockops.preferences')
   })
 
-  it('memakai default keypad, bunyi, dan getar', () => {
+  it('memakai default keyboard, bunyi, dan getar', () => {
     window.localStorage.removeItem('stockops.preferences')
-    expect(loadPreferences()).toEqual({ qtyInput: 'pad', feedbackBeep: true, feedbackVibrate: true })
+    expect(loadPreferences()).toEqual({ qtyInput: 'keyboard', feedbackBeep: true, feedbackVibrate: true })
   })
 
   it('menyimpan dan membaca preferensi operator', () => {

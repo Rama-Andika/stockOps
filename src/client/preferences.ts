@@ -12,7 +12,7 @@ export interface Preferences {
 const STORAGE_KEY = 'stockops.preferences'
 
 const DEFAULTS: Preferences = {
-  qtyInput: 'pad',
+  qtyInput: 'keyboard',
   feedbackBeep: true,
   feedbackVibrate: true,
 }
@@ -30,7 +30,7 @@ export function loadPreferences(): Preferences {
 
     const value = parsed as Partial<Preferences>
     return {
-      qtyInput: value.qtyInput === 'keyboard' ? 'keyboard' : 'pad',
+      qtyInput: value.qtyInput === 'pad' ? 'pad' : 'keyboard',
       feedbackBeep: typeof value.feedbackBeep === 'boolean' ? value.feedbackBeep : DEFAULTS.feedbackBeep,
       feedbackVibrate:
         typeof value.feedbackVibrate === 'boolean' ? value.feedbackVibrate : DEFAULTS.feedbackVibrate,

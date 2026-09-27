@@ -7,6 +7,7 @@ import { addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
 import { loadPreferences, type Preferences } from '~/client/preferences'
 import { playFeedback } from '~/client/feedback'
+import { toast } from '~/client/toast'
 import { ConfirmButton } from '~/components/confirm-button'
 import { NumericPad } from '~/components/numeric-pad'
 import { ScanFeedback, type ScanFeedbackData } from '~/components/scan-feedback'
@@ -45,14 +46,6 @@ function SessionDetailPage() {
 
   const session = useLive(() => localRepo.getSession(sessionId), [sessionId], undefined)
   const lines = useLive(() => localRepo.sessionItems(sessionId), [sessionId], [])
-  const purchase = useLive(
-    async () => {
-      const current = await localRepo.getSession(sessionId)
-      return current ? localRepo.getPurchase(current.purchaseId) : undefined
-    },
-    [sessionId],
-    undefined,
-  )
   const purchaseItems = useLive(
     async () => {
       const current = await localRepo.getSession(sessionId)
@@ -88,16 +81,14 @@ function SessionDetailPage() {
   const [scan, setScan] = useState('')
   const [qty, setQty] = useState('1')
   const [qtyTouched, setQtyTouched] = useState(false)
-  const [notice, setNotice] = useState<{ tone: 'success' | 'warn' | 'danger' | 'info'; text: string } | null>(null)
   const [scanFeedback, setScanFeedback] = useState<ScanFeedbackData | null>(null)
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
-  const [preferences, setPreferences] = useState<Preferences>({
-    qtyInput: 'pad',
-    feedbackBeep: true,
-    feedbackVibrate: true,
-  })
+  const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences())
   const [invoice, setInvoice] = useState('')
   const [doNumber, setDoNumber] = useState('')
+  const [confirmingFinalize, setConfirmingFinalize] = useState(false)
+  const [invoiceError, setInvoiceError] = useState(false)
+  const [doNumberError, setDoNumberError] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -108,13 +99,21 @@ function SessionDetailPage() {
   }, [session?.invoiceNumber, session?.doNumber])
 
   useEffect(() => {
-    setPreferences(loadPreferences())
-  }, [])
-
-  useEffect(() => {
     if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
+  }, [session?.status, editingLineId])
+
+  useEffect(() => {
+    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
+    const handler = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('button, input, textarea, select, a, [role="dialog"]')) return
+      scanRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', handler)
+    return () => document.removeEventListener('pointerdown', handler)
   }, [session?.status, editingLineId])
 
   const dismissScanFeedback = useCallback(() => setScanFeedback(null), [])
@@ -183,15 +182,24 @@ function SessionDetailPage() {
     }
   }
 
-  const handleFinalize = async () => {
-    if (!invoice.trim() || !doNumber.trim()) {
-      setNotice({ tone: 'danger', text: 'Nomor invoice dan nomor DO wajib diisi.' })
+  const requestFinalize = () => {
+    const invoiceMissing = !invoice.trim()
+    const doMissing = !doNumber.trim()
+    if (invoiceMissing || doMissing) {
+      setInvoiceError(invoiceMissing)
+      setDoNumberError(doMissing)
+      toast('danger', 'Nomor invoice dan nomor DO wajib diisi.')
       return
     }
     if (lines.length === 0) {
-      setNotice({ tone: 'danger', text: 'Belum ada item yang discan.' })
+      toast('danger', 'Belum ada item yang discan.')
       return
     }
+    setConfirmingFinalize(true)
+  }
+
+  const doFinalize = async () => {
+    setConfirmingFinalize(false)
     await localRepo.updateSessionDraft(session.sessionId, {
       invoiceNumber: invoice.trim(),
       doNumber: doNumber.trim(),
@@ -201,8 +209,20 @@ function SessionDetailPage() {
       doNumber: doNumber.trim(),
       receiveDate: session.receiveDate || toLocalDateTime(new Date()),
     })
-    setNotice({ tone: 'info', text: 'Sesi difinalisasi & masuk antrian sinkronisasi.' })
-    await sync()
+    const result = await sync()
+    if (result.ok) {
+      toast('success', 'Sesi selesai & tersinkron.')
+    } else if (!online) {
+      toast('info', 'Sesi disimpan. Menunggu sinkronisasi (offline).')
+    } else {
+      toast('danger', result.message)
+    }
+  }
+
+  const handleRetrySync = async () => {
+    const result = await sync()
+    if (result.ok) toast('success', result.message)
+    else toast(online ? 'danger' : 'warn', result.message)
   }
 
   const handleCancel = async () => {
@@ -218,7 +238,7 @@ function SessionDetailPage() {
         actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
       >
         <p className="text-slate-300">
-          {purchase?.number ?? session.purchaseId} • {purchase?.vendorName ?? '-'}
+          {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
         </p>
         {session.receiveDate ? (
           <p className="text-sm text-slate-400">Tanggal penerimaan: {session.receiveDate}</p>
@@ -229,8 +249,6 @@ function SessionDetailPage() {
           </p>
         ) : null}
       </Card>
-
-      {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
 
       {editable ? (
         <ScanCard
@@ -277,7 +295,7 @@ function SessionDetailPage() {
                         = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
                       </p>
                       {purchaseItem ? (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm tabular-nums text-slate-300">
                           Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
                         </p>
                       ) : null}
@@ -296,13 +314,21 @@ function SessionDetailPage() {
         invoice={invoice}
         doNumber={doNumber}
         editable={editable}
-        onInvoiceChange={setInvoice}
-        onDoNumberChange={setDoNumber}
+        invoiceError={invoiceError}
+        doNumberError={doNumberError}
+        onInvoiceChange={(value) => {
+          setInvoice(value)
+          setInvoiceError(false)
+        }}
+        onDoNumberChange={(value) => {
+          setDoNumber(value)
+          setDoNumberError(false)
+        }}
       />
 
       {editable ? (
         <div className="flex flex-col gap-2">
-          <Button className="w-full" onClick={() => void handleFinalize()}>
+          <Button className="w-full" onClick={requestFinalize}>
             Selesai / Finalisasi
           </Button>
           <ConfirmButton
@@ -318,7 +344,7 @@ function SessionDetailPage() {
           {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
             <>
               {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
-              <Button className="w-full" disabled={!online || syncing} onClick={() => void sync()}>
+              <Button className="w-full" disabled={syncing} onClick={() => void handleRetrySync()}>
                 {syncing ? 'Mengirim…' : 'Sinkronkan Sekarang'}
               </Button>
             </>
@@ -361,6 +387,16 @@ function SessionDetailPage() {
           onClose={() => setEditingLineId(null)}
         />
       ) : null}
+      {confirmingFinalize ? (
+        <FinalizeDialog
+          purchaseLabel={session.purchaseNumber ?? session.purchaseId}
+          invoice={invoice.trim()}
+          doNumber={doNumber.trim()}
+          itemCount={lines.length}
+          onConfirm={() => void doFinalize()}
+          onCancel={() => setConfirmingFinalize(false)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -401,7 +437,7 @@ function ScanCard({
             onChange={(event) => onScanChange(event.target.value)}
           />
         </Field>
-        <Field label="Qty (satuan PO)">
+        <Field label="Qty">
           <input
             className={inputClass}
             inputMode="decimal"
@@ -427,12 +463,16 @@ function VendorDocCard({
   invoice,
   doNumber,
   editable,
+  invoiceError,
+  doNumberError,
   onInvoiceChange,
   onDoNumberChange,
 }: {
   invoice: string
   doNumber: string
   editable: boolean
+  invoiceError: boolean
+  doNumberError: boolean
   onInvoiceChange: (value: string) => void
   onDoNumberChange: (value: string) => void
 }) {
@@ -441,19 +481,21 @@ function VendorDocCard({
       <div className="flex flex-col gap-3">
         <Field label="Nomor Invoice (wajib)">
           <input
-            className={inputClass}
+            className={`${inputClass} ${invoiceError ? 'border-red-500' : ''}`}
             value={invoice}
             disabled={!editable}
             onChange={(event) => onInvoiceChange(event.target.value)}
           />
+          {invoiceError ? <span className="mt-1 block text-xs text-red-400">Nomor invoice wajib diisi.</span> : null}
         </Field>
         <Field label="Nomor Surat Jalan / DO (wajib)">
           <input
-            className={inputClass}
+            className={`${inputClass} ${doNumberError ? 'border-red-500' : ''}`}
             value={doNumber}
             disabled={!editable}
             onChange={(event) => onDoNumberChange(event.target.value)}
           />
+          {doNumberError ? <span className="mt-1 block text-xs text-red-400">Nomor surat jalan (DO) wajib diisi.</span> : null}
         </Field>
       </div>
     </Card>
@@ -601,6 +643,56 @@ function LineEditSheet({
           />
           <Button variant="ghost" className="w-full" onClick={close}>
             Tutup
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FinalizeDialog({
+  purchaseLabel,
+  invoice,
+  doNumber,
+  itemCount,
+  onConfirm,
+  onCancel,
+}: {
+  purchaseLabel: string
+  invoice: string
+  doNumber: string
+  itemCount: number
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Batal finalisasi"
+        className="absolute inset-0 bg-slate-950/60"
+        onClick={onCancel}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Konfirmasi selesaikan sesi"
+        className="relative w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4"
+      >
+        <p className="text-lg font-bold text-slate-100">Selesaikan sesi?</p>
+        <div className="mt-3 flex flex-col gap-1 text-sm text-slate-300">
+          <p>PO: {purchaseLabel}</p>
+          <p>Invoice: {invoice}</p>
+          <p>DO: {doNumber}</p>
+          <p>Item: {itemCount}</p>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">Setelah diselesaikan, sesi tidak bisa diubah lagi.</p>
+        <div className="mt-4 flex flex-col gap-2">
+          <Button className="w-full" onClick={onConfirm}>
+            Ya, Selesaikan
+          </Button>
+          <Button variant="ghost" className="w-full" onClick={onCancel}>
+            Batal
           </Button>
         </div>
       </div>

@@ -20,71 +20,20 @@ function toneFor(progress: ProgressStatus): 'neutral' | 'info' | 'success' | 'da
 function PosListPage() {
   const [term, setTerm] = useState('')
   const summaries = useLive(() => localRepo.listPurchaseSummaries(), [], [])
-  const runningInfo = useLive(async () => {
-    const sessions = await localRepo.runningSessions()
-    return Promise.all(
-      sessions.map(async (session) => {
-        const [purchase, items] = await Promise.all([
-          localRepo.getPurchase(session.purchaseId),
-          localRepo.sessionItems(session.sessionId),
-        ])
-        return {
-          sessionId: session.sessionId,
-          purchaseId: session.purchaseId,
-          purchaseNumber: purchase?.number ?? session.purchaseId,
-          vendorName: purchase?.vendorName ?? '-',
-          itemCount: items.length,
-          qtyTotal: items.reduce((acc, line) => acc + line.qty, 0),
-        }
-      }),
-    )
-  }, [], [])
 
   const filtered = useMemo(() => {
-    const runningIds = new Set(runningInfo.map((info) => info.purchaseId))
-    const sorted = [...summaries].sort((a, b) => {
-      const aRunning = runningIds.has(a.purchaseId) ? 0 : 1
-      const bRunning = runningIds.has(b.purchaseId) ? 0 : 1
-      if (aRunning !== bRunning) return aRunning - bRunning
-      return (a.number ?? '').localeCompare(b.number ?? '')
-    })
     const needle = term.trim().toLowerCase()
-    if (!needle) return sorted
-    return sorted.filter(
+    const list = [...summaries].sort((a, b) => (a.number ?? '').localeCompare(b.number ?? ''))
+    if (!needle) return list
+    return list.filter(
       (row) =>
         (row.number ?? '').toLowerCase().includes(needle) ||
         row.vendorName.toLowerCase().includes(needle),
     )
-  }, [summaries, term, runningInfo])
+  }, [summaries, term])
 
   return (
     <div className="flex flex-col gap-3">
-      {runningInfo.length > 0 ? (
-        <Card title="Sesi Berjalan">
-          <ul className="flex flex-col divide-y divide-slate-800">
-            {runningInfo.map((info) => (
-              <li key={info.sessionId} className="flex items-center justify-between gap-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-slate-100">
-                    {info.purchaseNumber} • {info.vendorName}
-                  </p>
-                  <p className="text-sm tabular-nums text-slate-400">
-                    {info.itemCount} item • qty {formatQty(info.qtyTotal)}
-                  </p>
-                </div>
-                <Link
-                  to="/sessions/$sessionId"
-                  params={{ sessionId: info.sessionId }}
-                  className="touch-target flex shrink-0 items-center justify-center rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400"
-                >
-                  Lanjutkan
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
-
       <Card title="Daftar PO (CHECKED)">
         <input
           className={inputClass}

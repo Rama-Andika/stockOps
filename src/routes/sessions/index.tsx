@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMemo } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
@@ -33,11 +32,6 @@ function SessionsPage() {
   const syncing = useAppStore((state) => state.syncing)
   const online = useAppStore((state) => state.online)
   const sessions = useLive(() => localRepo.listSessions(), [], [])
-  const purchases = useLive(() => localRepo.db.purchases.toArray(), [], [])
-  const purchaseMap = useMemo(
-    () => new Map(purchases.map((row) => [row.purchaseId, row])),
-    [purchases],
-  )
 
   return (
     <div className="flex flex-col gap-3">
@@ -59,7 +53,6 @@ function SessionsPage() {
       ) : null}
 
       {sessions.map((session) => {
-        const purchase = purchaseMap.get(session.purchaseId)
         return (
           <Card key={session.sessionId}>
             <div className="flex flex-wrap items-start justify-between gap-2">
@@ -68,7 +61,7 @@ function SessionsPage() {
                   {session.number ?? 'ID sementara'}
                 </p>
                 <p className="text-slate-300">
-                  {purchase?.number ?? session.purchaseId} • {purchase?.vendorName ?? '-'}
+                  {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
                 </p>
                 <p className="text-sm text-slate-400">
                   {session.syncedAt

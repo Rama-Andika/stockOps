@@ -345,9 +345,12 @@ export class LocalRepository {
     deviceId: string
     receiveDate?: string
   }): Promise<LocalSession> {
+    const purchase = await this.getPurchase(input.purchaseId)
     const session: LocalSession = {
       sessionId: newUuid(),
       purchaseId: input.purchaseId,
+      purchaseNumber: purchase?.number ?? null,
+      vendorName: purchase?.vendorName ?? null,
       userId: input.userId,
       deviceId: input.deviceId,
       status: SESSION_STATUS.RUNNING,

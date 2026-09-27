@@ -67,7 +67,10 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
 
   sync: async () => {
     if (!isBrowser()) return { ok: false, message: 'Tidak tersedia.' }
-    if (!navigator.onLine) return { ok: false, message: 'Sedang offline. Sinkronisasi dilewati.' }
+    if (!navigator.onLine) {
+      await get().refresh()
+      return { ok: false, message: 'Sedang offline. Sinkronisasi dilewati.' }
+    }
     set({ syncing: true })
     try {
       const outcome = await syncOutbox(localRepo, serverTransport, {
@@ -115,7 +118,13 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
     try {
       const result = await refreshPurchases(localRepo, serverTransport)
       await get().refresh()
-      return { ok: true, message: `${result.purchases} PO diperbarui.` }
+      if (result.removedCount > 0) {
+        return {
+          ok: true,
+          message: `${result.removedCount} PO ditutup (CLOSED) & dihapus dari daftar. ${result.purchases} PO aktif.`,
+        }
+      }
+      return { ok: true, message: `Daftar PO disegarkan. ${result.purchases} PO aktif (CHECKED).` }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : 'Gagal memperbarui PO.' }
     }

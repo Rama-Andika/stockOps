@@ -4,7 +4,8 @@ import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { ConfirmButton } from '~/components/confirm-button'
-import { Badge, Button, Card, EmptyState, Notice } from '~/components/ui'
+import { Badge, Button, Card, EmptyState } from '~/components/ui'
+import { toast } from '~/client/toast'
 import { loadPreferences, savePreferences, type Preferences } from '~/client/preferences'
 import { isCredentialExpired, remainingDays } from '~/client/auth/offline-auth'
 import { formatDateTime } from '~/shared/format'
@@ -36,20 +37,11 @@ function SettingsPage() {
   const refresh = useAppStore((state) => state.refresh)
   const deviceId = useAppStore((state) => state.deviceId)
   const now = new Date()
-  const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null)
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null)
-  const [preferences, setPreferences] = useState<Preferences>({
-    qtyInput: 'pad',
-    feedbackBeep: true,
-    feedbackVibrate: true,
-  })
+  const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences())
 
   const counts = useLive(() => localRepo.masterCounts(), [], {})
   const sessionCount = useLive(() => localRepo.db.sessions.count(), [], 0)
-
-  useEffect(() => {
-    setPreferences(loadPreferences())
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -67,18 +59,18 @@ function SettingsPage() {
 
   const handleDownload = async () => {
     const result = await downloadData()
-    setMessage({ tone: result.ok ? 'success' : 'danger', text: result.message })
+    toast(result.ok ? 'success' : 'danger', result.message)
   }
 
   const handleRefreshPo = async () => {
     const result = await refreshPurchases()
-    setMessage({ tone: result.ok ? 'success' : 'danger', text: result.message })
+    toast(result.ok ? 'success' : 'danger', result.message)
   }
 
   const handleCleanup = async () => {
     const removed = await localRepo.deleteSyncedSessions()
     await refresh()
-    setMessage({ tone: 'info', text: `${removed} sesi tersinkron dibersihkan. Data master dipertahankan.` })
+    toast('info', `${removed} sesi tersinkron dibersihkan. Data master dipertahankan.`)
   }
 
   const updatePreferences = (patch: Partial<Preferences>) => {
@@ -101,7 +93,7 @@ function SettingsPage() {
             </p>
           ) : null}
           <Button variant="secondary" disabled={!online} onClick={() => void handleRefreshPo()}>
-            Segarkan Daftar PO
+            Refresh PO
           </Button>
           <ConfirmButton
             tone="danger"
@@ -160,8 +152,6 @@ function SettingsPage() {
           </div>
         </div>
       </Card>
-
-      {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
 
       <Card title="Akun">
         <Button variant="danger" className="w-full" onClick={() => void logout()}>
