@@ -91,6 +91,12 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
 - **qty diinput dalam satuan PO**; `qty_purchase` disimpan = `conv_qty` vendor-item dan
   `conv_unit` = 1 (rasio konversi), default 1 dengan penanda bila konversi tidak ditemukan
   (BR-7, PRD 12.4).
+- **Finansial dokumen dihitung ulang saat sinkronisasi** (PRD 12.11): `amount`,
+  `discount_amount`, `total_amount` pada `pos_receive_item` dihitung dari data PO (diskon
+  diprorata terhadap qty diterima); `total_amount`, `discount_total`, `total_tax` pada
+  `pos_receive` dihitung ulang (pajak mengikuti `price_include_tax` PO); `type = 1`,
+  `company_id` = NULL, `approval_1..3 = 0`, `pos_receive_item.status` = NULL. Pembulatan
+  2 desimal (round half-up).
 - **ID & nomor dibuat server saat sinkronisasi** (BR-8, BR-17):
   `receive_id = (millis + 2^56 × appIdx) × 10 + digitAcak`, **appIdx PDT = 2**
   (admin = 1) sehingga tidak mungkin bertabrakan. Nomor `IN<MMYY><0001>` memakai
@@ -179,6 +185,7 @@ Contoh perilaku yang diuji secara eksplisit:
 - Dua device menerima 6 dan 5 dari 10 → item ditandai over-receive sebesar 1, dokumen tetap `DRAFT`, muncul di worklist (Skenario B).
 - Bila satu item gagal disimpan, **seluruh** dokumen dibatalkan (FR-5.7).
 - `conv_qty` 12 → `qty_purchase` = 12 dan `conv_unit` = 1 (BR-7).
+- `amount` 100000 & diskon item 39403.99 (dipesan 10) → terima 6 → `total_amount` 576357.61 dan `total_tax` 63399.34 (PRD 12.11).
 - ID yang dibuat berada di namespace appIdx 2 dan **tidak pernah** masuk rentang appIdx 1 (BR-17).
 
 ---

@@ -24,6 +24,8 @@ import {
   parseOverReceiveMemo,
 } from '~/shared/memo'
 import { resolveConvQty, type VendorItemRow } from '~/shared/uom'
+import { computeHeaderFinance, computeLineFinance } from '~/shared/receive-finance'
+import { dec2 } from '~/shared/num'
 import { evaluateSession, type LineEvaluation } from '~/shared/over-receive'
 import { sanitizeReceiveDate } from '~/shared/receive-date'
 import {
@@ -276,6 +278,12 @@ async function processSession(
         vendorId: posPurchase.vendorId,
         locationId: posPurchase.locationId,
         companyId: posPurchase.companyId,
+        includeTax: posPurchase.includeTax,
+        taxPercent: posPurchase.taxPercent,
+        discountPercent: posPurchase.discountPercent,
+        paymentType: posPurchase.paymentType,
+        currencyId: posPurchase.currencyId,
+        priceIncludeTax: posPurchase.priceIncludeTax,
       })
       .from(posPurchase)
       .where(eq(posPurchase.purchaseId, BigInt(session.purchaseId)))
@@ -303,6 +311,8 @@ async function processSession(
         itemMasterId: posPurchaseItem.itemMasterId,
         qty: posPurchaseItem.qty,
         uomId: posPurchaseItem.uomId,
+        amount: posPurchaseItem.amount,
+        discountAmount: posPurchaseItem.discountAmount,
       })
       .from(posPurchaseItem)
       .where(
@@ -361,6 +371,31 @@ async function processSession(
       })),
     )
 
+    // 5b) Finansial dokumen: hitung per baris & total (data diambil dari PO).
+    //     - diskon item diprorata terhadap qty yang diterima
+    //     - pajak mengikuti price_include_tax PO (0 = harga belum termasuk pajak)
+    //     - semua angka dibulatkan 2 desimal (round half-up) lewat dec2()
+    const lineFinancials: ReturnType<typeof computeLineFinance>[] = []
+    let itemsTotalAmount = 0
+    for (let index = 0; index < evaluation.lines.length; index += 1) {
+      const line = evaluation.lines[index]!
+      const purchaseItem = byPurchaseItem.get(line.purchaseItemId)!
+      const finance = computeLineFinance({
+        qtyReceived: line.sessionQty,
+        qtyOrdered: Number(purchaseItem.qty ?? 0),
+        amount: Number(purchaseItem.amount ?? 0),
+        discountAmountOrdered: Number(purchaseItem.discountAmount ?? 0),
+      })
+      lineFinancials.push(finance)
+      itemsTotalAmount = dec2(itemsTotalAmount + finance.totalAmount)
+    }
+    const headerFinance = computeHeaderFinance({
+      itemsTotalAmount,
+      discountPercent: Number(purchase.discountPercent ?? 0),
+      taxPercent: Number(purchase.taxPercent ?? 0),
+      priceIncludeTax: Number(purchase.priceIncludeTax ?? 0),
+    })
+
     // 6) Tanggal penerimaan & prefix nomor dokumen.
     const now = ctx.now()
     const sanitized = sanitizeReceiveDate(session.receiveDate, now)
@@ -399,18 +434,30 @@ async function processSession(
             deviceId: session.deviceId,
             userId: session.userId,
           }),
+          approval1: BigInt(0),
+          approval2: BigInt(0),
+          approval3: BigInt(0),
+          includeTax: purchase.includeTax ?? 0,
+          totalTax: String(headerFinance.totalTax),
+          totalAmount: String(headerFinance.totalAmount),
+          taxPercent: purchase.taxPercent ?? '0',
+          discountPercent: purchase.discountPercent ?? '0',
+          discountTotal: String(headerFinance.discountTotal),
+          paymentType: purchase.paymentType ?? null,
           locationId: BigInt(session.locationId),
           userId: BigInt(session.userId),
           number,
           counter,
           vendorId,
           date: sanitized.value,
+          currencyId: purchase.currencyId ?? null,
           prefixNumber,
           purchaseId: BigInt(session.purchaseId),
           dueDate,
           invoiceNumber: session.invoiceNumber,
           doNumber: session.doNumber,
-          companyId: BigInt(session.companyId),
+          type: 1,
+          priceIncludeTax: purchase.priceIncludeTax ?? 0,
           createdAt: sanitized.value,
         })
 
@@ -421,6 +468,7 @@ async function processSession(
           const line = evaluation.lines[index]!
           const input = session.items[index]!
           const purchaseItem = byPurchaseItem.get(line.purchaseItemId)!
+          const finance = lineFinancials[index]!
           const uomPurchaseId = String(purchaseItem.uomId ?? 0)
           const conv = resolveConvQty(vendorItemRows, {
             vendorId: String(purchase.vendorId ?? 0),
@@ -437,17 +485,41 @@ async function processSession(
 
           await tx.insert(posReceiveItem).values({
             receiveItemId: ctx.itemIdGen.next(),
-            receiveId,
-            purchaseItemId: BigInt(line.purchaseItemId),
             itemMasterId: BigInt(input.itemMasterId),
             qty: String(line.sessionQty),
+            totalAmount: String(finance.totalAmount),
+            amount: String(finance.amount),
+            discountAmount: String(finance.discountAmount),
+            deliveryDate: sanitized.value,
             uomId: stockUomByItem.get(input.itemMasterId) ?? BigInt(0),
+            receiveId,
+            purchaseItemId: BigInt(line.purchaseItemId),
+            expiredDate: toMysqlDate(sanitized.parsed),
+            apCoaId: BigInt(0),
+            type: 0,
+            companyId: BigInt(session.companyId),
+            isBonus: 0,
+            memo,
+            status: null,
+            priceImport: '0.00',
+            transport: '0.00',
+            bea: '0.00',
+            komisi: '0.00',
+            lainLain: '0.00',
+            segment1Id: BigInt(0),
+            convUnit: '1',
+            dis1Percent: '0.00',
+            dis1Val: '0.00',
+            dis2Percent: '0.00',
+            dis2Val: '0.00',
+            dis3Percent: '0.00',
+            dis3Val: '0.00',
+            dis4Percent: '0.00',
+            dis4Val: '0.00',
             uomPurchaseId: BigInt(uomPurchaseId),
             qtyPurchase: String(conv.convQty),
-            convUnit: '1',
-            memo,
-            status: RECEIVE_STATUS_DRAFT,
-            companyId: BigInt(session.companyId),
+            expiredCheckStatus: 0,
+            expiredCheckId: BigInt(0),
           })
 
           resultLines.push(

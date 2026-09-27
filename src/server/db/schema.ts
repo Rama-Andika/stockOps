@@ -31,6 +31,12 @@ export const posPurchase = mysqlTable('pos_purchase', {
   purchDate: datetime('purch_date', { mode: 'string' }),
   totalAmount: decimal('total_amount', { precision: 25, scale: 2 }),
   note: text('note'),
+  includeTax: int('include_tax'),
+  taxPercent: decimal('tax_percent', { precision: 10, scale: 2 }),
+  discountPercent: decimal('discount_percent', { precision: 10, scale: 2 }),
+  paymentType: varchar('payment_type', { length: 20 }),
+  currencyId: bigint('currency_id', { mode: 'bigint' }),
+  priceIncludeTax: int('price_include_tax'),
 })
 
 export const posPurchaseItem = mysqlTable('pos_purchase_item', {
@@ -40,6 +46,8 @@ export const posPurchaseItem = mysqlTable('pos_purchase_item', {
   qty: decimal('qty', { precision: 10, scale: 2 }),
   uomId: bigint('uom_id', { mode: 'bigint' }),
   status: varchar('status', { length: 45 }),
+  amount: decimal('amount', { precision: 25, scale: 2 }),
+  discountAmount: decimal('discount_amount', { precision: 25, scale: 2 }),
 })
 
 export const posReceive = mysqlTable('pos_receive', {
@@ -59,6 +67,19 @@ export const posReceive = mysqlTable('pos_receive', {
   doNumber: varchar('do_number', { length: 45 }),
   companyId: bigint('company_id', { mode: 'bigint' }),
   createdAt: datetime('created_at', { mode: 'string' }),
+  approval1: bigint('approval_1', { mode: 'bigint' }),
+  approval2: bigint('approval_2', { mode: 'bigint' }),
+  approval3: bigint('approval_3', { mode: 'bigint' }),
+  includeTax: int('include_tax'),
+  totalTax: decimal('total_tax', { precision: 25, scale: 2 }),
+  totalAmount: decimal('total_amount', { precision: 25, scale: 2 }),
+  taxPercent: decimal('tax_percent', { precision: 10, scale: 2 }),
+  discountPercent: decimal('discount_percent', { precision: 10, scale: 2 }),
+  discountTotal: decimal('discount_total', { precision: 25, scale: 2 }),
+  paymentType: varchar('payment_type', { length: 20 }),
+  currencyId: bigint('currency_id', { mode: 'bigint' }),
+  priceIncludeTax: int('price_include_tax'),
+  type: int('type'),
 })
 
 export const posReceiveItem = mysqlTable('pos_receive_item', {
@@ -74,6 +95,30 @@ export const posReceiveItem = mysqlTable('pos_receive_item', {
   uomPurchaseId: bigint('uom_purchase_id', { mode: 'bigint' }),
   qtyPurchase: decimal('qty_purchase', { precision: 22, scale: 2 }),
   companyId: bigint('company_id', { mode: 'bigint' }),
+  totalAmount: decimal('total_amount', { precision: 25, scale: 2 }),
+  amount: decimal('amount', { precision: 25, scale: 2 }),
+  discountAmount: decimal('discount_amount', { precision: 25, scale: 2 }),
+  deliveryDate: datetime('delivery_date', { mode: 'string' }),
+  expiredDate: date('expired_date', { mode: 'string' }),
+  apCoaId: bigint('ap_coa_id', { mode: 'bigint' }),
+  type: int('type'),
+  isBonus: int('is_bonus'),
+  priceImport: decimal('price_import', { precision: 25, scale: 2 }),
+  transport: decimal('transport', { precision: 25, scale: 2 }),
+  bea: decimal('bea', { precision: 25, scale: 2 }),
+  komisi: decimal('komisi', { precision: 25, scale: 2 }),
+  lainLain: decimal('lain_lain', { precision: 25, scale: 2 }),
+  segment1Id: bigint('segment1_id', { mode: 'bigint' }),
+  dis1Percent: decimal('dis_1_percent', { precision: 10, scale: 2 }),
+  dis1Val: decimal('dis_1_val', { precision: 25, scale: 2 }),
+  dis2Percent: decimal('dis_2_percent', { precision: 10, scale: 2 }),
+  dis2Val: decimal('dis_2_val', { precision: 25, scale: 2 }),
+  dis3Percent: decimal('dis_3_percent', { precision: 10, scale: 2 }),
+  dis3Val: decimal('dis_3_val', { precision: 25, scale: 2 }),
+  dis4Percent: decimal('dis_4_percent', { precision: 10, scale: 2 }),
+  dis4Val: decimal('dis_4_val', { precision: 25, scale: 2 }),
+  expiredCheckStatus: int('expired_check_status'),
+  expiredCheckId: bigint('expired_check_id', { mode: 'bigint' }),
 })
 
 export const posItemMaster = mysqlTable('pos_item_master', {

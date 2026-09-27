@@ -525,6 +525,11 @@ Aplikasi membaca/menulis tabel-tabel yang sudah ada di database admin. Ringkasan
 | `vendor_id`, `location_id`, `user_id` | Mengikuti PO / user yang login. |
 | `invoice_number`, `do_number` | **Wajib**, diinput manual di device. |
 | `date`, `due_date` | Tanggal penerimaan & jatuh tempo. |
+| `approval_1`, `approval_2`, `approval_3` | Selalu `0` (belum ada persetujuan; tanpa alter database). |
+| `include_tax`, `tax_percent`, `payment_type`, `currency_id`, `price_include_tax`, `discount_percent` | Disalin dari PO (`pos_purchase`). |
+| `total_amount`, `discount_total`, `total_tax` | Dihitung ulang saat sinkronisasi dari item penerimaan — lihat **12.11 Rumus Finansial**. |
+| `type` | Selalu `1`. |
+| `company_id` | **NULL** (sengaja tidak ditulis). |
 
 ### 12.4 `pos_receive_item` — Item Penerimaan (ditulis saat sinkronisasi)
 
@@ -539,6 +544,10 @@ Aplikasi membaca/menulis tabel-tabel yang sudah ada di database admin. Ringkasan
 | `uom_purchase_id` | Menyimpan `pos_purchase_item.uom_id` — penanda bahwa satuan PO berbeda dari satuan stok terkecil. |
 | `qty_purchase` | Faktor konversi `conv_qty` dari `pos_vendor_item` (bukan hasil kali `qty`). Dipakai untuk pembukuan stok. |
 | `conv_unit` | Selalu `1` (pembilang rasio "1 satuan PO = `conv_qty` satuan stok"). |
+| `amount`, `total_amount`, `discount_amount` | Dihitung ulang: harga satuan PO, subtotal, dan diskon diprorata — lihat **12.11**. |
+| `delivery_date`, `expired_date` | Tanggal penerimaan (datetime) dan tanggalnya (date). |
+| `status` | **NULL** (sengaja tidak ditulis). |
+| `is_bonus`, `price_import`, `transport`, `bea`, `komisi`, `lain_lain`, `dis_1..4_*`, `ap_coa_id`, `type`, `segment1_id`, `expired_check_*` | Diisi `0` / `0.00`. |
 
 > **Penting (semantik UOM):** `qty` dan `qty_purchase` bukan duplikat. `qty` = jumlah diterima dalam satuan PO (dipakai validasi vs pesanan). `conv_unit` dan `qty_purchase` menyimpan RASIO konversi dari `pos_vendor_item`: `conv_unit = 1` (selalu) dan `qty_purchase = conv_qty` (faktor konversi). Contoh: PO memakai karton (purchase UOM); 1 karton = 12 pcs (stock UOM); maka untuk item tersebut `qty_purchase = 12` dan `conv_unit = 1`, terlepas dari berapa pun `qty` yang diterima.
 
@@ -582,6 +591,28 @@ Kamus satuan (`uom_id` → nama satuan).
 | Sesi penerimaan | Dokumen `DRAFT` lokal dengan **UUID sementara**, belum punya `receive_id`/`number` resmi. |
 | Outbox | Antrian sesi yang menunggu dikirim ke server + status pengiriman. |
 | Kredensial offline | Per (device, user): hash password dengan salt lokal + fingerprint password (untuk deteksi perubahan, lihat BR-19) + waktu kedaluwarsa (7 hari). |
+
+### 12.11 Rumus Finansial Dokumen Penerimaan
+
+Dihitung **di server saat sinkronisasi** dari data PO (`pos_purchase` & `pos_purchase_item`).
+Semua hasil dibulatkan **2 desimal (round half-up)**.
+
+**Per baris item (`pos_receive_item`):**
+
+- `amount` = `pos_purchase_item.amount` (harga satuan dalam satuan PO).
+- `discount_amount` = `pos_purchase_item.discount_amount × qty_diterima ÷ qty_dipesan` (diskon diprorata).
+- `total_amount` = `qty_diterima × amount − discount_amount`.
+
+**Header dokumen (`pos_receive`):**
+
+- `total_amount` = jumlah seluruh `total_amount` item.
+- `discount_total` = `total_amount × discount_percent ÷ 100` (`discount_percent` disalin dari PO).
+- `total_tax`:
+  - `price_include_tax = 0` → `(total_amount − discount_total) × tax_percent ÷ 100`
+  - `price_include_tax = 1` → `(total_amount − discount_total) × tax_percent ÷ (100 + tax_percent)`
+
+> Diskon berjenjang `dis_1..dis_4` pada item PO **tidak direplikasi**; yang dipakai hanya hasil
+> akhir `discount_amount` PO yang kemudian diprorata terhadap qty diterima.
 
 ---
 

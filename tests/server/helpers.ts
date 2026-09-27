@@ -39,6 +39,7 @@ export const FIXTURE = {
     PI_OTHER: '720593553977261001',
   },
   location: { L1: '5044048676177565078', L2: '6660031' },
+  currency: { IDR: '504404384818397770' },
 } as const
 
 export const CREDENTIALS = {
@@ -59,7 +60,7 @@ export async function resetDatabase(): Promise<void> {
 
 export async function seedBase(): Promise<void> {
   const db = getDb()
-  const { uom, vendor, item, user, purchase, location } = FIXTURE
+  const { uom, vendor, item, user, purchase, location, currency } = FIXTURE
 
   await db.execute(sql`
     INSERT INTO pos_unit (uom_id, unit) VALUES
@@ -98,21 +99,23 @@ export async function seedBase(): Promise<void> {
 
   await db.execute(sql`
     INSERT INTO pos_purchase
-      (purchase_id, number, status, vendor_id, location_id, user_id, company_id, purch_date, total_amount)
+      (purchase_id, number, status, vendor_id, location_id, user_id, company_id, purch_date, total_amount,
+       include_tax, tax_percent, discount_percent, payment_type, currency_id, price_include_tax)
     VALUES
-      (${purchase.CHECKED}, 'PO10250001', 'CHECKED', ${vendor.V1}, ${location.L1}, ${user.ACTIVE}, 0, '2025-10-25 00:00:00', 100000),
-      (${purchase.DRAFT}, 'PO10250002', 'DRAFT', ${vendor.V1}, ${location.L1}, ${user.ACTIVE}, 0, '2025-10-25 00:00:00', 50000),
-      (${purchase.CHECKED_OTHER_LOC}, 'PO10250003', 'CHECKED', ${vendor.V1}, ${location.L2}, ${user.ACTIVE}, 0, '2025-10-25 00:00:00', 70000)
+      (${purchase.CHECKED}, 'PO10250001', 'CHECKED', ${vendor.V1}, ${location.L1}, ${user.ACTIVE}, 0, '2025-10-25 00:00:00', 100000, 1, 11.00, 0.00, 'Cash', ${currency.IDR}, 0),
+      (${purchase.DRAFT}, 'PO10250002', 'DRAFT', ${vendor.V1}, ${location.L1}, ${user.ACTIVE}, 0, '2025-10-25 00:00:00', 50000, 1, 11.00, 0.00, 'Cash', ${currency.IDR}, 0),
+      (${purchase.CHECKED_OTHER_LOC}, 'PO10250003', 'CHECKED', ${vendor.V1}, ${location.L2}, ${user.ACTIVE}, 0, '2025-10-25 00:00:00', 70000, 1, 11.00, 0.00, 'Cash', ${currency.IDR}, 0)
   `)
 
   const { purchaseItem } = FIXTURE
   await db.execute(sql`
-    INSERT INTO pos_purchase_item (purchase_item_id, purchase_id, item_master_id, qty, uom_id, status) VALUES
-      (${purchaseItem.PI1}, ${purchase.CHECKED}, ${item.I1}, 10, ${uom.KARTON}, 'OPEN'),
-      (${purchaseItem.PI2}, ${purchase.CHECKED}, ${item.I2}, 5, ${uom.PACK}, 'OPEN'),
-      (${purchaseItem.PI3}, ${purchase.CHECKED}, ${item.I3_INACTIVE}, 3, ${uom.PCS}, 'OPEN'),
-      (${purchaseItem.PI_DRAFT}, ${purchase.DRAFT}, ${item.I1}, 1, ${uom.KARTON}, 'OPEN'),
-      (${purchaseItem.PI_OTHER}, ${purchase.CHECKED_OTHER_LOC}, ${item.I1}, 7, ${uom.KARTON}, 'OPEN')
+    INSERT INTO pos_purchase_item
+      (purchase_item_id, purchase_id, item_master_id, qty, uom_id, status, amount, discount_amount) VALUES
+      (${purchaseItem.PI1}, ${purchase.CHECKED}, ${item.I1}, 10, ${uom.KARTON}, 'OPEN', 100000.00, 39403.99),
+      (${purchaseItem.PI2}, ${purchase.CHECKED}, ${item.I2}, 5, ${uom.PACK}, 'OPEN', 100000.00, 0.00),
+      (${purchaseItem.PI3}, ${purchase.CHECKED}, ${item.I3_INACTIVE}, 3, ${uom.PCS}, 'OPEN', 100000.00, 0.00),
+      (${purchaseItem.PI_DRAFT}, ${purchase.DRAFT}, ${item.I1}, 1, ${uom.KARTON}, 'OPEN', 100000.00, 0.00),
+      (${purchaseItem.PI_OTHER}, ${purchase.CHECKED_OTHER_LOC}, ${item.I1}, 7, ${uom.KARTON}, 'OPEN', 100000.00, 0.00)
   `)
 }
 

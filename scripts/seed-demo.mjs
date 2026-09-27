@@ -32,6 +32,7 @@ const DEMO = {
   },
   loginId: 'pdt',
   password: 'pdt123',
+  currencyId: '504404384818397770',
 }
 
 const config = {
@@ -103,16 +104,18 @@ async function seed(connection) {
 
   await connection.query(
     `INSERT INTO pos_purchase
-       (purchase_id, number, status, vendor_id, location_id, user_id, company_id, purch_date, total_amount)
-     VALUES (?, ?, 'CHECKED', ?, ?, ?, 0, NOW(), 1000000)
+       (purchase_id, number, status, vendor_id, location_id, user_id, company_id, purch_date, total_amount,
+        include_tax, tax_percent, discount_percent, payment_type, currency_id, price_include_tax)
+     VALUES (?, ?, 'CHECKED', ?, ?, ?, 0, NOW(), 1000000, 1, 11.00, 0.00, 'Cash', ?, 0)
      ON DUPLICATE KEY UPDATE status = 'CHECKED', vendor_id = VALUES(vendor_id)`,
-    [DEMO.purchaseId, DEMO.purchaseNumber, DEMO.vendorId, DEMO.locationId, DEMO.userId],
+    [DEMO.purchaseId, DEMO.purchaseNumber, DEMO.vendorId, DEMO.locationId, DEMO.userId, DEMO.currencyId],
   )
 
   await connection.query(
-    `INSERT INTO pos_purchase_item (purchase_item_id, purchase_id, item_master_id, qty, uom_id, status)
-     VALUES (?, ?, ?, 10, ?, 'OPEN'), (?, ?, ?, 5, ?, 'OPEN')
-     ON DUPLICATE KEY UPDATE qty = VALUES(qty), uom_id = VALUES(uom_id)`,
+    `INSERT INTO pos_purchase_item
+       (purchase_item_id, purchase_id, item_master_id, qty, uom_id, status, amount, discount_amount)
+     VALUES (?, ?, ?, 10, ?, 'OPEN', 100000.00, 0.00), (?, ?, ?, 5, ?, 'OPEN', 100000.00, 0.00)
+     ON DUPLICATE KEY UPDATE qty = VALUES(qty), uom_id = VALUES(uom_id), amount = VALUES(amount)`,
     [
       DEMO.purchaseItemIds[0], DEMO.purchaseId, DEMO.itemIds[0], units.KARTON,
       DEMO.purchaseItemIds[1], DEMO.purchaseId, DEMO.itemIds[1], units.PACK,

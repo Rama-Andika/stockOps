@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { sql } from 'drizzle-orm'
-import { closeDb } from '~/server/db/client'
+import { closeDb, getDb } from '~/server/db/client'
 import { syncPush, overReceiveWorklist } from '~/server/services/sync-service'
 import { pullChunk } from '~/server/services/pull-service'
 import { computeFingerprint } from '~/server/auth/credentials'
@@ -54,6 +54,20 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(header.purchase_id).toBe(FIXTURE.purchase.CHECKED)
       expect(header.invoice_number).toBe('INV-001')
       expect(header.do_number).toBe('DO-001')
+      expect(Number(header.approval_1)).toBe(0)
+      expect(Number(header.approval_2)).toBe(0)
+      expect(Number(header.approval_3)).toBe(0)
+      expect(Number(header.include_tax)).toBe(1)
+      expect(Number(header.tax_percent)).toBe(11)
+      expect(Number(header.discount_percent)).toBe(0)
+      expect(Number(header.discount_total)).toBe(0)
+      expect(Number(header.total_amount)).toBe(576357.61)
+      expect(Number(header.total_tax)).toBe(63399.34)
+      expect(header.payment_type).toBe('Cash')
+      expect(header.currency_id).toBe(FIXTURE.currency.IDR)
+      expect(Number(header.price_include_tax)).toBe(0)
+      expect(Number(header.type)).toBe(1)
+      expect(header.company_id).toBeNull()
       expect(String(header.note)).toContain('PDT|SESS=11111111-2222-4333-8444-555555555555')
 
       const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
@@ -65,6 +79,28 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(item.uom_purchase_id).toBe(FIXTURE.uom.KARTON)
       expect(item.uom_id).toBe(FIXTURE.uom.PCS)
       expect(item.memo).toBeNull()
+      expect(Number(item.amount)).toBe(100000)
+      expect(Number(item.discount_amount)).toBe(23642.39)
+      expect(Number(item.total_amount)).toBe(576357.61)
+      expect(String(item.delivery_date)).toContain('2025-10-25')
+      expect(String(item.expired_date)).toBe('2025-10-25')
+      expect(Number(item.ap_coa_id)).toBe(0)
+      expect(Number(item.type)).toBe(0)
+      expect(Number(item.company_id)).toBe(0)
+      expect(Number(item.is_bonus)).toBe(0)
+      expect(Number(item.price_import)).toBe(0)
+      expect(Number(item.transport)).toBe(0)
+      expect(Number(item.bea)).toBe(0)
+      expect(Number(item.komisi)).toBe(0)
+      expect(Number(item.lain_lain)).toBe(0)
+      expect(Number(item.segment1_id)).toBe(0)
+      expect(Number(item.dis_1_percent)).toBe(0)
+      expect(Number(item.dis_1_val)).toBe(0)
+      expect(Number(item.dis_4_percent)).toBe(0)
+      expect(Number(item.dis_4_val)).toBe(0)
+      expect(Number(item.expired_check_status)).toBe(0)
+      expect(Number(item.expired_check_id)).toBe(0)
+      expect(item.status).toBeNull()
     })
 
     it('membuat receiveId di namespace appIdx PDT (BR-17) dan mengangkutnya sebagai string (BR-12)', async () => {
@@ -108,6 +144,49 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
       expect(Number(items[0]?.qty_purchase)).toBe(6) // conv_qty, bukan 2 x 6
       expect(Number(items[0]?.conv_unit)).toBe(1)
+    })
+  })
+
+  describe('finansial dokumen (pos_receive & pos_receive_item)', () => {
+    it('menghitung total_amount, discount_total, dan total_tax (price_include_tax = 1)', async () => {
+      await getDb().execute(sql`
+        UPDATE pos_purchase SET tax_percent = 25.00, price_include_tax = 1, discount_percent = 10.00
+        WHERE purchase_id = ${FIXTURE.purchase.CHECKED}
+      `)
+      await getDb().execute(sql`
+        UPDATE pos_purchase_item SET amount = 1000.00, discount_amount = 0.00
+        WHERE purchase_item_id = ${FIXTURE.purchaseItem.PI1}
+      `)
+      await syncPush(
+        pushInput([
+          session({
+            items: [
+              {
+                clientLineId: 'l1',
+                purchaseItemId: FIXTURE.purchaseItem.PI1,
+                itemMasterId: FIXTURE.item.I1,
+                qty: 5,
+                uomPurchaseId: FIXTURE.uom.KARTON,
+                uomId: FIXTURE.uom.PCS,
+                convQty: 12,
+                convFound: true,
+              },
+            ],
+          }),
+        ]),
+        { now: NOW },
+      )
+
+      const headers = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive`)
+      const header = headers[0]!
+      expect(Number(header.total_amount)).toBe(5000)
+      expect(Number(header.discount_total)).toBe(500)
+      expect(Number(header.total_tax)).toBe(900)
+
+      const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
+      expect(Number(items[0]?.amount)).toBe(1000)
+      expect(Number(items[0]?.discount_amount)).toBe(0)
+      expect(Number(items[0]?.total_amount)).toBe(5000)
     })
   })
 
