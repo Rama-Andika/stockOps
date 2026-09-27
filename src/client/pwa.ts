@@ -7,9 +7,9 @@
 export function registerServiceWorker(): void {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
 
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch(() => {
-      // PWA opsional: aplikasi tetap berfungsi tanpa service worker.
-    })
+  // Daftarkan segera (tanpa menunggu event `load`) agar SW pasti terdaftar
+  // walau event `load` sudah terpicu sebelum komponen sempat me-mount.
+  void navigator.serviceWorker.register('/sw.js').catch(() => {
+    // PWA opsional: aplikasi tetap berfungsi tanpa service worker.
   })
 }

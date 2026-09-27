@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
@@ -28,7 +28,7 @@ function PosDetailPage() {
 
   const detail = useLive(() => localRepo.getPurchaseDetail(purchaseId), [purchaseId], undefined)
   const unitRows = useLive(() => localRepo.db.units.toArray(), [], [])
-  const unitMap = new Map(unitRows.map((row) => [row.uomId, row.unit]))
+  const unitMap = useMemo(() => new Map(unitRows.map((row) => [row.uomId, row.unit])), [unitRows])
 
   if (!detail) return <Loading label="Memuat detail PO…" />
   if (!detail.purchase) {
@@ -40,7 +40,13 @@ function PosDetailPage() {
   }
 
   const allItemsFull =
-    detail.items.length > 0 && detail.items.every((row) => row.totalReceivedQty >= row.orderedQty)
+    detail.items.length > 0 &&
+    detail.items.every(
+      (row) =>
+        Number.isFinite(row.totalReceivedQty) &&
+        Number.isFinite(row.orderedQty) &&
+        row.totalReceivedQty >= row.orderedQty,
+    )
 
   const startReception = async () => {
     if (!user) return

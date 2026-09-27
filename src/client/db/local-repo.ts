@@ -501,15 +501,16 @@ export class LocalRepository {
   /** Reset sesi yang nyangkut di status SYNCING (mis. aplikasi tertutup di tengah sinkronisasi). */
   async resetStaleSyncingSessions(): Promise<number> {
     const syncing = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCING).toArray()
-    for (const session of syncing) {
-      await this.db.sessions.put({
+    if (syncing.length === 0) return 0
+    await this.db.sessions.bulkPut(
+      syncing.map((session) => ({
         ...session,
         status: SESSION_STATUS.FAILED,
         lastError: 'Sinkronisasi terputus. Coba lagi.',
         failureCode: null,
         updatedAt: nowIso(),
-      })
-    }
+      })),
+    )
     return syncing.length
   }
 

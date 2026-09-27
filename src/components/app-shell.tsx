@@ -5,7 +5,6 @@ import { registerServiceWorker } from "~/client/pwa";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Inbox, Settings, Upload } from "lucide-react";
-import { SESSION_STATUS_LABEL, SESSION_STATUS } from "~/shared/constants";
 
 const NAV_LINK_CLASS =
   "touch-target relative flex flex-1 items-center justify-center rounded-lg px-3 py-2 text-center font-semibold";
@@ -155,9 +154,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto w-full max-w-3xl">{children ?? <Outlet />}</div>
       </main>
       <BottomNav />
-      <span className="sr-only">
-        {SESSION_STATUS_LABEL[SESSION_STATUS.RUNNING]}
-      </span>
     </div>
   );
 }

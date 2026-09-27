@@ -3,11 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useAppStore } from '~/client/state/store/app-store'
 import { Button, Card, Field, Notice, inputClass } from './ui'
 
-export interface LoginFormProps {
-  initialMode?: 'online' | 'offline'
-}
-
-export function LoginForm(_props: LoginFormProps = {}) {
+export function LoginForm() {
   const online = useAppStore((state) => state.online)
   const ready = useAppStore((state) => state.ready)
   const loginOnline = useAppStore((state) => state.loginOnline)
@@ -125,7 +121,7 @@ function PasswordField({ value, onChange }: { value: string; onChange: (value: s
         onClick={() => setShowPassword((value) => !value)}
         className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-400 transition hover:text-slate-100 focus:text-slate-100"
       >
-        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
       </button>
     </div>
   )

@@ -49,10 +49,9 @@ function SessionDetailPage() {
   const lines = useLive(() => localRepo.sessionItems(sessionId), [sessionId], [])
   const purchaseItems = useLive(
     async () => {
-      const current = await localRepo.getSession(sessionId)
-      return current ? localRepo.getPurchaseItems(current.purchaseId) : []
+      return session ? localRepo.getPurchaseItems(session.purchaseId) : []
     },
-    [sessionId],
+    [session?.purchaseId],
     [],
   )
   const itemIds = useMemo(
