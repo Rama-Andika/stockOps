@@ -61,16 +61,14 @@ function PosDetailPage() {
         <p className="text-sm text-slate-400">Tanggal PO: {formatDate(detail.purchase.purchDate)}</p>
         <div className="mt-3 flex items-center gap-3">
           <Badge tone={toneFor(detail.progress.progress)}>{PROGRESS_LABEL[detail.progress.progress]}</Badge>
-          <span className="text-sm text-slate-300">
+          <span className="text-sm tabular-nums text-slate-300">
             {formatQty(detail.progress.totalReceivedTotal)} / {formatQty(detail.progress.orderedTotal)}
           </span>
         </div>
         <div className="mt-2">
           <Progress value={detail.progress.totalReceivedTotal} max={detail.progress.orderedTotal} />
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          Angka sisa bersifat perkiraan lokal; angka resmi dihitung server saat sinkronisasi.
-        </p>
+        <p className="mt-2 text-xs text-slate-500">Angka sisa bersifat perkiraan lokal.</p>
       </Card>
 
       <Card title="Item PO">
@@ -86,7 +84,7 @@ function PosDetailPage() {
                 </div>
                 <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
               </div>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm tabular-nums text-slate-300">
                 Dipesan {formatQty(row.orderedQty)} • Diterima {formatQty(row.totalReceivedQty)}
                 {row.localPendingQty > 0 ? ` (termasuk ${formatQty(row.localPendingQty)} belum terkirim)` : ''}
               </p>
@@ -100,9 +98,7 @@ function PosDetailPage() {
         {busy ? 'Menyiapkan…' : 'Mulai Penerimaan'}
       </Button>
 
-      <Notice tone="info">
-        Satu sesi = satu dokumen penerimaan. Sesi bisa dijeda dan dilanjutkan kapan saja.
-      </Notice>
+      <Notice tone="info">Sesi bisa dijeda dan dilanjutkan kapan saja.</Notice>
     </div>
   )
 }

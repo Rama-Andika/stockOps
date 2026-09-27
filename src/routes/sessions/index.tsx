@@ -45,10 +45,7 @@ function SessionsPage() {
           </Button>
         }
       >
-        <p className="text-sm text-slate-400">
-          Status tiap sesi: Berjalan, Menunggu Sinkronisasi, Sedang Dikirim, Tersinkron, Gagal,
-          atau Ditolak.
-        </p>
+        <p className="text-sm text-slate-400">Pantau status dan tindakan sesi pada daftar.</p>
       </Card>
 
       {sessions.length === 0 ? (

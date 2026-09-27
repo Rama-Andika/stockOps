@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
+import { ConfirmButton } from '~/components/confirm-button'
 import { Badge, Button, Card, EmptyState, Notice } from '~/components/ui'
-import { formatDateTime } from '~/shared/format'
+import { loadPreferences, savePreferences, type Preferences } from '~/client/preferences'
 import { isCredentialExpired, remainingDays } from '~/client/auth/offline-auth'
+import { formatDateTime } from '~/shared/format'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -36,9 +38,18 @@ function SettingsPage() {
   const now = new Date()
   const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null)
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null)
+  const [preferences, setPreferences] = useState<Preferences>({
+    qtyInput: 'pad',
+    feedbackBeep: true,
+    feedbackVibrate: true,
+  })
 
   const counts = useLive(() => localRepo.masterCounts(), [], {})
   const sessionCount = useLive(() => localRepo.db.sessions.count(), [], 0)
+
+  useEffect(() => {
+    setPreferences(loadPreferences())
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -70,32 +81,14 @@ function SettingsPage() {
     setMessage({ tone: 'info', text: `${removed} sesi tersinkron dibersihkan. Data master dipertahankan.` })
   }
 
+  const updatePreferences = (patch: Partial<Preferences>) => {
+    const next = { ...preferences, ...patch }
+    setPreferences(next)
+    savePreferences(next)
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <Card title="Data Lokal">
-        <dl className="grid grid-cols-2 gap-2 text-sm text-slate-300">
-          <dt>PO</dt>
-          <dd>{counts.purchases ?? 0}</dd>
-          <dt>Item PO</dt>
-          <dd>{counts.purchaseItems ?? 0}</dd>
-          <dt>Master barang</dt>
-          <dd>{counts.items ?? 0}</dd>
-          <dt>Satuan</dt>
-          <dd>{counts.units ?? 0}</dd>
-          <dt>Vendor</dt>
-          <dd>{counts.vendors ?? 0}</dd>
-          <dt>Vendor item</dt>
-          <dd>{counts.vendorItems ?? 0}</dd>
-          <dt>Sesi tersimpan</dt>
-          <dd>{sessionCount}</dd>
-          <dt>Pemakaian penyimpanan</dt>
-          <dd>{formatBytes(usage?.usage)}</dd>
-        </dl>
-        <p className="mt-2 text-xs text-slate-500">Unduh terakhir: {formatDateTime(lastPullAt)}</p>
-      </Card>
-
-      {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
-
       <Card title="Sinkronisasi Data">
         <div className="flex flex-col gap-2">
           <Button disabled={!online || pullProgress.running} onClick={() => void handleDownload()}>
@@ -110,46 +103,130 @@ function SettingsPage() {
           <Button variant="secondary" disabled={!online} onClick={() => void handleRefreshPo()}>
             Segarkan Daftar PO
           </Button>
-          <Button variant="secondary" onClick={() => void handleCleanup()}>
-            Bersihkan Sesi Tersinkron
-          </Button>
+          <ConfirmButton
+            tone="danger"
+            className="w-full"
+            label="Tahan 1,5 dtk: Bersihkan Sesi Tersinkron"
+            confirmLabel="Tahan… data akan dibersihkan"
+            onConfirm={() => void handleCleanup()}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Unduh terakhir: {formatDateTime(lastPullAt)}</p>
+      </Card>
+
+      <Card title="Preferensi Input & Umpan Balik">
+        <div className="flex flex-col gap-4">
+          <div>
+            <p className="mb-1 text-sm font-semibold text-slate-300">Metode input qty</p>
+            <div className="flex gap-2">
+              <Button
+                variant={preferences.qtyInput === 'pad' ? 'primary' : 'secondary'}
+                className="flex-1"
+                aria-pressed={preferences.qtyInput === 'pad'}
+                onClick={() => updatePreferences({ qtyInput: 'pad' })}
+              >
+                Keypad di layar
+              </Button>
+              <Button
+                variant={preferences.qtyInput === 'keyboard' ? 'primary' : 'secondary'}
+                className="flex-1"
+                aria-pressed={preferences.qtyInput === 'keyboard'}
+                onClick={() => updatePreferences({ qtyInput: 'keyboard' })}
+              >
+                Keyboard fisik
+              </Button>
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-sm font-semibold text-slate-300">Umpan balik scan</p>
+            <div className="flex gap-2">
+              <Button
+                variant={preferences.feedbackBeep ? 'primary' : 'secondary'}
+                className="flex-1"
+                aria-pressed={preferences.feedbackBeep}
+                onClick={() => updatePreferences({ feedbackBeep: !preferences.feedbackBeep })}
+              >
+                Bunyi: {preferences.feedbackBeep ? 'Aktif' : 'Mati'}
+              </Button>
+              <Button
+                variant={preferences.feedbackVibrate ? 'primary' : 'secondary'}
+                className="flex-1"
+                aria-pressed={preferences.feedbackVibrate}
+                onClick={() => updatePreferences({ feedbackVibrate: !preferences.feedbackVibrate })}
+              >
+                Getar: {preferences.feedbackVibrate ? 'Aktif' : 'Mati'}
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
 
-      <Card title="Kredensial Offline (per perangkat)">
-        {credentials.length === 0 ? (
-          <EmptyState>Belum ada kredensial tersimpan.</EmptyState>
-        ) : (
-          <ul className="flex flex-col divide-y divide-slate-800">
-            {credentials.map((credential) => {
-              const expired = isCredentialExpired(credential, now)
-              const days = remainingDays(credential, now)
-              return (
-                <li key={credential.key} className="flex items-center justify-between gap-3 py-2">
-                  <div>
-                    <p className="font-semibold text-slate-100">{credential.fullName}</p>
-                    <p className="text-sm text-slate-400">{credential.loginId}</p>
-                  </div>
-                  <Badge tone={expired ? 'danger' : days <= 2 ? 'warn' : 'success'}>
-                    {expired ? 'Kedaluwarsa' : `${days} hari`}
-                  </Badge>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <p className="mt-2 text-xs text-slate-500">
-          Password tidak disimpan sebagai teks biasa — hanya hash bersalt. Perubahan kredensial di pusat akan dicabut
-          pada sinkronisasi berikutnya.
-        </p>
-      </Card>
+      {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
 
-      <Card title="Perangkat & Sesi">
-        <p className="text-sm text-slate-400">Device ID: {deviceId ?? '-'}</p>
-        <Button variant="danger" className="mt-3 w-full" onClick={() => void logout()}>
+      <Card title="Akun">
+        <Button variant="danger" className="w-full" onClick={() => void logout()}>
           Logout
         </Button>
       </Card>
+
+      <details className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+        <summary className="cursor-pointer text-base font-bold text-slate-100">
+          Info & Diagnostik (untuk tim IT)
+        </summary>
+        <div className="mt-3 flex flex-col gap-4">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-300">Data lokal</p>
+            <dl className="grid grid-cols-2 gap-2 text-sm text-slate-300">
+              <dt>PO</dt>
+              <dd>{counts.purchases ?? 0}</dd>
+              <dt>Item PO</dt>
+              <dd>{counts.purchaseItems ?? 0}</dd>
+              <dt>Master barang</dt>
+              <dd>{counts.items ?? 0}</dd>
+              <dt>Satuan</dt>
+              <dd>{counts.units ?? 0}</dd>
+              <dt>Vendor</dt>
+              <dd>{counts.vendors ?? 0}</dd>
+              <dt>Vendor item</dt>
+              <dd>{counts.vendorItems ?? 0}</dd>
+              <dt>Sesi tersimpan</dt>
+              <dd>{sessionCount}</dd>
+              <dt>Pemakaian penyimpanan</dt>
+              <dd>{formatBytes(usage?.usage)}</dd>
+            </dl>
+            <p className="mt-1 break-all text-xs text-slate-500">Device ID: {deviceId ?? '-'}</p>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-300">Kredensial offline (per perangkat)</p>
+            {credentials.length === 0 ? (
+              <EmptyState>Belum ada kredensial tersimpan.</EmptyState>
+            ) : (
+              <ul className="flex flex-col divide-y divide-slate-800">
+                {credentials.map((credential) => {
+                  const expired = isCredentialExpired(credential, now)
+                  const days = remainingDays(credential, now)
+                  return (
+                    <li key={credential.key} className="flex items-center justify-between gap-3 py-2">
+                      <div>
+                        <p className="font-semibold text-slate-100">{credential.fullName}</p>
+                        <p className="text-sm text-slate-400">{credential.loginId}</p>
+                      </div>
+                      <Badge tone={expired ? 'danger' : days <= 2 ? 'warn' : 'success'}>
+                        {expired ? 'Kedaluwarsa' : `${days} hari`}
+                      </Badge>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              Password tidak disimpan sebagai teks biasa — hanya hash bersalt. Perubahan kredensial di pusat akan dicabut
+              pada sinkronisasi berikutnya.
+            </p>
+          </div>
+        </div>
+      </details>
     </div>
   )
 }

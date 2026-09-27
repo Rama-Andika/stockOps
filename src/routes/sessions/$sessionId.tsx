@@ -1,9 +1,15 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { addScannedItem } from '~/client/services/scanning'
+import type { LocalSessionItem } from '~/client/db/local-db'
+import { loadPreferences, type Preferences } from '~/client/preferences'
+import { playFeedback } from '~/client/feedback'
+import { ConfirmButton } from '~/components/confirm-button'
+import { NumericPad } from '~/components/numeric-pad'
+import { ScanFeedback, type ScanFeedbackData } from '~/components/scan-feedback'
 import { Badge, Button, Card, EmptyState, Field, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
@@ -77,7 +83,15 @@ function SessionDetailPage() {
 
   const [scan, setScan] = useState('')
   const [qty, setQty] = useState('1')
+  const [qtyTouched, setQtyTouched] = useState(false)
   const [notice, setNotice] = useState<{ tone: 'success' | 'warn' | 'danger' | 'info'; text: string } | null>(null)
+  const [scanFeedback, setScanFeedback] = useState<ScanFeedbackData | null>(null)
+  const [editingLineId, setEditingLineId] = useState<string | null>(null)
+  const [preferences, setPreferences] = useState<Preferences>({
+    qtyInput: 'pad',
+    feedbackBeep: true,
+    feedbackVibrate: true,
+  })
   const [invoice, setInvoice] = useState('')
   const [doNumber, setDoNumber] = useState('')
   const scanRef = useRef<HTMLInputElement>(null)
@@ -88,6 +102,18 @@ function SessionDetailPage() {
       setDoNumber(session.doNumber)
     }
   }, [session?.sessionId, session?.invoiceNumber, session?.doNumber, session])
+
+  useEffect(() => {
+    setPreferences(loadPreferences())
+  }, [])
+
+  useEffect(() => {
+    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
+    const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
+    return () => window.cancelAnimationFrame(frame)
+  }, [session?.status, editingLineId])
+
+  const dismissScanFeedback = useCallback(() => setScanFeedback(null), [])
 
   if (!session) return <Loading label="Memuat sesi…" />
 
@@ -101,26 +127,47 @@ function SessionDetailPage() {
       .reduce((acc, other) => acc + other.qty, 0)
     return received + localQty > Number(purchaseItem.qty ?? 0)
   })
+  const editingLine = editingLineId
+    ? (lines.find((line) => line.lineId === editingLineId) ?? null)
+    : null
+  const editingPurchaseItem = editingLine
+    ? purchaseItemMap.get(editingLine.purchaseItemId)
+    : undefined
+  const editingItem = editingLine ? items[editingLine.itemMasterId] : undefined
 
   const handleAdd = async () => {
     if (!scan.trim()) return
-    const result = await addScannedItem(
-      localRepo,
-      session.sessionId,
-      session.purchaseId,
-      scan.trim(),
-      Number(qty),
-    )
-    if (result.ok) {
-      setNotice({ tone: 'success', text: `Ditambahkan: ${result.message}` })
+    try {
+      const result = await addScannedItem(
+        localRepo,
+        session.sessionId,
+        session.purchaseId,
+        scan.trim(),
+        Number(qty),
+      )
+      if (result.ok) {
+        const text = `Ditambahkan: ${result.message} × ${formatQty(qty)}`
+        setScanFeedback({ tone: 'success', text, key: Date.now() })
+        playFeedback('success')
+        setScan('')
+        setQty('1')
+        setQtyTouched(false)
+        scanRef.current?.focus()
+      } else {
+        const tone = result.resolution.status === 'ITEM_NOT_FOUND' ? 'danger' : 'warn'
+        setScanFeedback({ tone, text: result.message, key: Date.now() })
+        playFeedback(tone)
+        // Scanner mengirim karakter seperti keyboard; selalu kosongkan field agar
+        // scan berikutnya tidak tertempel pada barcode yang ditolak.
+        setScan('')
+        scanRef.current?.focus()
+      }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Gagal menyimpan hasil scan.'
+      setScanFeedback({ tone: 'danger', text, key: Date.now() })
+      playFeedback('danger')
       setScan('')
-      setQty('1')
       scanRef.current?.focus()
-    } else {
-      setNotice({
-        tone: result.resolution.status === 'ITEM_NOT_FOUND' ? 'danger' : 'warn',
-        text: result.message,
-      })
     }
   }
 
@@ -153,6 +200,7 @@ function SessionDetailPage() {
 
   return (
     <div className="flex flex-col gap-3">
+      <ScanFeedback feedback={scanFeedback} onDismiss={dismissScanFeedback} />
       <Card
         title={session.number ?? 'Sesi Baru'}
         actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
@@ -176,65 +224,55 @@ function SessionDetailPage() {
         <ScanCard
           scan={scan}
           qty={qty}
+          qtyTouched={qtyTouched}
           scanRef={scanRef}
+          qtyInput={preferences.qtyInput}
           onScanChange={setScan}
-          onQtyChange={setQty}
+          onQtyChange={(value) => {
+            setQty(value)
+            setQtyTouched(true)
+          }}
           onAdd={() => void handleAdd()}
         />
       ) : null}
 
       <Card title={`Item dalam Sesi (${lines.length})`}>
+        {editable ? (
+          <p className="mb-1 text-sm text-slate-400">Ketuk item untuk mengubah qty atau menghapus.</p>
+        ) : null}
         <ul className="flex flex-col divide-y divide-slate-800">
           {lines.map((line) => {
             const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
             const item = items[line.itemMasterId]
             const isOver = totalOver.some((row) => row.lineId === line.lineId)
             return (
-              <li key={line.lineId} className="flex flex-col gap-2 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
-                    <p className="text-sm text-slate-400">
-                      {item?.code ?? '-'} • {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
-                      {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
-                    </p>
+              <li key={line.lineId}>
+                <button
+                  type="button"
+                  className="touch-target w-full py-3 text-left"
+                  disabled={!editable}
+                  onClick={() => setEditingLineId(line.lineId)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
+                      <p className="text-sm text-slate-400">
+                        {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
+                        {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
+                        {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
+                      </p>
+                      <p className="text-sm tabular-nums text-slate-400">
+                        = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
+                      </p>
+                      {purchaseItem ? (
+                        <p className="text-xs text-slate-500">
+                          Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+                        </p>
+                      ) : null}
+                    </div>
+                    {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
                   </div>
-                  {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
-                </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    className={`${inputClass} max-w-35`}
-                    inputMode="decimal"
-                    aria-label={`Qty ${item?.name ?? line.itemMasterId}`}
-                    value={String(line.qty)}
-                    disabled={!editable}
-                    onChange={(event) => {
-                      const raw = event.target.value
-                      if (raw.trim() === '') return
-                      const parsed = Number(raw)
-                      if (!Number.isFinite(parsed) || parsed <= 0) return
-                      void localRepo.setLineQty(line.lineId, parsed)
-                    }}
-                  />
-                  <span className="text-slate-400">
-                    → {formatQty(line.qty * line.convQty)}{' '}
-                    {unitMap.get(line.uomId) ?? line.uomId}
-                  </span>
-                  {editable ? (
-                    <Button
-                      variant="danger"
-                      className="!px-3 !py-2 text-sm"
-                      onClick={() => void localRepo.removeLine(line.lineId)}
-                    >
-                      Hapus
-                    </Button>
-                  ) : null}
-                </div>
-                {purchaseItem ? (
-                  <p className="text-xs text-slate-500">
-                    Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
-                  </p>
-                ) : null}
+                </button>
               </li>
             )
           })}
@@ -255,9 +293,13 @@ function SessionDetailPage() {
           <Button className="w-full" onClick={() => void handleFinalize()}>
             Selesai / Finalisasi
           </Button>
-          <Button variant="danger" className="w-full" onClick={() => void handleCancel()}>
-            Batalkan Sesi
-          </Button>
+          <ConfirmButton
+            tone="danger"
+            className="w-full"
+            label="Tahan 1,5 dtk: Batalkan Sesi"
+            confirmLabel="Tahan… sesi akan dibatalkan"
+            onConfirm={() => void handleCancel()}
+          />
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -274,9 +316,13 @@ function SessionDetailPage() {
               <Notice tone="danger">
                 Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
               </Notice>
-              <Button variant="danger" className="w-full" onClick={() => void handleCancel()}>
-                Hapus Sesi
-              </Button>
+              <ConfirmButton
+                tone="danger"
+                className="w-full"
+                label="Tahan 1,5 dtk: Hapus Sesi"
+                confirmLabel="Tahan… sesi akan dihapus"
+                onConfirm={() => void handleCancel()}
+              />
             </>
           ) : null}
           {session.status === SESSION_STATUS.SYNCED ? (
@@ -286,6 +332,23 @@ function SessionDetailPage() {
           ) : null}
         </div>
       )}
+      {editable && editingLine && editingItem ? (
+        <LineEditSheet
+          key={editingLine.lineId}
+          line={editingLine}
+          itemName={editingItem.name}
+          purchaseUnit={unitMap.get(editingLine.uomPurchaseId) ?? editingLine.uomPurchaseId}
+          stockUnit={unitMap.get(editingLine.uomId) ?? editingLine.uomId}
+          orderedText={
+            editingPurchaseItem
+              ? `Dipesan ${formatQty(editingPurchaseItem.qty)} ${unitMap.get(editingPurchaseItem.uomId) ?? ''}`
+              : 'Item tidak ditemukan pada PO'
+          }
+          onQtyChange={(nextQty) => void localRepo.setLineQty(editingLine.lineId, nextQty)}
+          onRemove={() => void localRepo.removeLine(editingLine.lineId)}
+          onClose={() => setEditingLineId(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -293,14 +356,18 @@ function SessionDetailPage() {
 function ScanCard({
   scan,
   qty,
+  qtyTouched,
   scanRef,
+  qtyInput,
   onScanChange,
   onQtyChange,
   onAdd,
 }: {
   scan: string
   qty: string
+  qtyTouched: boolean
   scanRef: RefObject<HTMLInputElement | null>
+  qtyInput: 'pad' | 'keyboard'
   onScanChange: (value: string) => void
   onQtyChange: (value: string) => void
   onAdd: () => void
@@ -308,7 +375,7 @@ function ScanCard({
   return (
     <Card title="Scan Barang">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
-        <Field label="Barcode / Kode Barang" hint="Scanner PDT mengisi field ini lalu menekan Enter otomatis.">
+        <Field label="Barcode / Kode Barang" hint="Scan lalu Enter otomatis.">
           <input
             ref={scanRef}
             className={inputClass}
@@ -328,10 +395,23 @@ function ScanCard({
             className={inputClass}
             inputMode="decimal"
             value={qty}
+            onFocus={(event) => event.currentTarget.select()}
             onChange={(event) => onQtyChange(event.target.value)}
           />
         </Field>
       </div>
+      {qtyInput === 'pad' ? (
+        <div className="mt-3">
+          <NumericPad
+            value={qtyTouched ? qty : ''}
+            onChange={(value) => {
+              onQtyChange(value)
+              // Kembalikan fokus ke scanner agar scan berikutnya langsung diterima.
+              window.setTimeout(() => scanRef.current?.focus(), 0)
+            }}
+          />
+        </div>
+      ) : null}
       <Button className="mt-3 w-full" disabled={!scan.trim()} onClick={onAdd}>
         Tambah ke Sesi
       </Button>
@@ -373,5 +453,123 @@ function VendorDocCard({
         </Field>
       </div>
     </Card>
+  )
+}
+
+function LineEditSheet({
+  line,
+  itemName,
+  purchaseUnit,
+  stockUnit,
+  orderedText,
+  onQtyChange,
+  onRemove,
+  onClose,
+}: {
+  line: LocalSessionItem
+  itemName: string
+  purchaseUnit: string
+  stockUnit: string
+  orderedText: string
+  onQtyChange: (qty: number) => void
+  onRemove: () => void
+  onClose: () => void
+}) {
+  const [draftQty, setDraftQty] = useState(String(line.qty))
+
+  useEffect(() => {
+    setDraftQty(String(line.qty))
+  }, [line.lineId, line.qty])
+
+  const commit = () => {
+    const parsed = Number(draftQty)
+    if (Number.isFinite(parsed) && parsed > 0) onQtyChange(parsed)
+  }
+
+  const close = () => {
+    commit()
+    onClose()
+  }
+
+  const step = (amount: number) => {
+    const current = Number(draftQty)
+    const base = Number.isFinite(current) && current > 0 ? current : line.qty
+    const next = base + amount
+    if (next <= 0) return
+    setDraftQty(String(next))
+    onQtyChange(next)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex flex-col justify-end bg-slate-950/60"
+      onClick={close}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Edit ${itemName}`}
+        className="rounded-t-2xl border-t border-slate-700 bg-slate-900 p-4 pb-[env(safe-area-inset-bottom)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-lg font-bold text-slate-100">{itemName}</p>
+        <p className="text-sm text-slate-400">
+          {orderedText} • 1 {purchaseUnit} = {formatQty(line.convQty)} {stockUnit}
+        </p>
+        <div className="mt-3 flex items-center gap-3">
+          <Button
+            variant="secondary"
+            className="!px-5 !py-3 text-xl"
+            aria-label="Kurangi qty satu satuan PO"
+            onClick={() => step(-1)}
+          >
+            −1
+          </Button>
+          <input
+            className={`${inputClass} text-center text-xl font-bold tabular-nums`}
+            inputMode="decimal"
+            aria-label={`Qty ${itemName}`}
+            value={draftQty}
+            onChange={(event) => {
+              const raw = event.target.value
+              if (/^\d*(?:[.,]\d*)?$/.test(raw)) setDraftQty(raw.replace(',', '.'))
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                close()
+              }
+            }}
+          />
+          <Button
+            variant="secondary"
+            className="!px-5 !py-3 text-xl"
+            aria-label="Tambah qty satu satuan PO"
+            onClick={() => step(1)}
+          >
+            +1
+          </Button>
+        </div>
+        <p className="mt-2 text-sm tabular-nums text-slate-300">
+          {formatQty(Number(draftQty) > 0 ? Number(draftQty) : line.qty)} {purchaseUnit} ={' '}
+          {formatQty((Number(draftQty) > 0 ? Number(draftQty) : line.qty) * line.convQty)} {stockUnit}
+        </p>
+        <div className="mt-4 flex flex-col gap-2">
+          <ConfirmButton
+            tone="danger"
+            className="w-full"
+            label="Tahan 1,5 dtk: Hapus Item"
+            confirmLabel="Tahan… item akan dihapus"
+            onConfirm={() => {
+              onRemove()
+              onClose()
+            }}
+          />
+          <Button variant="ghost" className="w-full" onClick={close}>
+            Tutup
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }

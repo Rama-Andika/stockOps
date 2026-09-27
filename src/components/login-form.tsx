@@ -6,12 +6,11 @@ export interface LoginFormProps {
   initialMode?: 'online' | 'offline'
 }
 
-export function LoginForm({ initialMode }: LoginFormProps) {
+export function LoginForm(_props: LoginFormProps = {}) {
   const online = useAppStore((state) => state.online)
   const ready = useAppStore((state) => state.ready)
   const loginOnline = useAppStore((state) => state.loginOnline)
   const loginOffline = useAppStore((state) => state.loginOffline)
-  const [mode, setMode] = useState<'online' | 'offline'>(initialMode ?? (online ? 'online' : 'offline'))
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,12 +25,23 @@ export function LoginForm({ initialMode }: LoginFormProps) {
     setBusy(true)
     setResult(null)
     try {
-      const response =
-        mode === 'online'
-          ? await loginOnline(loginId.trim(), password)
-          : await loginOffline(loginId.trim(), password)
+      let response
+      if (!online) {
+        response = await loginOffline(loginId.trim(), password)
+      } else {
+        try {
+          response = await loginOnline(loginId.trim(), password)
+        } catch {
+          // Status jaringan dapat tertinggal dari koneksi ke server. Coba kredensial
+          // lokal hanya bila request online gagal secara transport; penolakan login
+          // dari server tetap ditampilkan dan tidak dilewati dengan login offline.
+          response = await loginOffline(loginId.trim(), password)
+        }
+      }
       setResult(response)
       if (response.ok) setPassword('')
+    } catch {
+      setResult({ ok: false, message: 'Login gagal. Periksa koneksi atau kredensial, lalu coba lagi.' })
     } finally {
       setBusy(false)
     }
@@ -42,6 +52,15 @@ export function LoginForm({ initialMode }: LoginFormProps) {
       <div className="text-center">
         <h1 className="text-3xl font-black tracking-tight text-cyan-400">StockOps</h1>
         <p className="mt-1 text-slate-300">Penerimaan Barang — Perangkat PDT</p>
+        <p className="mt-2">
+          <span
+            className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${
+              online ? 'bg-emerald-800 text-emerald-100' : 'bg-red-800 text-red-100'
+            }`}
+          >
+            {online ? 'Online' : 'Offline'}
+          </span>
+        </p>
       </div>
 
       <Card title="Masuk">
@@ -52,23 +71,6 @@ export function LoginForm({ initialMode }: LoginFormProps) {
             if (!busy && ready) void submit()
           }}
         >
-          <div className="flex gap-2">
-            <Button
-              variant={mode === 'online' ? 'primary' : 'secondary'}
-              className="flex-1"
-              onClick={() => setMode('online')}
-            >
-              Online
-            </Button>
-            <Button
-              variant={mode === 'offline' ? 'primary' : 'secondary'}
-              className="flex-1"
-              onClick={() => setMode('offline')}
-            >
-              Offline
-            </Button>
-          </div>
-
           <Field label="ID Pengguna">
             <input
               ref={idRef}
@@ -83,9 +85,9 @@ export function LoginForm({ initialMode }: LoginFormProps) {
           <Field
             label="Password"
             hint={
-              mode === 'offline'
-                ? 'Login offline hanya berlaku bila pernah login online di perangkat ini (maks. 7 hari).'
-                : 'Login online memerlukan koneksi ke server & database pusat.'
+              online
+                ? 'Terhubung ke server & database pusat.'
+                : 'Mode offline: hanya berlaku bila pernah login online di perangkat ini (maks. 7 hari).'
             }
           >
             <PasswordField value={password} onChange={setPassword} />
@@ -94,7 +96,7 @@ export function LoginForm({ initialMode }: LoginFormProps) {
           {result ? <Notice tone={result.ok ? 'success' : 'danger'}>{result.message}</Notice> : null}
 
           <Button type="submit" disabled={busy || !loginId || !password} className="w-full">
-            {busy ? 'Memproses…' : mode === 'online' ? 'Masuk Online' : 'Masuk Offline'}
+            {busy ? 'Memproses…' : 'Masuk'}
           </Button>
         </form>
       </Card>

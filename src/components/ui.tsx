@@ -53,7 +53,7 @@ const TONE_STYLES: Record<Tone, string> = {
   neutral: 'bg-slate-700 text-slate-100',
   info: 'bg-sky-800 text-sky-100',
   success: 'bg-emerald-800 text-emerald-100',
-  warn: 'bg-amber-700 text-amber-50',
+  warn: 'bg-amber-500/20 text-amber-300',
   danger: 'bg-red-800 text-red-100',
 }
 
