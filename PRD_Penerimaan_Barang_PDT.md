@@ -356,7 +356,8 @@ Setiap kebutuhan fungsional diberi ID `FR-<fitur>.<nomor>` dan ditulis dalam ben
 **Cerita pengguna:** Sebagai operator gudang, saya ingin tahu bila pengiriman gagal, dan data saya tidak hilang, sehingga saya bisa mencoba lagi.
 
 **Kriteria penerimaan:**
-- Bila gagal, sesi tetap berada di antrian dengan status "Gagal — coba lagi".
+- Bila gagal karena masalah sementara (mis. koneksi), sesi tetap berada di antrian dengan status "Gagal — coba lagi".
+- Bila ditolak permanen oleh server (PO ditutup/dihapus, atau item tidak valid), sesi berstatus "Ditolak", keluar dari antrian, tidak dihitung pada angka "Diterima", dan daftar PO disegarkan otomatis.
 - Pesan kegagalan ditampilkan dengan alasan yang dapat dipahami.
 - Data lokal **tidak pernah dihapus** sebelum server mengonfirmasi sukses.
 
@@ -424,7 +425,7 @@ Setiap kebutuhan fungsional diberi ID `FR-<fitur>.<nomor>` dan ditulis dalam ben
 **Cerita pengguna:** Sebagai operator gudang, saya ingin melihat status tiap sesi penerimaan saya, sehingga mudah memantau.
 
 **Kriteria penerimaan:**
-- Tiap sesi menampilkan salah satu status: **Berjalan** (belum final), **Menunggu Sinkronisasi**, **Sedang Dikirim**, **Tersinkron**, atau **Gagal**.
+- Tiap sesi menampilkan salah satu status: **Berjalan** (belum final), **Menunggu Sinkronisasi**, **Sedang Dikirim**, **Tersinkron**, **Gagal** (sementara, bisa dicoba ulang), atau **Ditolak** (ditolak permanen oleh server, mis. PO ditutup — bisa dihapus).
 - Sesi yang sudah tersinkron menampilkan nomor dokumen resmi.
 
 ---
@@ -613,6 +614,24 @@ Semua hasil dibulatkan **2 desimal (round half-up)**.
 
 > Diskon berjenjang `dis_1..dis_4` pada item PO **tidak direplikasi**; yang dipakai hanya hasil
 > akhir `discount_amount` PO yang kemudian diprorata terhadap qty diterima.
+
+### 12.12 `document_history` (ditulis saat sinkronisasi sukses)
+
+Saat dokumen penerimaan berhasil dibuat, aplikasi menulis satu baris riwayat agar terlihat
+di sistem admin:
+
+| Kolom | Nilai |
+| --- | --- |
+| `document_history_id` | ID namespace PDT (appIdx 2), dibuat server. |
+| `type` | `2` (incoming). |
+| `user_id` | User pembuat sesi. |
+| `employee_id` | `0`. |
+| `description` | `New incoming document <nomor> created from PDT device <deviceId>.` |
+| `ref_id` | `receive_id` dokumen yang dibuat. |
+| `date` | Waktu server saat sinkronisasi. |
+
+Baris riwayat ikut dibatalkan (rollback) bila transaksi gagal, dan tidak diduplikasi pada
+pengiriman ulang (idempoten).
 
 ---
 

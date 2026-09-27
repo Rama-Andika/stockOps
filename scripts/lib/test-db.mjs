@@ -12,6 +12,7 @@ import mysql from 'mysql2/promise'
 import 'dotenv/config'
 
 export const CLONED_TABLES = [
+  'document_history',
   'pos_purchase',
   'pos_purchase_item',
   'pos_receive',

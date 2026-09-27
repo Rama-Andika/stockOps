@@ -2,7 +2,7 @@ import type { LocalRepository } from '../db/local-repo'
 import type { LocalSession, LocalSessionItem } from '../db/local-db'
 import type { SyncTransport } from './transport'
 import { serverTransport } from './transport'
-import { DEFAULT_PULL_CHUNK_SIZE, SESSION_STATUS } from '~/shared/constants'
+import { DEFAULT_PULL_CHUNK_SIZE, PERMANENT_REJECT_CODES, SESSION_STATUS } from '~/shared/constants'
 import type { PullKind, ReceiveSessionInput, SyncSessionResult } from '~/shared/schemas'
 
 export const PULL_KIND_ORDER: PullKind[] = [
@@ -239,8 +239,15 @@ export async function syncOutbox(
         )
         synced += 1
       } else {
-        await repo.markFailed(result.sessionId, result.message ?? 'Gagal sinkronisasi.')
-        await repo.log('error', result.message ?? 'Gagal sinkronisasi.', result.sessionId)
+        const code = result.code ?? ''
+        const message = result.message ?? 'Gagal sinkronisasi.'
+        if (PERMANENT_REJECT_CODES.includes(code)) {
+          await repo.markRejected(result.sessionId, message, code)
+          await repo.log('error', `Sesi ditolak server (${code}): ${message}`, result.sessionId)
+        } else {
+          await repo.markFailed(result.sessionId, message, code)
+          await repo.log('error', message, result.sessionId)
+        }
         failed += 1
       }
     }

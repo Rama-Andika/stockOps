@@ -73,6 +73,21 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
       const outcome = await syncOutbox(localRepo, serverTransport, {
         deviceId: (await localRepo.ensureDeviceId()) ?? undefined,
       })
+
+      // Auto-refresh daftar PO bila ada sesi ditolak karena PO ditutup/dihapus,
+      // supaya PO yang tidak lagi CHECKED hilang dari daftar lokal.
+      const hasRejectedPurchase = outcome.results.some(
+        (result) =>
+          result.status === 'FAILED' &&
+          (result.code === 'PURCHASE_NOT_CHECKED' || result.code === 'PURCHASE_NOT_FOUND'),
+      )
+      if (hasRejectedPurchase) {
+        try {
+          await refreshPurchases(localRepo, serverTransport)
+        } catch {
+          // Kegagalan refresh PO tidak boleh menggagalkan hasil sinkronisasi.
+        }
+      }
       await get().refresh()
 
       const user = get().user

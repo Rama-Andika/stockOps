@@ -269,7 +269,12 @@ export class LocalRepository {
     const localPending = new Map<string, number>()
     for (const line of pendingLines) {
       const session = purchaseBySession.get(line.sessionId)
-      if (!session || session.status === SESSION_STATUS.SYNCED) continue
+      if (
+        !session ||
+        session.status === SESSION_STATUS.SYNCED ||
+        session.status === SESSION_STATUS.REJECTED
+      )
+        continue
       localPending.set(
         session.purchaseId,
         dec2((localPending.get(session.purchaseId) ?? 0) + line.qty),
@@ -356,6 +361,7 @@ export class LocalRepository {
       receiveId: null,
       number: null,
       lastError: null,
+      failureCode: null,
       overReceive: false,
       excessTotal: 0,
       sequence: await this.nextSequence(),
@@ -465,6 +471,7 @@ export class LocalRepository {
       status: SESSION_STATUS.PENDING,
       finalizedAt: nowIso(),
       lastError: null,
+      failureCode: null,
       updatedAt: nowIso(),
     }
     await this.db.sessions.put(updated)
@@ -504,6 +511,7 @@ export class LocalRepository {
       excessTotal: result.excessTotal,
       syncedAt: nowIso(),
       lastError: null,
+      failureCode: null,
       updatedAt: nowIso(),
     })
 
@@ -528,14 +536,28 @@ export class LocalRepository {
     }
   }
 
-  /** FR-5.6: gagal -> tetap di antrian, data tidak dihapus. */
-  async markFailed(sessionId: string, error: string): Promise<void> {
+  /** FR-5.6: gagal SEMENTARA -> tetap di antrian, data tidak dihapus. */
+  async markFailed(sessionId: string, error: string, code?: string | null): Promise<void> {
     const session = await this.db.sessions.get(sessionId)
     if (!session) return
     await this.db.sessions.put({
       ...session,
       status: SESSION_STATUS.FAILED,
       lastError: error,
+      failureCode: code ?? null,
+      updatedAt: nowIso(),
+    })
+  }
+
+  /** Ditolak PERMANEN (PO ditutup/dihapus/validasi): terminal, keluar dari antrian. */
+  async markRejected(sessionId: string, error: string, code: string): Promise<void> {
+    const session = await this.db.sessions.get(sessionId)
+    if (!session) return
+    await this.db.sessions.put({
+      ...session,
+      status: SESSION_STATUS.REJECTED,
+      lastError: error,
+      failureCode: code,
       updatedAt: nowIso(),
     })
   }
@@ -565,7 +587,10 @@ export class LocalRepository {
   async getPurchaseProgress(purchaseId: string): Promise<PurchaseProgress> {
     const items = await this.getPurchaseItems(purchaseId)
     const sessions = await this.db.sessions.where('purchaseId').equals(purchaseId).toArray()
-    const pendingSessions = sessions.filter((session) => session.status !== SESSION_STATUS.SYNCED)
+    const pendingSessions = sessions.filter(
+      (session) =>
+        session.status !== SESSION_STATUS.SYNCED && session.status !== SESSION_STATUS.REJECTED,
+    )
     const sessionIds = pendingSessions.map((session) => session.sessionId)
 
     const lines = sessionIds.length

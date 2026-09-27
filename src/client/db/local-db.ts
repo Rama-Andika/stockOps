@@ -95,6 +95,7 @@ export interface LocalSession {
   receiveId: string | null
   number: string | null
   lastError: string | null
+  failureCode: string | null
   overReceive: boolean
   excessTotal: number
   sequence: number

@@ -17,6 +17,8 @@ import {
   int,
   mysqlTable,
   text,
+  tinyint,
+  timestamp,
   varchar,
 } from 'drizzle-orm/mysql-core'
 
@@ -162,4 +164,14 @@ export const sysuser = mysqlTable('sysuser', {
   password: varchar('password', { length: 32 }),
   fullName: varchar('full_name', { length: 64 }),
   companyId: bigint('company_id', { mode: 'bigint' }),
+})
+
+export const documentHistory = mysqlTable('document_history', {
+  documentHistoryId: bigint('document_history_id', { mode: 'bigint' }).primaryKey(),
+  type: tinyint('type'),
+  userId: bigint('user_id', { mode: 'bigint' }),
+  employeeId: bigint('employee_id', { mode: 'bigint' }),
+  description: text('description'),
+  refId: bigint('ref_id', { mode: 'bigint' }),
+  date: timestamp('date', { mode: 'string' }),
 })

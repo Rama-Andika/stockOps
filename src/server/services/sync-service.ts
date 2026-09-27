@@ -3,6 +3,7 @@ import { getDb, withNamedLock, type Database } from '../db/client'
 import { invalidateCache } from '../db/cache'
 import { rowsOf } from '../db/rows'
 import {
+  documentHistory,
   posItemMaster,
   posPurchase,
   posPurchaseItem,
@@ -11,7 +12,7 @@ import {
   posVendorItem,
   vendor,
 } from '../db/schema'
-import { addDays, toMysqlDate } from '../db/sql-utils'
+import { addDays, toMysqlDate, toMysqlDateTime } from '../db/sql-utils'
 import { serverEnv } from '../env'
 import { checkCredentialRevocations } from './auth-service'
 import { buildNumber, buildPrefix } from '~/shared/doc-number'
@@ -57,6 +58,7 @@ export interface SyncContext {
   pdtAppIdx: number
   receiveIdGen: IdGenerator
   itemIdGen: IdGenerator
+  docHistoryIdGen: IdGenerator
 }
 
 export interface SyncOptions {
@@ -66,16 +68,28 @@ export interface SyncOptions {
   pdtAppIdx?: number
   receiveIdGen?: IdGenerator
   itemIdGen?: IdGenerator
+  docHistoryIdGen?: IdGenerator
 }
 
 // Registry generator per-proses agar ID tetap monotonik & unik antar pemanggilan
 // (dua request bersamaan tidak boleh menghasilkan ID yang sama).
-const generatorRegistry = new Map<number, { receive: IdGenerator; item: IdGenerator }>()
+const generatorRegistry = new Map<
+  number,
+  { receive: IdGenerator; item: IdGenerator; docHistory: IdGenerator }
+>()
 
-function generatorsFor(appIdx: number): { receive: IdGenerator; item: IdGenerator } {
+function generatorsFor(appIdx: number): {
+  receive: IdGenerator
+  item: IdGenerator
+  docHistory: IdGenerator
+} {
   let entry = generatorRegistry.get(appIdx)
   if (!entry) {
-    entry = { receive: new IdGenerator(appIdx), item: new IdGenerator(appIdx) }
+    entry = {
+      receive: new IdGenerator(appIdx),
+      item: new IdGenerator(appIdx),
+      docHistory: new IdGenerator(appIdx),
+    }
     generatorRegistry.set(appIdx, entry)
   }
   return entry
@@ -91,6 +105,7 @@ function buildContext(options: SyncOptions): SyncContext {
     pdtAppIdx,
     receiveIdGen: options.receiveIdGen ?? fallback.receive,
     itemIdGen: options.itemIdGen ?? fallback.item,
+    docHistoryIdGen: options.docHistoryIdGen ?? fallback.docHistory,
   }
 }
 
@@ -459,6 +474,17 @@ async function processSession(
           type: 1,
           priceIncludeTax: purchase.priceIncludeTax ?? 0,
           createdAt: sanitized.value,
+        })
+
+        // Riwayat dokumen untuk sistem admin: incoming baru dibuat dari PDT.
+        await tx.insert(documentHistory).values({
+          documentHistoryId: ctx.docHistoryIdGen.next(),
+          type: 2,
+          userId: BigInt(session.userId),
+          employeeId: BigInt(0),
+          description: `New incoming document ${number} created from PDT device ${session.deviceId}.`,
+          refId: receiveId,
+          date: toMysqlDateTime(now),
         })
 
         const vendorItemRows = await resolveServerConv(tx, vendorId, itemIds)

@@ -97,6 +97,10 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
   `pos_receive` dihitung ulang (pajak mengikuti `price_include_tax` PO); `type = 1`,
   `company_id` = NULL, `approval_1..3 = 0`, `pos_receive_item.status` = NULL. Pembulatan
   2 desimal (round half-up).
+- **Riwayat dokumen & penolakan PO** (PRD 12.12): setiap dokumen yang berhasil dibuat menulis
+  baris `document_history` (type 2, ref_id = receive_id). Bila server menolak sesi karena PO
+  `CLOSED`/dihapus/validasi, sesi berstatus **Ditolak (REJECTED)** — tidak dihitung pada angka
+  "Diterima", keluar dari antrian, bisa dihapus, dan daftar PO di-refresh otomatis.
 - **ID & nomor dibuat server saat sinkronisasi** (BR-8, BR-17):
   `receive_id = (millis + 2^56 × appIdx) × 10 + digitAcak`, **appIdx PDT = 2**
   (admin = 1) sehingga tidak mungkin bertabrakan. Nomor `IN<MMYY><0001>` memakai

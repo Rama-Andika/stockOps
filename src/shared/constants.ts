@@ -22,6 +22,7 @@ export const SESSION_STATUS = {
   SYNCING: 'SYNCING',
   SYNCED: 'SYNCED',
   FAILED: 'FAILED',
+  REJECTED: 'REJECTED',
 } as const
 
 export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS]
@@ -32,7 +33,18 @@ export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
   SYNCING: 'Sedang Dikirim',
   SYNCED: 'Tersinkron',
   FAILED: 'Gagal',
+  REJECTED: 'Ditolak',
 }
+
+/**
+ * Kode kegagalan server yang bersifat PERMANEN: sesi ditolak & tidak bisa
+ * dicoba ulang (mis. PO ditutup/dihapus, atau item tidak valid).
+ */
+export const PERMANENT_REJECT_CODES: readonly string[] = [
+  'PURCHASE_NOT_FOUND',
+  'PURCHASE_NOT_CHECKED',
+  'VALIDATION',
+]
 
 /** FR-3.2: status kemajuan PO. */
 export const PROGRESS_STATUS = {

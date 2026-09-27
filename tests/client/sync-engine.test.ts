@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { closeDb } from '~/server/db/client'
+import { sql } from 'drizzle-orm'
+import { closeDb, getDb } from '~/server/db/client'
 import { checkCredentialRevocations, loginOnline } from '~/server/services/auth-service'
 import { pullChunk } from '~/server/services/pull-service'
 import { syncPush } from '~/server/services/sync-service'
@@ -285,6 +286,67 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(resolution.convFound).toBe(false)
       expect(resolution.convQty).toBe(1)
       expect(resolution.message).toContain('konversi satuan tidak ditemukan')
+    })
+  })
+
+  describe('sesi ditolak saat PO ditutup (REJECTED)', () => {
+    it('server menolak PO CLOSED -> sesi jadi REJECTED dan keluar dari antrian', async () => {
+      await pullAllData(repo, directTransport)
+      const session = await repo.createSession({
+        purchaseId: FIXTURE.purchase.CHECKED,
+        userId: FIXTURE.user.ACTIVE,
+        deviceId: DEVICE,
+        receiveDate: toLocalDateTime(new Date()),
+      })
+      await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 6)
+      await repo.finalizeSession(session.sessionId, {
+        invoiceNumber: 'INV-9',
+        doNumber: 'DO-9',
+        receiveDate: session.receiveDate,
+      })
+
+      // Admin menutup PO di sistem pusat setelah data ditarik ke device.
+      await getDb().execute(sql`
+        UPDATE pos_purchase SET status = 'CLOSED' WHERE purchase_id = ${FIXTURE.purchase.CHECKED}
+      `)
+
+      const outcome = await syncOutbox(repo, directTransport)
+      expect(outcome.synced).toBe(0)
+      expect(outcome.failed).toBe(1)
+
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.REJECTED)
+      expect(saved?.failureCode).toBe('PURCHASE_NOT_CHECKED')
+      expect(await repo.outboxSessions()).toHaveLength(0)
+    })
+
+    it('kegagalan transport -> sesi FAILED dan tetap bisa dicoba ulang', async () => {
+      await pullAllData(repo, directTransport)
+      const session = await repo.createSession({
+        purchaseId: FIXTURE.purchase.CHECKED,
+        userId: FIXTURE.user.ACTIVE,
+        deviceId: DEVICE,
+        receiveDate: toLocalDateTime(new Date()),
+      })
+      await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 2)
+      await repo.finalizeSession(session.sessionId, {
+        invoiceNumber: 'INV-10',
+        doNumber: 'DO-10',
+        receiveDate: session.receiveDate,
+      })
+
+      const brokenTransport: SyncTransport = {
+        ...directTransport,
+        push: async () => {
+          throw new Error('Koneksi terputus')
+        },
+      }
+      const outcome = await syncOutbox(repo, brokenTransport)
+      expect(outcome.error).toBe('Koneksi terputus')
+
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.FAILED)
+      expect(await repo.outboxSessions()).toHaveLength(1)
     })
   })
 })

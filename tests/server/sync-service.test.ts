@@ -101,6 +101,22 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(Number(item.expired_check_status)).toBe(0)
       expect(Number(item.expired_check_id)).toBe(0)
       expect(item.status).toBeNull()
+
+      // Riwayat dokumen (document_history) dibuat tepat satu baris.
+      const history = await queryRows<Record<string, string>>(sql`SELECT * FROM document_history`)
+      expect(history).toHaveLength(1)
+      const hist = history[0]!
+      expect(Number(hist.type)).toBe(2)
+      expect(hist.user_id).toBe(FIXTURE.user.ACTIVE)
+      expect(Number(hist.employee_id)).toBe(0)
+      expect(hist.ref_id).toBe(header.receive_id)
+      expect(String(hist.description)).toBe(
+        'New incoming document IN10250001 created from PDT device device-test-1.',
+      )
+      expect(hist.date).toBeTruthy()
+      const histId = BigInt(hist.document_history_id!)
+      expect(histId).toBeGreaterThanOrEqual(minIdForApp(2))
+      expect(histId).toBeLessThanOrEqual(maxIdForApp(2))
     })
 
     it('membuat receiveId di namespace appIdx PDT (BR-17) dan mengangkutnya sebagai string (BR-12)', async () => {
@@ -190,6 +206,36 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
     })
   })
 
+  describe('penolakan PO & riwayat dokumen (document_history)', () => {
+    it('menolak PO berstatus CLOSED dan tidak menulis data apa pun', async () => {
+      await getDb().execute(sql`
+        UPDATE pos_purchase SET status = 'CLOSED' WHERE purchase_id = ${FIXTURE.purchase.CHECKED}
+      `)
+      const result = await syncPush(pushInput([session()]), { now: NOW })
+      expect(result.results[0]?.status).toBe('FAILED')
+      expect(result.results[0]?.code).toBe('PURCHASE_NOT_CHECKED')
+      expect(await countRows('pos_receive')).toBe(0)
+      expect(await countRows('pos_receive_item')).toBe(0)
+      expect(await countRows('document_history')).toBe(0)
+    })
+
+    it('sukses bila PO dibuka kembali (CHECKED) setelah sempat CLOSED', async () => {
+      await getDb().execute(sql`
+        UPDATE pos_purchase SET status = 'CLOSED' WHERE purchase_id = ${FIXTURE.purchase.CHECKED}
+      `)
+      const first = await syncPush(pushInput([session()]), { now: NOW })
+      expect(first.results[0]?.code).toBe('PURCHASE_NOT_CHECKED')
+
+      await getDb().execute(sql`
+        UPDATE pos_purchase SET status = 'CHECKED' WHERE purchase_id = ${FIXTURE.purchase.CHECKED}
+      `)
+      const second = await syncPush(pushInput([session()]), { now: NOW })
+      expect(second.results[0]?.status).toBe('SYNCED')
+      expect(await countRows('pos_receive')).toBe(1)
+      expect(await countRows('document_history')).toBe(1)
+    })
+  })
+
   describe('idempotensi (FR-5.3, Skenario C)', () => {
     it('mengirim ulang sesi yang sama tidak menghasilkan dokumen ganda', async () => {
       const first = await syncPush(pushInput([session()]), { now: NOW })
@@ -202,6 +248,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
 
       expect(await countRows('pos_receive')).toBe(1)
       expect(await countRows('pos_receive_item')).toBe(1)
+      expect(await countRows('document_history')).toBe(1)
     })
 
     it('tidak menambah slot nomor dokumen saat replay', async () => {
@@ -388,6 +435,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(result.results[0]?.status).toBe('FAILED')
       expect(result.results[0]?.code).toBe('PURCHASE_NOT_CHECKED')
       expect(await countRows('pos_receive')).toBe(0)
+      expect(await countRows('document_history')).toBe(0)
     })
 
     it('menolak PO yang tidak ditemukan', async () => {

@@ -16,6 +16,8 @@ function toneFor(status: SessionStatus): 'neutral' | 'info' | 'success' | 'warn'
       return 'success'
     case 'FAILED':
       return 'danger'
+    case 'REJECTED':
+      return 'danger'
     case 'SYNCING':
       return 'info'
     case 'PENDING':
@@ -44,7 +46,8 @@ function SessionsPage() {
         }
       >
         <p className="text-sm text-slate-400">
-          Status tiap sesi: Berjalan, Menunggu Sinkronisasi, Sedang Dikirim, Tersinkron, atau Gagal.
+          Status tiap sesi: Berjalan, Menunggu Sinkronisasi, Sedang Dikirim, Tersinkron, Gagal,
+          atau Ditolak.
         </p>
       </Card>
 

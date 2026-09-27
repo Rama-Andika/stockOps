@@ -211,6 +211,25 @@ describe('LocalRepository (Dexie)', () => {
       expect(await repo.outboxSessions()).toHaveLength(1)
     })
 
+    it('markRejected menandai sesi terminal & tidak masuk antrian', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.markRejected(session.sessionId, 'PO tidak dapat diterima.', 'PURCHASE_NOT_CHECKED')
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.REJECTED)
+      expect(saved?.failureCode).toBe('PURCHASE_NOT_CHECKED')
+      expect(saved?.lastError).toBe('PO tidak dapat diterima.')
+      expect(await repo.outboxSessions()).toHaveLength(0)
+    })
+
+    it('markFailed menyimpan kode kegagalan dan tetap di antrian', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.markFailed(session.sessionId, 'Koneksi putus', 'SERVER_ERROR')
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.FAILED)
+      expect(saved?.failureCode).toBe('SERVER_ERROR')
+      expect(await repo.outboxSessions()).toHaveLength(1)
+    })
+
     it('membersihkan sesi tersinkron saja (FR-8.2)', async () => {
       const a = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       const b = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
@@ -264,6 +283,30 @@ describe('LocalRepository (Dexie)', () => {
       // (receivedQty seed = 4, ditambah qty sesi 3 => 7), sehingga total tidak turun.
       expect(progress.items.get('PI1')?.serverReceivedQty).toBe(7)
       expect(progress.items.get('PI1')?.totalReceivedQty).toBe(7)
+    })
+
+    it('sesi ditolak (REJECTED) tidak dihitung di "diterima"', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.addOrIncrementLine(session.sessionId, {
+        purchaseItemId: 'PI1',
+        itemMasterId: 'I1',
+        barcode: null,
+        qty: 3,
+        uomPurchaseId: 'U-KRT',
+        uomId: 'U-PCS',
+        convQty: 12,
+        convFound: true,
+      })
+      await repo.markRejected(session.sessionId, 'PO ditutup.', 'PURCHASE_NOT_CHECKED')
+
+      const progress = await repo.getPurchaseProgress('P1')
+      expect(progress.items.get('PI1')?.localPendingQty).toBe(0)
+      expect(progress.items.get('PI1')?.serverReceivedQty).toBe(4)
+      expect(progress.items.get('PI1')?.totalReceivedQty).toBe(4)
+
+      const summaries = await repo.listPurchaseSummaries()
+      const summary = summaries.find((row) => row.purchaseId === 'P1')
+      expect(summary?.totalReceivedTotal).toBe(4)
     })
   })
 

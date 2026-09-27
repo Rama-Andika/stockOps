@@ -5,6 +5,7 @@ import { rowsOf } from '~/server/db/rows'
 
 /** Tabel yang dikloning ke schema uji. */
 export const TEST_TABLES = [
+  'document_history',
   'pos_receive_item',
   'pos_receive',
   'pos_purchase_item',

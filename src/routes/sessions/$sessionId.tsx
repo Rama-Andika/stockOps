@@ -19,6 +19,8 @@ function toneFor(status: SessionStatus): 'neutral' | 'info' | 'success' | 'warn'
       return 'success'
     case 'FAILED':
       return 'danger'
+    case 'REJECTED':
+      return 'danger'
     case 'SYNCING':
       return 'info'
     case 'PENDING':
@@ -260,9 +262,22 @@ function SessionDetailPage() {
       ) : (
         <div className="flex flex-col gap-2">
           {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
-            <Button className="w-full" disabled={!online || syncing} onClick={() => void sync()}>
-              {syncing ? 'Mengirim…' : 'Sinkronkan Sekarang'}
-            </Button>
+            <>
+              {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
+              <Button className="w-full" disabled={!online || syncing} onClick={() => void sync()}>
+                {syncing ? 'Mengirim…' : 'Sinkronkan Sekarang'}
+              </Button>
+            </>
+          ) : null}
+          {session.status === SESSION_STATUS.REJECTED ? (
+            <>
+              <Notice tone="danger">
+                Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
+              </Notice>
+              <Button variant="danger" className="w-full" onClick={() => void handleCancel()}>
+                Hapus Sesi
+              </Button>
+            </>
           ) : null}
           {session.status === SESSION_STATUS.SYNCED ? (
             <Notice tone="success">
