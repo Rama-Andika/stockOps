@@ -4,79 +4,17 @@ import { useAppStore } from "~/client/state/store/app-store";
 import { registerServiceWorker } from "~/client/pwa";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
+import { Barcode, ClipboardList, Inbox, Settings, Upload } from "lucide-react";
 import { SESSION_STATUS_LABEL, SESSION_STATUS } from "~/shared/constants";
 
 const NAV_LINK_CLASS =
   "touch-target relative flex flex-1 items-center justify-center rounded-lg px-3 py-2 text-center font-semibold";
 
 const NAV_ITEMS = [
-  { to: "/pos", label: "PO", icon: <PoIcon /> },
-  { to: "/sessions", label: "Sesi", icon: <SessionsIcon /> },
-  { to: "/settings", label: "Pengaturan", icon: <SettingsIcon /> },
+  { to: "/pos", label: "PO", icon: ClipboardList },
+  { to: "/sessions", label: "Sesi", icon: Barcode },
+  { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
-
-function IconBase({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {children}
-    </svg>
-  );
-}
-
-function PoIcon() {
-  return (
-    <IconBase>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-    </IconBase>
-  );
-}
-
-function SessionsIcon() {
-  return (
-    <IconBase>
-      <path d="M3 5v14" />
-      <path d="M7 5v14" />
-      <path d="M12 5v14" />
-      <path d="M17 5v14" />
-      <path d="M21 5v14" />
-    </IconBase>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <IconBase>
-      <line x1="4" x2="4" y1="21" y2="14" />
-      <line x1="4" x2="4" y1="10" y2="3" />
-      <line x1="12" x2="12" y1="21" y2="12" />
-      <line x1="12" x2="12" y1="8" y2="3" />
-      <line x1="20" x2="20" y1="21" y2="16" />
-      <line x1="20" x2="20" y1="12" y2="3" />
-      <line x1="2" x2="6" y1="14" y2="14" />
-      <line x1="10" x2="14" y1="8" y2="8" />
-      <line x1="18" x2="22" y1="16" y2="16" />
-    </IconBase>
-  );
-}
-
-function QueueIcon() {
-  return (
-    <IconBase>
-      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-    </IconBase>
-  );
-}
 
 function TopBar() {
   const online = useAppStore((state) => state.online);
@@ -115,18 +53,19 @@ function TopBar() {
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
         {pendingCount > 0 ? (
           <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300">
-            <QueueIcon />
+            <Inbox className="h-4 w-4" aria-hidden="true" />
             {pendingCount} dokumen menunggu kirim
           </span>
         ) : (
           <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-300">
-            <QueueIcon />
+            <Inbox className="h-4 w-4" aria-hidden="true" />
             Tidak ada dokumen menunggu
           </span>
         )}
         <button
           type="button"
-          className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+          aria-label="Upload"
+          className={`flex items-center justify-center rounded-lg p-2 transition ${
             pendingCount > 0
               ? "bg-cyan-500 text-slate-900 hover:bg-cyan-400"
               : "bg-slate-700 text-slate-100 hover:bg-slate-600"
@@ -134,7 +73,7 @@ function TopBar() {
           disabled={!online || syncing}
           onClick={() => void sync()}
         >
-          {syncing ? "Mengirim…" : "Sinkronkan"}
+          <Upload className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
     </header>
@@ -148,6 +87,7 @@ function BottomNav() {
     <nav className="sticky bottom-0 border-t border-slate-700 bg-slate-950/95 px-2 py-1 backdrop-blur">
       <div className="flex items-stretch justify-around">
         {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
           const badge =
             item.to === "/sessions" && pendingCount > 0 ? pendingCount : null;
           return (
@@ -156,9 +96,12 @@ function BottomNav() {
               to={item.to}
               aria-label={item.label}
               className={`${NAV_LINK_CLASS} text-slate-300`}
-              activeProps={{ className: `${NAV_LINK_CLASS} text-cyan-400` }}
+              activeProps={{
+                className: `${NAV_LINK_CLASS} bg-slate-800 text-cyan-400`,
+                "aria-current": "page",
+              }}
             >
-              {item.icon}
+              <Icon className="h-5 w-5" aria-hidden="true" />
               {badge ? (
                 <span
                   aria-label={`${badge} sesi menunggu sinkronisasi`}

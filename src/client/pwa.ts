@@ -1,9 +1,10 @@
 /**
- * Registrasi service worker. Hanya di build produksi (agar pengembangan
- * tidak terganggu cache aset yang basi).
+ * Registrasi service worker di semua environment (dev/staging/prod).
+ * Di dev, cache aset bisa basi saat kode berubah — naikkan CACHE_VERSION
+ * di public/sw.js bila perlu. Verifikasi offline penuh tetap pakai
+ * build/preview (npm run build && npm start).
  */
 export function registerServiceWorker(): void {
-  if (!import.meta.env.PROD) return
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
 
   window.addEventListener('load', () => {

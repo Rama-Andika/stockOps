@@ -1,32 +1,62 @@
 /*
  * Service worker StockOps (ditulis manual, tanpa dependensi).
  *
- * Tujuan: aplikasi tetap bisa DIBUKA saat offline (shell SPA + aset statis
- * tersimpan di cache). Data kerja sendiri disimpan di IndexedDB (Dexie),
- * dan panggilan server function SELALU network-only (tidak pernah di-cache).
+ * Tujuan: aplikasi tetap bisa DIBUKA saat offline (shell SPA + SEMUA aset
+ * hasil build, termasuk chunk per-route, tersimpan di cache). Data kerja
+ * sendiri disimpan di IndexedDB (Dexie), dan panggilan server function
+ * SELALU network-only (tidak pernah di-cache).
+ *
+ * Daftar aset hasil build dibaca dari /precache-manifest.json yang dibuat
+ * oleh scripts/generate-precache.mjs (dijalankan setelah `vite build`).
  */
 
-const CACHE_VERSION = 'stockops-v1'
+const CACHE_VERSION = 'stockops-v3'
 const SHELL_CACHE = `${CACHE_VERSION}-shell`
 const ASSET_CACHE = `${CACHE_VERSION}-assets`
 const SHELL_URL = '/_shell.html'
+const PRECACHE_MANIFEST = '/precache-manifest.json'
 
 const PRECACHE_URLS = ['/', SHELL_URL, '/manifest.webmanifest', '/icon.svg', '/offline.html']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open(SHELL_CACHE)
+      const shell = await caches.open(SHELL_CACHE)
       await Promise.all(
         PRECACHE_URLS.map(async (url) => {
           try {
             const response = await fetch(new Request(url, { cache: 'reload' }))
-            if (response && response.ok) await cache.put(url, response)
+            if (response && response.ok) await shell.put(url, response)
           } catch {
             // Abaikan: satu aset gagal tidak boleh menggagalkan instalasi.
           }
         }),
       )
+
+      // Precache SEMUA aset hasil build (termasuk chunk per-route) supaya
+      // navigasi offline ke route apa pun tidak gagal memuat chunk.
+      try {
+        const manifestResponse = await fetch(new Request(PRECACHE_MANIFEST, { cache: 'reload' }))
+        if (manifestResponse.ok) {
+          const urls = await manifestResponse.json()
+          if (Array.isArray(urls)) {
+            const assets = await caches.open(ASSET_CACHE)
+            await Promise.all(
+              urls.map(async (url) => {
+                try {
+                  const response = await fetch(new Request(url, { cache: 'reload' }))
+                  if (response && response.ok) await assets.put(url, response)
+                } catch {
+                  // abaikan
+                }
+              }),
+            )
+          }
+        }
+      } catch {
+        // Manifest belum tersedia (mis. saat dev) — lanjut tanpa precache aset.
+      }
+
       await self.skipWaiting()
     })(),
   )
@@ -56,6 +86,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
   // Data/auth harus selalu segar dari server (offline-first pakai IndexedDB).
   if (isServerCall(url.pathname)) return
+  // Manifest precache tidak perlu di-cache.
+  if (url.pathname === PRECACHE_MANIFEST) return
 
   // Navigasi: network-first, fallback ke shell yang tersimpan.
   if (request.mode === 'navigate') {
@@ -84,7 +116,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Aset statis (nama file ber-hash): cache-first.
+  // Aset statis (ber-hash) & chunk route: cache-first.
   event.respondWith(
     (async () => {
       const cache = await caches.open(ASSET_CACHE)

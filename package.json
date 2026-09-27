@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite dev --host",
-    "build": "vite build",
+    "build": "vite build && node scripts/generate-precache.mjs",
     "preview": "vite preview --host",
     "start": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",
@@ -31,6 +31,7 @@
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
     "drizzle-orm": "^0.45.3",
+    "lucide-react": "^1.48.0",
     "mysql2": "^3.24.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

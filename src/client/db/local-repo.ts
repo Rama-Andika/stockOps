@@ -498,6 +498,21 @@ export class LocalRepository {
     await this.setSessionStatus(sessionId, SESSION_STATUS.SYNCING)
   }
 
+  /** Reset sesi yang nyangkut di status SYNCING (mis. aplikasi tertutup di tengah sinkronisasi). */
+  async resetStaleSyncingSessions(): Promise<number> {
+    const syncing = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCING).toArray()
+    for (const session of syncing) {
+      await this.db.sessions.put({
+        ...session,
+        status: SESSION_STATUS.FAILED,
+        lastError: 'Sinkronisasi terputus. Coba lagi.',
+        failureCode: null,
+        updatedAt: nowIso(),
+      })
+    }
+    return syncing.length
+  }
+
   /** FR-5.5/FR-4.8: simpan nomor resmi & kunci sesi (read-only). */
   async markSynced(
     sessionId: string,

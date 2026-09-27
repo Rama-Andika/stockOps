@@ -28,6 +28,7 @@ export function AppStoreProvider({
       return
     }
     void (async () => {
+      await localRepo.resetStaleSyncingSessions()
       await refresh()
       resolved.setState({ ready: true })
     })()

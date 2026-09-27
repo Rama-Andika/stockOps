@@ -5,6 +5,25 @@ import { serverTransport } from './transport'
 import { DEFAULT_PULL_CHUNK_SIZE, PERMANENT_REJECT_CODES, SESSION_STATUS } from '~/shared/constants'
 import type { PullKind, ReceiveSessionInput, SyncSessionResult } from '~/shared/schemas'
 
+/** Batas waktu maksimal satu permintaan sinkronisasi sebelum dianggap gagal. */
+const SYNC_TIMEOUT_MS = 30_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Sinkronisasi melebihi batas waktu (timeout).')), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 export const PULL_KIND_ORDER: PullKind[] = [
   'units',
   'vendors',
@@ -220,15 +239,18 @@ export async function syncOutbox(
   }
 
   try {
-    const response = await transport.push({
-      deviceId: options.deviceId ?? payloads[0]!.deviceId,
-      sessions: payloads,
-      credentials: credentials.map((credential) => ({
-        userId: credential.userId,
-        loginId: credential.loginId,
-        fingerprint: credential.fingerprint,
-      })),
-    })
+    const response = await withTimeout(
+      transport.push({
+        deviceId: options.deviceId ?? payloads[0]!.deviceId,
+        sessions: payloads,
+        credentials: credentials.map((credential) => ({
+          userId: credential.userId,
+          loginId: credential.loginId,
+          fingerprint: credential.fingerprint,
+        })),
+      }),
+      SYNC_TIMEOUT_MS,
+    )
 
     let synced = 0
     let failed = 0

@@ -1,5 +1,6 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
@@ -38,6 +39,9 @@ function PosDetailPage() {
     )
   }
 
+  const allItemsFull =
+    detail.items.length > 0 && detail.items.every((row) => row.totalReceivedQty >= row.orderedQty)
+
   const startReception = async () => {
     if (!user) return
     const device = deviceId ?? (await localRepo.ensureDeviceId())
@@ -56,6 +60,13 @@ function PosDetailPage() {
 
   return (
     <div className="flex flex-col gap-3">
+      <Link
+        to="/pos"
+        aria-label="Kembali ke daftar PO"
+        className="touch-target flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 hover:text-slate-100"
+      >
+        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+      </Link>
       <Card title={detail.purchase.number ?? purchaseId}>
         <p className="text-slate-300">{detail.purchase.vendorName}</p>
         <p className="text-sm text-slate-400">Tanggal PO: {formatDate(detail.purchase.purchDate)}</p>
@@ -94,9 +105,12 @@ function PosDetailPage() {
         </ul>
       </Card>
 
-      <Button className="w-full" disabled={busy} onClick={() => void startReception()}>
-        {busy ? 'Menyiapkan…' : 'Mulai Penerimaan'}
+      <Button className="w-full" disabled={busy || allItemsFull} onClick={() => void startReception()}>
+        {busy ? 'Menyiapkan…' : allItemsFull ? 'Semua item sudah diterima penuh' : 'Mulai Penerimaan'}
       </Button>
+      {allItemsFull ? (
+        <Notice tone="warn">Semua item sudah diterima penuh — tidak bisa memulai penerimaan baru.</Notice>
+      ) : null}
 
       <Notice tone="info">Sesi bisa dijeda dan dilanjutkan kapan saja.</Notice>
     </div>

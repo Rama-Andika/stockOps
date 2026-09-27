@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
@@ -8,6 +8,7 @@ import type { LocalSessionItem } from '~/client/db/local-db'
 import { loadPreferences, type Preferences } from '~/client/preferences'
 import { playFeedback } from '~/client/feedback'
 import { toast } from '~/client/toast'
+import { ArrowLeft, Upload } from 'lucide-react'
 import { ConfirmButton } from '~/components/confirm-button'
 import { NumericPad } from '~/components/numeric-pad'
 import { ScanFeedback, type ScanFeedbackData } from '~/components/scan-feedback'
@@ -102,18 +103,6 @@ function SessionDetailPage() {
     if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [session?.status, editingLineId])
-
-  useEffect(() => {
-    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
-    const handler = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null
-      if (!target) return
-      if (target.closest('button, input, textarea, select, a, [role="dialog"]')) return
-      scanRef.current?.focus()
-    }
-    document.addEventListener('pointerdown', handler)
-    return () => document.removeEventListener('pointerdown', handler)
   }, [session?.status, editingLineId])
 
   const dismissScanFeedback = useCallback(() => setScanFeedback(null), [])
@@ -233,6 +222,13 @@ function SessionDetailPage() {
   return (
     <div className="flex flex-col gap-3">
       <ScanFeedback feedback={scanFeedback} onDismiss={dismissScanFeedback} />
+      <Link
+        to="/sessions"
+        aria-label="Kembali ke daftar sesi"
+        className="touch-target flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 hover:text-slate-100"
+      >
+        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+      </Link>
       <Card
         title={session.number ?? 'Sesi Baru'}
         actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
@@ -240,6 +236,7 @@ function SessionDetailPage() {
         <p className="text-slate-300">
           {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
         </p>
+        <p className="text-xs text-slate-500">ID sesi: {session.sessionId}</p>
         {session.receiveDate ? (
           <p className="text-sm text-slate-400">Tanggal penerimaan: {session.receiveDate}</p>
         ) : null}
@@ -344,8 +341,13 @@ function SessionDetailPage() {
           {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
             <>
               {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
-              <Button className="w-full" disabled={syncing} onClick={() => void handleRetrySync()}>
-                {syncing ? 'Mengirim…' : 'Sinkronkan Sekarang'}
+              <Button
+                className="flex w-full items-center justify-center gap-1"
+                aria-label="Upload"
+                disabled={syncing}
+                onClick={() => void handleRetrySync()}
+              >
+                <Upload className="h-5 w-5" aria-hidden="true" />  Upload
               </Button>
             </>
           ) : null}
