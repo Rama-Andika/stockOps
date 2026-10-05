@@ -323,6 +323,35 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(String(overItems[0]?.memo)).toMatch(/^PDT\|OVER;ORD=10;TOT=11;EXC=1$/)
     })
 
+    it('replay sesi over-receive mengembalikan previousQty & excess yang sama dengan hasil awal', async () => {
+      await syncPush(pushInput([session()]), { now: NOW })
+      const device2 = session({
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        deviceId: 'device-test-2',
+        items: [
+          {
+            clientLineId: 'line-1',
+            purchaseItemId: FIXTURE.purchaseItem.PI1,
+            itemMasterId: FIXTURE.item.I1,
+            qty: 5,
+            uomPurchaseId: FIXTURE.uom.KARTON,
+            uomId: FIXTURE.uom.PCS,
+            convQty: 12,
+            convFound: true,
+          },
+        ],
+      })
+      const first = await syncPush(pushInput([device2]), { now: NOW })
+      const replay = await syncPush(pushInput([device2]), { now: NOW })
+
+      expect(replay.results[0]?.code).toBe('IDEMPOTENT_REPLAY')
+      expect(replay.results[0]?.lines[0]?.previousQty).toBe(6)
+      expect(replay.results[0]?.lines[0]?.previousQty).toBe(first.results[0]?.lines[0]?.previousQty)
+      expect(replay.results[0]?.lines[0]?.newTotal).toBe(11)
+      expect(replay.results[0]?.lines[0]?.excess).toBe(1)
+      expect(replay.results[0]?.excessTotal).toBe(first.results[0]?.excessTotal)
+    })
+
     it('menandai hanya baris yang over, baris lain tetap normal', async () => {
       const mixed = session({
         items: [
@@ -628,6 +657,69 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(result.results[0]?.code).toBe('UNAUTHORIZED')
       expect(result.revoked).toEqual([{ userId: FIXTURE.user.ACTIVE_2, reason: 'CHANGED' }])
       expect(await countRows('pos_receive')).toBe(0)
+    })
+
+    it('menjumlahkan baris ganda untuk item PO yang sama sebelum menilai over-receive', async () => {
+      const line = {
+        purchaseItemId: FIXTURE.purchaseItem.PI1,
+        itemMasterId: FIXTURE.item.I1,
+        qty: 6,
+        uomPurchaseId: FIXTURE.uom.KARTON,
+        uomId: FIXTURE.uom.PCS,
+        convQty: 12,
+        convFound: true,
+      }
+      const result = await syncPush(
+        pushInput([
+          session({
+            items: [
+              { ...line, clientLineId: 'dup-1' },
+              { ...line, clientLineId: 'dup-2' },
+            ],
+          }),
+        ]),
+        { now: NOW },
+      )
+      // PI1 ordered 10: 6 + 6 = 12 -> second line over by 2.
+      expect(result.results[0]?.status).toBe('SYNCED')
+      expect(result.results[0]?.lines[0]?.overReceive).toBe(false)
+      expect(result.results[0]?.lines[1]?.previousQty).toBe(6)
+      expect(result.results[0]?.lines[1]?.overReceive).toBe(true)
+      expect(result.results[0]?.excessTotal).toBe(2)
+
+      // Only the line that crossed the ordered qty is flagged, with its own excess.
+      const flagged = await queryRows<Record<string, string>>(
+        sql`SELECT memo FROM pos_receive_item WHERE memo IS NOT NULL`,
+      )
+      expect(flagged).toHaveLength(1)
+      expect(String(flagged[0]?.memo)).toBe('PDT|OVER;ORD=10;TOT=12;EXC=2')
+    })
+
+    it('excessTotal tidak ganda untuk tiga baris item yang sama (3 x 6 dari pesanan 10)', async () => {
+      const line = {
+        purchaseItemId: FIXTURE.purchaseItem.PI1,
+        itemMasterId: FIXTURE.item.I1,
+        qty: 6,
+        uomPurchaseId: FIXTURE.uom.KARTON,
+        uomId: FIXTURE.uom.PCS,
+        convQty: 12,
+        convFound: true,
+      }
+      const result = await syncPush(
+        pushInput([
+          session({
+            items: [
+              { ...line, clientLineId: 'tri-1' },
+              { ...line, clientLineId: 'tri-2' },
+              { ...line, clientLineId: 'tri-3' },
+            ],
+          }),
+        ]),
+        { now: NOW },
+      )
+      // Totals 6, 12, 18 against 10: real excess is 8. Summing cumulative values would give 0 + 2 + 8 = 10.
+      expect(result.results[0]?.lines.map((l) => l.excess)).toEqual([0, 2, 6])
+      expect(result.results[0]?.excessTotal).toBe(8)
     })
 
     it('mengambil location_id & company_id dari PO, bukan dari payload klien', async () => {

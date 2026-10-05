@@ -90,6 +90,8 @@ function SessionDetailPage() {
   const [invoiceError, setInvoiceError] = useState(false)
   const [doNumberError, setDoNumberError] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
+  // Scans are saved strictly one after another (FIFO), even when the scanner is faster than IndexedDB.
+  const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   useEffect(() => {
     if (session) {
@@ -98,11 +100,14 @@ function SessionDetailPage() {
     }
   }, [session?.invoiceNumber, session?.doNumber])
 
+  // Keep the scanner's keystrokes landing in the barcode field. While a dialog is open focus
+  // belongs to it; when it closes (e.g. finalize cancelled) the field gets focus back, otherwise
+  // the scanner's Enter would press the previously focused button and reopen the dialog.
   useEffect(() => {
-    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
+    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId || confirmingFinalize) return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [session?.status, editingLineId])
+  }, [session?.status, editingLineId, confirmingFinalize])
 
   const dismissScanFeedback = useCallback(() => setScanFeedback(null), [])
 
@@ -134,40 +139,47 @@ function SessionDetailPage() {
     : undefined
   const editingItem = editingLine ? items[editingLine.itemMasterId] : undefined
 
-  const handleAdd = async () => {
-    if (!scan.trim()) return
+  const processScan = async (code: string, qtyText: string) => {
     try {
       const result = await addScannedItem(
         localRepo,
         session.sessionId,
         session.purchaseId,
-        scan.trim(),
-        Number(qty),
+        code,
+        Number(qtyText),
       )
       if (result.ok) {
-        const text = `Ditambahkan: ${result.message} × ${formatQty(qty)}`
+        const text = `Ditambahkan: ${result.message} × ${formatQty(qtyText)}`
         setScanFeedback({ tone: 'success', text, key: Date.now() })
         playFeedback('success')
-        setScan('')
         setQty('1')
         setQtyTouched(false)
-        scanRef.current?.focus()
       } else {
         const tone = result.resolution.status === 'ITEM_NOT_FOUND' ? 'danger' : 'warn'
         setScanFeedback({ tone, text: result.message, key: Date.now() })
         playFeedback(tone)
-        // Scanners send keystrokes like a keyboard; always clear the field so
-        // subsequent scans are not appended to the rejected barcode.
-        setScan('')
-        scanRef.current?.focus()
       }
     } catch (error) {
       const text = error instanceof Error ? error.message : 'Gagal menyimpan hasil scan.'
       setScanFeedback({ tone: 'danger', text, key: Date.now() })
       playFeedback('danger')
-      setScan('')
+    } finally {
       scanRef.current?.focus()
     }
+  }
+
+  const handleAdd = () => {
+    const code = scan.trim()
+    if (!code) return
+    const qtyText = qty
+    // Scanners type like a keyboard: clear the field synchronously so the next burst
+    // starts on an empty input, then save scans one after another.
+    setScan('')
+    // processScan handles its own errors; the catch only keeps the queue alive should its
+    // error handling itself throw (e.g. in the feedback), so later scans are never dropped.
+    scanQueueRef.current = scanQueueRef.current
+      .then(() => processScan(code, qtyText))
+      .catch(() => undefined)
   }
 
   const requestFinalize = () => {
@@ -666,6 +678,36 @@ function FinalizeDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // NF-8: move focus into the dialog (onto "Batal", the safe choice) and give it back on close.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+    return () => previouslyFocused?.focus()
+  }, [])
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancel()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])')
+    if (!focusables || focusables.length === 0) return
+    const list = Array.from(focusables)
+    const first = list[0]
+    const last = list[list.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center">
       <button
@@ -675,10 +717,12 @@ function FinalizeDialog({
         onClick={onCancel}
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Konfirmasi selesaikan sesi"
         className="relative w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4"
+        onKeyDown={handleKeyDown}
       >
         <p className="text-lg font-bold text-slate-100">Selesaikan sesi?</p>
         <div className="mt-3 flex flex-col gap-1 text-sm text-slate-300">
@@ -692,7 +736,7 @@ function FinalizeDialog({
           <Button className="w-full" onClick={onConfirm}>
             Ya, Selesaikan
           </Button>
-          <Button variant="ghost" className="w-full" onClick={onCancel}>
+          <Button variant="ghost" className="w-full" data-autofocus onClick={onCancel}>
             Batal
           </Button>
         </div>

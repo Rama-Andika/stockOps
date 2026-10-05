@@ -141,6 +141,27 @@ describe('LocalRepository (Dexie)', () => {
       expect(items[0]?.qty).toBe(3)
     })
 
+    it('dua penambahan bersamaan untuk item yang sama digabung jadi satu baris', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const input = {
+        purchaseItemId: 'PI1',
+        itemMasterId: 'I1',
+        barcode: '22001771',
+        qty: 1,
+        uomPurchaseId: 'U-KRT',
+        uomId: 'U-PCS',
+        convQty: 12,
+        convFound: true,
+      }
+      await Promise.all([
+        repo.addOrIncrementLine(session.sessionId, input),
+        repo.addOrIncrementLine(session.sessionId, input),
+      ])
+      const items = await repo.sessionItems(session.sessionId)
+      expect(items).toHaveLength(1)
+      expect(items[0]?.qty).toBe(2)
+    })
+
     it('mengubah & menghapus baris sebelum finalisasi (FR-4.5)', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       const line = await repo.addOrIncrementLine(session.sessionId, {

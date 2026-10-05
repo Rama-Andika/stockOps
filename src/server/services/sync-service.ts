@@ -232,7 +232,8 @@ async function buildReplayResult(
       clientLineId: session.items[index]?.clientLineId ?? String(item.purchaseItemId),
       purchaseItemId: String(item.purchaseItemId),
       orderedQty: parsedMemo?.orderedQty ?? 0,
-      previousQty: parsedMemo ? Math.max(0, parsedMemo.newTotal - qty - (parsedMemo.excess ?? 0)) : 0,
+      // The memo stores newTotal = previousQty + qty, so previousQty is exactly the difference.
+      previousQty: parsedMemo ? Math.max(0, dec2(parsedMemo.newTotal - qty)) : 0,
       sessionQty: qty,
       newTotal: parsedMemo?.newTotal ?? qty,
       overReceive: isOverReceiveMemo(memo),

@@ -453,52 +453,59 @@ export class LocalRepository {
   }
 
   async addOrIncrementLine(sessionId: string, input: NewLineInput): Promise<LocalSessionItem> {
-    const existing = await this.db.sessionItems
-      .where('[sessionId+purchaseItemId]')
-      .equals([sessionId, input.purchaseItemId])
-      .first()
+    // One transaction: two concurrent adds for the same PO item must merge into one line.
+    return this.db.transaction('rw', [this.db.sessionItems, this.db.sessions], async () => {
+      const existing = await this.db.sessionItems
+        .where('[sessionId+purchaseItemId]')
+        .equals([sessionId, input.purchaseItemId])
+        .first()
 
-    if (existing) {
-      const updated: LocalSessionItem = { ...existing, qty: dec2(existing.qty + input.qty) }
-      await this.db.sessionItems.put(updated)
+      if (existing) {
+        const updated: LocalSessionItem = { ...existing, qty: dec2(existing.qty + input.qty) }
+        await this.db.sessionItems.put(updated)
+        await this.touchSession(sessionId)
+        return updated
+      }
+
+      const line: LocalSessionItem = {
+        lineId: newUuid(),
+        sessionId,
+        purchaseItemId: input.purchaseItemId,
+        itemMasterId: input.itemMasterId,
+        barcode: input.barcode,
+        qty: dec2(input.qty),
+        uomPurchaseId: input.uomPurchaseId,
+        uomId: input.uomId,
+        convQty: input.convQty,
+        convFound: input.convFound,
+        createdAt: nowIso(),
+      }
+      await this.db.sessionItems.put(line)
       await this.touchSession(sessionId)
-      return updated
-    }
-
-    const line: LocalSessionItem = {
-      lineId: newUuid(),
-      sessionId,
-      purchaseItemId: input.purchaseItemId,
-      itemMasterId: input.itemMasterId,
-      barcode: input.barcode,
-      qty: dec2(input.qty),
-      uomPurchaseId: input.uomPurchaseId,
-      uomId: input.uomId,
-      convQty: input.convQty,
-      convFound: input.convFound,
-      createdAt: nowIso(),
-    }
-    await this.db.sessionItems.put(line)
-    await this.touchSession(sessionId)
-    return line
+      return line
+    })
   }
 
   async setLineQty(lineId: string, qty: number): Promise<void> {
-    const line = await this.db.sessionItems.get(lineId)
-    if (!line) return
-    if (qty <= 0) {
-      await this.db.sessionItems.delete(lineId)
-    } else {
-      await this.db.sessionItems.put({ ...line, qty: dec2(qty) })
-    }
-    await this.touchSession(line.sessionId)
+    await this.db.transaction('rw', [this.db.sessionItems, this.db.sessions], async () => {
+      const line = await this.db.sessionItems.get(lineId)
+      if (!line) return
+      if (qty <= 0) {
+        await this.db.sessionItems.delete(lineId)
+      } else {
+        await this.db.sessionItems.put({ ...line, qty: dec2(qty) })
+      }
+      await this.touchSession(line.sessionId)
+    })
   }
 
   async removeLine(lineId: string): Promise<void> {
-    const line = await this.db.sessionItems.get(lineId)
-    if (!line) return
-    await this.db.sessionItems.delete(lineId)
-    await this.touchSession(line.sessionId)
+    await this.db.transaction('rw', [this.db.sessionItems, this.db.sessions], async () => {
+      const line = await this.db.sessionItems.get(lineId)
+      if (!line) return
+      await this.db.sessionItems.delete(lineId)
+      await this.touchSession(line.sessionId)
+    })
   }
 
   private async touchSession(sessionId: string): Promise<void> {

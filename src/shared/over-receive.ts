@@ -91,8 +91,23 @@ export function evaluateSession(
   already: readonly AlreadyReceivedLine[],
 ): SessionEvaluationSummary {
   const orderedMap = toMap(ordered)
-  const alreadyMap = receivedMap(already)
-  const evaluations = lines.map((line) => evaluateLine(line, orderedMap, alreadyMap))
+  // Running total per PO item: a second line for the same item in this session starts
+  // from the first line's new total, so duplicate lines cannot hide an over-receive.
+  const runningMap = receivedMap(already)
+  const seenInSession = new Set<string>()
+  const evaluations = lines.map((line) => {
+    const evaluation = evaluateLine(line, orderedMap, runningMap)
+    runningMap.set(line.purchaseItemId, evaluation.newTotal)
+    const repeated = seenInSession.has(line.purchaseItemId)
+    seenInSession.add(line.purchaseItemId)
+    if (!repeated || !evaluation.overReceive) return evaluation
+    // A repeated line only reports the excess ADDED by itself. `excess` is cumulative
+    // (newTotal - ordered), so summing it over duplicate lines would count the earlier
+    // lines' excess again and inflate excessTotal. The first line of an item keeps the
+    // cumulative meaning, so per item the lines add up to (final total - ordered).
+    const alreadyOver = Math.max(evaluation.previousQty, evaluation.orderedQty)
+    return { ...evaluation, excess: dec2(evaluation.newTotal - alreadyOver) }
+  })
 
   const overReceiveLines = evaluations.filter((line) => line.overReceive)
   return {
