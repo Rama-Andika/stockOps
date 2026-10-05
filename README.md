@@ -27,7 +27,7 @@ Prasyarat: Node.js ≥ 20, MySQL/MariaDB berjalan di `localhost:3306`.
 npm run db:seed
 
 # 3) Jalankan mode pengembangan
-npm run dev            # http://localhost:3000 (--host, bisa diakses dari PDT di LAN)
+npm run dev            # http://localhost:3000 (--host; PDT di LAN butuh https, lihat bagian 6.1)
 ```
 
 Login demo: **`pdt` / `pdt123`** (online pertama; setelah itu bisa login offline s/d 7 hari).
@@ -40,8 +40,12 @@ Menjalankan seperti produksi (SPA build + server functions):
 
 ```bash
 npm run build
-npm start              # http://localhost:3000
+npm start              # http://localhost:3000 (https bila TLS_CERT_FILE & TLS_KEY_FILE diisi)
 ```
+
+> **Syarat produksi:** `npm start` berjalan dengan `NODE_ENV=production` dan **menolak** membuka koneksi
+> database bila `CREDENTIAL_HMAC_SECRET` masih nilai contoh/terlalu pendek (< 32 karakter) atau
+> `DB_USER`/`DB_PASSWORD`/`DB_NAME` tidak diisi eksplisit. Pesan errornya muncul di konsol server (`[env] ...`).
 
 Menghapus data demo: `npm run db:seed:clean`.
 
@@ -113,6 +117,13 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
 - **Login offline maksimal 7 hari** (BR-10) + **pencabutan kredensial** saat password/login_id
   berubah di `sysuser`, berlaku untuk semua user ter-cache (BR-19), dideteksi server
   memakai fingerprint HMAC (password plaintext tidak pernah dikirim/di-cache).
+- **Otorisasi perangkat:** pull, push, dan worklist over-receive wajib membawa fingerprint
+  minimal satu user ter-cache yang **masih valid** (`assertAuthorizedDevice` di
+  `src/server/services/auth-service.ts`). Tanpa itu, pull ditolak dan semua sesi push
+  dibalas `UNAUTHORIZED` (sesi tetap di antrian device, tidak hilang). Sesi milik user yang
+  kredensialnya baru dicabut tetap diterima selama perangkat masih terautentikasi.
+- **Data dokumen dari PO:** `vendor_id`, `location_id` (header) dan `company_id` (item)
+  diambil dari baris `pos_purchase`, bukan dari payload device.
 
 ### 3.3 Keputusan untuk celah yang ada di PRD (didokumentasikan, bukan disembunyikan)
 
@@ -173,7 +184,7 @@ tests/                    unit, server, client, component
 
 ## 5. Pengujian
 
-`npm test` menjalankan 150 test pada 15 berkas:
+`npm test` menjalankan 212 test pada 21 berkas:
 
 | Lapisan | Berkas | Fokus |
 | --- | --- | --- |
@@ -198,9 +209,39 @@ Contoh perilaku yang diuji secara eksplisit:
 
 - `public/sw.js` menyimpan shell SPA + aset statis; navigasi network-first dengan
   fallback shell. Panggilan `/_serverFn/*` dan `/api/*` selalu **network-only**.
-- Service worker hanya didaftarkan pada build produksi (`npm run build && npm start`).
+- Service worker didaftarkan di **semua** environment (`registerServiceWorker()` di
+  `src/components/app-shell.tsx`). Perilaku offline penuh hanya terjamin pada build
+  (`npm run build && npm start`); di `npm run dev` cache shell bisa basi — naikkan
+  `CACHE_VERSION` di `public/sw.js` bila perlu.
 - Data kerja selalu tersimpan di IndexedDB, sehingga tetap bisa dipakai walau PWA
   belum terpasang.
+
+### 6.1 HTTPS untuk PDT (wajib di jaringan LAN)
+
+Browser hanya menyediakan service worker dan `crypto.subtle` (dipakai untuk kredensial
+offline) pada **https://** atau **localhost**. PDT yang membuka `http://<IP-komputer>`
+tidak bisa login maupun bekerja offline; layar login menampilkan peringatan.
+
+Contoh memakai [mkcert](https://github.com/FiloSottile/mkcert) di komputer server (Windows):
+
+```powershell
+winget install FiloSottile.mkcert
+mkcert -install
+New-Item -ItemType Directory -Force C:\stockops-cert
+mkcert -cert-file C:\stockops-cert\cert.pem -key-file C:\stockops-cert\key.pem 192.168.1.10 localhost
+```
+
+Ganti `192.168.1.10` dengan IP komputer server (sebaiknya IP statis). Lalu:
+
+```powershell
+$env:TLS_CERT_FILE='C:\stockops-cert\cert.pem'; $env:TLS_KEY_FILE='C:\stockops-cert\key.pem'; npm start
+```
+
+Di setiap PDT, pasang sertifikat CA mkcert sebagai sertifikat tepercaya: salin file
+`rootCA.pem` dari folder yang ditampilkan `mkcert -CAROOT` ke perangkat, lalu pasang lewat
+Pengaturan → Keamanan → Enkripsi & kredensial → Instal sertifikat → Sertifikat CA (nama
+menu berbeda antar versi Android). Setelah itu buka `https://192.168.1.10:3000` di Chrome.
+Pastikan di perangkat bahwa halaman terbuka tanpa peringatan sertifikat.
 
 ## 7. Keterbatasan yang Disadari
 
