@@ -285,6 +285,51 @@ describe('LocalRepository (Dexie)', () => {
       expect(progress.items.get('PI1')?.totalReceivedQty).toBe(7)
     })
 
+    it('markSynced dua kali tidak menambah receivedQty dua kali', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.addOrIncrementLine(session.sessionId, {
+        purchaseItemId: 'PI1',
+        itemMasterId: 'I1',
+        barcode: null,
+        qty: 3,
+        uomPurchaseId: 'U-KRT',
+        uomId: 'U-PCS',
+        convQty: 12,
+        convFound: true,
+      })
+      const result = { receiveId: '1', number: 'IN1', overReceive: false, excessTotal: 0 }
+      await repo.markSynced(session.sessionId, result)
+      await repo.markSynced(session.sessionId, result)
+      const progress = await repo.getPurchaseProgress('P1')
+      // Seed receivedQty = 4, plus session qty 3 exactly once => 7.
+      expect(progress.items.get('PI1')?.serverReceivedQty).toBe(7)
+    })
+
+    it('markSynced untuk replay idempoten tidak menambah receivedQty', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.addOrIncrementLine(session.sessionId, {
+        purchaseItemId: 'PI1',
+        itemMasterId: 'I1',
+        barcode: null,
+        qty: 3,
+        uomPurchaseId: 'U-KRT',
+        uomId: 'U-PCS',
+        convQty: 12,
+        convFound: true,
+      })
+      await repo.markSynced(session.sessionId, {
+        receiveId: '1',
+        number: 'IN1',
+        overReceive: false,
+        excessTotal: 0,
+        replay: true,
+      })
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.SYNCED)
+      const progress = await repo.getPurchaseProgress('P1')
+      expect(progress.items.get('PI1')?.serverReceivedQty).toBe(4)
+    })
+
     it('sesi ditolak (REJECTED) tidak dihitung di "diterima"', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.addOrIncrementLine(session.sessionId, {

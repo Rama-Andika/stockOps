@@ -95,6 +95,22 @@ export interface PurchaseDetail {
   progress: PurchaseProgress
 }
 
+/** Complete download of master/PO data, applied to the local tables in one transaction. */
+export interface MasterDataSnapshot {
+  purchases: PurchaseRowInput[]
+  purchaseItems: PurchaseItemRowInput[]
+  items: ItemRowInput[]
+  units: Array<{ uomId: string; unit: string }>
+  vendors: Array<{ vendorId: string; code: string | null; name: string; dueDate: string | null }>
+  vendorItems: Array<{
+    vendorItemId: string
+    vendorId: string
+    itemMasterId: string
+    uomPurchase: string
+    convQty: string
+  }>
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -208,6 +224,47 @@ export class LocalRepository {
     await this.db.transaction('rw', [this.db.purchases, this.db.purchaseItems], async () => {
       await this.db.purchases.clear()
       await this.db.purchaseItems.clear()
+    })
+  }
+
+  /**
+   * FR-2.2: Atomically replaces ALL master/PO tables with a fully downloaded snapshot.
+   * Called only after every chunk arrived, so a dropped connection never leaves the
+   * device with partial or empty master data. Receiving sessions are not touched.
+   */
+  async replaceMasterData(snapshot: MasterDataSnapshot): Promise<void> {
+    const at = nowIso()
+    await this.db.transaction(
+      'rw',
+      [this.db.purchases, this.db.purchaseItems, this.db.items, this.db.units, this.db.vendors, this.db.vendorItems],
+      async () => {
+        await this.db.purchases.clear()
+        await this.db.purchaseItems.clear()
+        await this.db.items.clear()
+        await this.db.units.clear()
+        await this.db.vendors.clear()
+        await this.db.vendorItems.clear()
+        await this.db.purchases.bulkPut(snapshot.purchases.map((row) => ({ ...row, updatedAt: at })))
+        await this.db.purchaseItems.bulkPut(snapshot.purchaseItems.map((row) => ({ ...row, updatedAt: at })))
+        await this.db.items.bulkPut(snapshot.items.map((row) => ({ ...row, updatedAt: at })))
+        await this.db.units.bulkPut(snapshot.units.map((row) => ({ ...row, updatedAt: at })))
+        await this.db.vendors.bulkPut(snapshot.vendors.map((row) => ({ ...row, updatedAt: at })))
+        await this.db.vendorItems.bulkPut(snapshot.vendorItems.map((row) => ({ ...row, updatedAt: at })))
+      },
+    )
+  }
+
+  /** FR-2.3: Atomically replaces the PO list (item master untouched). */
+  async replacePurchases(
+    purchases: readonly PurchaseRowInput[],
+    purchaseItems: readonly PurchaseItemRowInput[],
+  ): Promise<void> {
+    const at = nowIso()
+    await this.db.transaction('rw', [this.db.purchases, this.db.purchaseItems], async () => {
+      await this.db.purchases.clear()
+      await this.db.purchaseItems.clear()
+      await this.db.purchases.bulkPut(purchases.map((row) => ({ ...row, updatedAt: at })))
+      await this.db.purchaseItems.bulkPut(purchaseItems.map((row) => ({ ...row, updatedAt: at })))
     })
   }
 
@@ -514,34 +571,49 @@ export class LocalRepository {
     return syncing.length
   }
 
-  /** FR-5.5/FR-4.8: Store official number & lock session (read-only). */
+  /**
+   * FR-5.5/FR-4.8: Store official number & lock session (read-only).
+   * Idempotent and atomic: a session that is already SYNCED is left untouched, so a
+   * double push can never count its qty twice.
+   */
   async markSynced(
     sessionId: string,
-    result: { receiveId: string; number: string; overReceive: boolean; excessTotal: number },
+    result: {
+      receiveId: string
+      number: string
+      overReceive: boolean
+      excessTotal: number
+      /** true when the server answered IDEMPOTENT_REPLAY (the document already existed). */
+      replay?: boolean
+    },
   ): Promise<void> {
-    const session = await this.db.sessions.get(sessionId)
-    if (!session) return
-    await this.db.sessions.put({
-      ...session,
-      status: SESSION_STATUS.SYNCED,
-      receiveId: result.receiveId,
-      number: result.number,
-      overReceive: result.overReceive,
-      excessTotal: result.excessTotal,
-      syncedAt: nowIso(),
-      lastError: null,
-      failureCode: null,
-      updatedAt: nowIso(),
-    })
+    await this.db.transaction(
+      'rw',
+      [this.db.sessions, this.db.sessionItems, this.db.purchaseItems],
+      async () => {
+        const session = await this.db.sessions.get(sessionId)
+        if (!session || session.status === SESSION_STATUS.SYNCED) return
 
-    // Fix for "Received" regression bug: newly synced session was previously counted as
-    // "unsent" (localPending). Once status transitions to SYNCED, the session qty is
-    // removed from localPending, but the receivedQty snapshot from the server has not yet been refreshed.
-    // As a result, the "Received" number dropped. Solution: increment local receivedQty by the qty of the
-    // newly synced session. This value will be overwritten by subsequent pulls (no double-counting).
-    const lines = await this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
-    if (lines.length > 0) {
-      await this.db.transaction('rw', this.db.purchaseItems, async () => {
+        await this.db.sessions.put({
+          ...session,
+          status: SESSION_STATUS.SYNCED,
+          receiveId: result.receiveId,
+          number: result.number,
+          overReceive: result.overReceive,
+          excessTotal: result.excessTotal,
+          syncedAt: nowIso(),
+          lastError: null,
+          failureCode: null,
+          updatedAt: nowIso(),
+        })
+
+        // Fix for "Received" regression bug: once SYNCED, the session qty leaves
+        // localPending, but the server snapshot (receivedQty) is not refreshed yet.
+        // Add the qty locally so the "Received" number does not drop; the next pull
+        // overwrites it. Skipped on replay: the document came from an earlier request
+        // whose qty may already be in the snapshot, so sync() refreshes the PO list instead.
+        if (result.replay) return
+        const lines = await this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
         for (const line of lines) {
           const purchaseItem = await this.db.purchaseItems.get(line.purchaseItemId)
           if (!purchaseItem) continue
@@ -551,8 +623,8 @@ export class LocalRepository {
             receivedQty: String(dec2(current + line.qty)),
           })
         }
-      })
-    }
+      },
+    )
   }
 
   /** FR-5.6: TEMPORARY failure -> remains in queue, data is not deleted. */

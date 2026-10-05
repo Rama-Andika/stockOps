@@ -18,7 +18,9 @@ export function AppStoreProvider({
 
   const refresh = useStore(resolved, (state) => state.refresh)
   const online = useStore(resolved, (state) => state.online)
-  const user = useStore(resolved, (state) => state.user)
+  // Primitive on purpose: refresh() re-creates the user object on every call, and an
+  // object dependency would re-trigger the auto-sync effect after every sync (endless loop).
+  const userId = useStore(resolved, (state) => state.user?.userId ?? null)
   const sync = useStore(resolved, (state) => state.sync)
 
   // Initialize on mount + monitor online/offline status.
@@ -42,14 +44,14 @@ export function AppStoreProvider({
     }
   }, [resolved, refresh])
 
-  // Automatic sync when returning online (FR-5.1).
+  // Automatic sync when returning online or when a user logs in (FR-5.1).
   useEffect(() => {
-    if (!isBrowser() || !online || !user) return
+    if (!isBrowser() || !online || !userId) return
     void (async () => {
       const pending = await countPendingSessions(localRepo)
       if (pending > 0) await sync()
     })()
-  }, [online, user, sync])
+  }, [online, userId, sync])
 
   return <AppStoreContext.Provider value={resolved}>{children}</AppStoreContext.Provider>
 }

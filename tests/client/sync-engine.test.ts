@@ -240,6 +240,42 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     })
   })
 
+  describe('balasan server hilang (timeout) lalu kirim ulang', () => {
+    it('replay idempoten tidak menghitung qty dua kali di progress lokal', async () => {
+      await pullAllData(repo, directTransport)
+      const session = await repo.createSession({
+        purchaseId: FIXTURE.purchase.CHECKED,
+        userId: FIXTURE.user.ACTIVE,
+        deviceId: DEVICE,
+        receiveDate: toLocalDateTime(new Date()),
+      })
+      await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 6)
+      await repo.finalizeSession(session.sessionId, {
+        invoiceNumber: 'INV-11',
+        doNumber: 'DO-11',
+        receiveDate: session.receiveDate,
+      })
+
+      // The server stores the document, but the device never receives the answer.
+      const finalized = (await repo.getSession(session.sessionId))!
+      const purchase = (await repo.getPurchase(session.purchaseId))!
+      const payload = buildSessionPayload(finalized, await repo.sessionItems(session.sessionId), {
+        vendorId: purchase.vendorId,
+        locationId: purchase.locationId,
+        companyId: purchase.companyId,
+      })
+      await directTransport.push({ deviceId: DEVICE, sessions: [payload], credentials: [activeFingerprint()] })
+
+      // A later PO refresh already contains the 6 received units.
+      await refreshPurchases(repo, directTransport)
+
+      const outcome = await syncOutbox(repo, directTransport)
+      expect(outcome.results[0]?.code).toBe('IDEMPOTENT_REPLAY')
+      const progress = await repo.getPurchaseProgress(session.purchaseId)
+      expect(progress.items.get(FIXTURE.purchaseItem.PI1)?.totalReceivedQty).toBe(6)
+    })
+  })
+
   describe('otorisasi perangkat saat sinkronisasi', () => {
     it('tanpa kredensial valid -> sesi FAILED (UNAUTHORIZED) dan tetap di antrian', async () => {
       await pullAllData(repo, directTransport)
@@ -281,6 +317,34 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(refreshed.purchases).toBe(2)
       expect(await repo.getSession(session.sessionId)).toBeDefined()
       expect(await repo.sessionItems(session.sessionId)).toHaveLength(1)
+    })
+
+    it('pullAllData yang gagal di tengah tidak menghapus data lama', async () => {
+      await pullAllData(repo, directTransport)
+      const before = await repo.masterCounts()
+      const flaky: SyncTransport = {
+        ...directTransport,
+        pull: async (input) => {
+          if (input.kind === 'purchaseItems') throw new Error('Koneksi terputus')
+          return directTransport.pull(input)
+        },
+      }
+      await expect(pullAllData(repo, flaky)).rejects.toThrow('Koneksi terputus')
+      expect(await repo.masterCounts()).toEqual(before)
+    })
+
+    it('refreshPurchases yang gagal di tengah mempertahankan daftar PO lama', async () => {
+      await pullAllData(repo, directTransport)
+      const flaky: SyncTransport = {
+        ...directTransport,
+        pull: async (input) => {
+          if (input.kind === 'purchaseItems') throw new Error('Koneksi terputus')
+          return directTransport.pull(input)
+        },
+      }
+      await expect(refreshPurchases(repo, flaky)).rejects.toThrow('Koneksi terputus')
+      expect(await repo.db.purchases.count()).toBe(2)
+      expect(await repo.db.purchaseItems.count()).toBe(4)
     })
 
     it('pull ulang penuh juga mempertahankan sesi lokal', async () => {

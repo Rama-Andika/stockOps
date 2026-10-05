@@ -64,9 +64,36 @@ export interface PullSummary {
   pulledAt: string
 }
 
+type PullRows = Array<Record<string, unknown>>
+
+/** Downloads every chunk of one kind into memory; nothing is written locally. */
+async function fetchAllChunks(
+  transport: SyncTransport,
+  kind: PullKind,
+  chunkSize: number,
+  credentials: CredentialFingerprint[],
+  onProgress?: (event: PullProgressEvent) => void,
+): Promise<{ rows: PullRows; total: number }> {
+  const rows: PullRows = []
+  let offset = 0
+  let total = 0
+  // Iteration limit as a safeguard against infinite loops.
+  for (let guard = 0; guard < 100_000; guard += 1) {
+    const result = await transport.pull({ kind, offset, limit: chunkSize, credentials })
+    total = result.total
+    for (const row of result.rows) rows.push(row)
+    onProgress?.({ kind, fetched: rows.length, total })
+    if (result.nextOffset === null) break
+    offset = result.nextOffset
+  }
+  return { rows, total }
+}
+
 /**
  * FR-2.1 / FR-2.2 / BR-16: FULL download of master data & CHECKED POs, paginated
- * (chunking) with progress. Does not touch local receiving sessions.
+ * (chunking) with progress. Everything is downloaded first and only then swapped in
+ * with one local transaction, so a dropped connection keeps the previous data intact.
+ * Does not touch local receiving sessions.
  */
 export async function pullAllData(
   repo: LocalRepository,
@@ -75,62 +102,29 @@ export async function pullAllData(
 ): Promise<PullSummary> {
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
   const credentials = await credentialPayload(repo)
-  await repo.clearMasterData()
 
+  const collected = {} as Record<PullKind, PullRows>
   const counts: Record<string, number> = {}
   for (const kind of PULL_KIND_ORDER) {
-    let offset = 0
-    let total = 0
-    let fetched = 0
-    // Iteration limit as a safeguard against infinite loops.
-    for (let guard = 0; guard < 100_000; guard += 1) {
-      const result = await transport.pull({ kind, offset, limit: chunkSize, credentials })
-      total = result.total
-      if (result.rows.length > 0) {
-        await storeChunk(repo, kind, result.rows)
-        fetched += result.rows.length
-      }
-      options.onProgress?.({ kind, fetched, total })
-      if (result.nextOffset === null) break
-      offset = result.nextOffset
-    }
-    counts[kind] = fetched || total
+    const { rows, total } = await fetchAllChunks(transport, kind, chunkSize, credentials, options.onProgress)
+    collected[kind] = rows
+    counts[kind] = rows.length || total
   }
+
+  await repo.replaceMasterData({
+    purchases: collected.purchases as never,
+    purchaseItems: collected.purchaseItems as never,
+    items: collected.items as never,
+    units: collected.units as never,
+    vendors: collected.vendors as never,
+    vendorItems: collected.vendorItems as never,
+  })
 
   await repo.setMeta('lastPullAt', new Date().toISOString())
   return { counts, pulledAt: new Date().toISOString() }
 }
 
-async function storeChunk(
-  repo: LocalRepository,
-  kind: PullKind,
-  rows: Array<Record<string, unknown>>,
-): Promise<void> {
-  switch (kind) {
-    case 'purchases':
-      await repo.upsertPurchases(rows as never)
-      break
-    case 'purchaseItems':
-      await repo.upsertPurchaseItems(rows as never)
-      break
-    case 'items':
-      await repo.upsertItems(rows as never)
-      break
-    case 'units':
-      await repo.upsertUnits(rows as never)
-      break
-    case 'vendors':
-      await repo.upsertVendors(rows as never)
-      break
-    case 'vendorItems':
-      await repo.upsertVendorItems(rows as never)
-      break
-    default:
-      break
-  }
-}
-
-/** FR-2.3: Refresh PO list without touching ongoing sessions. */
+/** FR-2.3: Refresh PO list without touching ongoing sessions (download first, then swap). */
 export async function refreshPurchases(
   repo: LocalRepository,
   transport: SyncTransport = serverTransport,
@@ -139,35 +133,28 @@ export async function refreshPurchases(
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
   const credentials = await credentialPayload(repo)
   const before = await repo.listPurchases()
-  await repo.clearPurchases()
-  let purchases = 0
-  let purchaseItems = 0
 
-  for (const kind of ['purchases', 'purchaseItems'] as const) {
-    let offset = 0
-    for (let guard = 0; guard < 100_000; guard += 1) {
-      const result = await transport.pull({ kind, offset, limit: chunkSize, credentials })
-      if (result.rows.length > 0) {
-        await storeChunk(repo, kind, result.rows)
-        if (kind === 'purchases') purchases += result.rows.length
-        else purchaseItems += result.rows.length
-      }
-      options.onProgress?.({ kind, fetched: result.rows.length ? offset + result.rows.length : offset, total: result.total })
-      if (result.nextOffset === null) break
-      offset = result.nextOffset
-    }
-  }
+  const purchases = await fetchAllChunks(transport, 'purchases', chunkSize, credentials, options.onProgress)
+  const purchaseItems = await fetchAllChunks(
+    transport,
+    'purchaseItems',
+    chunkSize,
+    credentials,
+    options.onProgress,
+  )
+  await repo.replacePurchases(purchases.rows as never, purchaseItems.rows as never)
 
   const after = await repo.listPurchases()
   const afterIds = new Set(after.map((purchase) => purchase.purchaseId))
   const removed = before.filter((purchase) => !afterIds.has(purchase.purchaseId))
   return {
-    purchases,
-    purchaseItems,
+    purchases: purchases.rows.length,
+    purchaseItems: purchaseItems.rows.length,
     removedCount: removed.length,
     removedNumbers: removed.map((purchase) => purchase.number ?? purchase.purchaseId),
   }
 }
+
 
 /** Transforms local session into sync payload (FR-5.2, BR-8/BR-12). */
 export function buildSessionPayload(
@@ -280,6 +267,7 @@ export async function syncOutbox(
           number: result.number ?? '',
           overReceive: result.overReceive,
           excessTotal: result.excessTotal,
+          replay: result.code === 'IDEMPOTENT_REPLAY',
         })
         await repo.log(
           result.overReceive ? 'error' : 'info',
