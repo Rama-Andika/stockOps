@@ -21,7 +21,19 @@ function session(overrides: Record<string, unknown> = {}): ReceiveSessionInput {
   return makeSessionPayload(overrides) as unknown as ReceiveSessionInput
 }
 
-function pushInput(sessions: ReceiveSessionInput[], credentials: PushInput['credentials'] = []): PushInput {
+/** Valid credential of the ACTIVE user (as issued by loginOnline). */
+function validCredential(): PushInput['credentials'][number] {
+  return {
+    userId: FIXTURE.user.ACTIVE,
+    loginId: CREDENTIALS.ACTIVE.loginId,
+    fingerprint: computeFingerprint(CREDENTIALS.ACTIVE.password),
+  }
+}
+
+function pushInput(
+  sessions: ReceiveSessionInput[],
+  credentials: PushInput['credentials'] = [validCredential()],
+): PushInput {
   return { deviceId: 'device-test-1', sessions, credentials }
 }
 
@@ -570,6 +582,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
     it('mengembalikan daftar kredensial yang dicabut saat sinkronisasi (BR-19)', async () => {
       const result = await syncPush(
         pushInput([session()], [
+          validCredential(),
           {
             userId: FIXTURE.user.ACTIVE_2,
             loginId: CREDENTIALS.ACTIVE_2.loginId,
@@ -579,7 +592,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
         { now: NOW },
       )
       expect(result.revoked).toEqual([{ userId: FIXTURE.user.ACTIVE_2, reason: 'CHANGED' }])
-      // Session still syncs even if credential was revoked.
+      // Session still syncs: the device is authorized by the other, still-valid credential.
       expect(result.results[0]?.status).toBe('SYNCED')
     })
 
@@ -590,6 +603,43 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(result.results.map((r) => r.sessionId)).toEqual([first.sessionId, second.sessionId])
       expect(result.results[0]?.number).toBe('IN10250001')
       expect(result.results[1]?.number).toBe('IN10250002')
+    })
+  })
+
+  describe('otorisasi perangkat & data dari PO', () => {
+    it('menolak semua sesi bila tidak ada kredensial (UNAUTHORIZED)', async () => {
+      const result = await syncPush(pushInput([session()], []), { now: NOW })
+      expect(result.results[0]?.status).toBe('FAILED')
+      expect(result.results[0]?.code).toBe('UNAUTHORIZED')
+      expect(await countRows('pos_receive')).toBe(0)
+    })
+
+    it('menolak bila semua kredensial sudah dicabut', async () => {
+      const result = await syncPush(
+        pushInput([session()], [
+          {
+            userId: FIXTURE.user.ACTIVE_2,
+            loginId: CREDENTIALS.ACTIVE_2.loginId,
+            fingerprint: computeFingerprint('basi'),
+          },
+        ]),
+        { now: NOW },
+      )
+      expect(result.results[0]?.code).toBe('UNAUTHORIZED')
+      expect(result.revoked).toEqual([{ userId: FIXTURE.user.ACTIVE_2, reason: 'CHANGED' }])
+      expect(await countRows('pos_receive')).toBe(0)
+    })
+
+    it('mengambil location_id & company_id dari PO, bukan dari payload klien', async () => {
+      const result = await syncPush(
+        pushInput([session({ locationId: '999999', companyId: '888888' })]),
+        { now: NOW },
+      )
+      expect(result.results[0]?.status).toBe('SYNCED')
+      const headers = await queryRows<{ location_id: string }>(sql`SELECT location_id FROM pos_receive`)
+      expect(String(headers[0]?.location_id)).toBe(FIXTURE.location.L1)
+      const items = await queryRows<{ company_id: string }>(sql`SELECT company_id FROM pos_receive_item`)
+      expect(String(items[0]?.company_id)).toBe('0')
     })
   })
 

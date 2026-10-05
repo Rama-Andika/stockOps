@@ -12,4 +12,12 @@ export const loginOnlineFn = createServerFn({ method: 'POST' })
 
 export const checkCredentialsFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => checkCredentialsInputSchema.parse(data))
-  .handler(async ({ data }) => ({ revoked: await checkCredentialRevocations(data.credentials) }))
+  .handler(async ({ data }) => {
+    try {
+      return { revoked: await checkCredentialRevocations(data.credentials) }
+    } catch (error) {
+      // Internal details (SQL, host) stay in the server log only.
+      console.error('[auth] cek kredensial gagal:', error)
+      throw new Error('Server gagal memeriksa kredensial. Coba lagi beberapa saat lagi.')
+    }
+  })

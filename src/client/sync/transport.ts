@@ -21,7 +21,12 @@ export interface SyncTransport {
   checkCredentials(input: {
     credentials: CredentialFingerprint[]
   }): Promise<CheckCredentialsResult>
-  pull(input: { kind: PullKind; offset: number; limit: number }): Promise<PullResult>
+  pull(input: {
+    kind: PullKind
+    offset: number
+    limit: number
+    credentials: CredentialFingerprint[]
+  }): Promise<PullResult>
   push(input: PushInput): Promise<PushResult>
 }
 

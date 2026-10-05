@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm'
 import { getDb, type Database } from '../db/client'
 import { sysuser } from '../db/schema'
-import { computeFingerprint, verifyLegacyPassword } from '../auth/credentials'
+import { computeFingerprint, safeEqual, verifyLegacyPassword } from '../auth/credentials'
 import { serverEnv } from '../env'
 import type {
   CheckCredentialsResult,
@@ -19,8 +19,11 @@ export interface LoginInput {
  * FR-1.1: First online login on a device.
  * Verification against `sysuser` (legacy password = plaintext).
  */
-export async function loginOnline(input: LoginInput, db: Database = getDb()): Promise<LoginResult> {
+export async function loginOnline(input: LoginInput, dbOverride?: Database): Promise<LoginResult> {
   try {
+    // Resolved inside the try: a failing pool (e.g. rejected production config) must be
+    // answered with the generic message below, not thrown raw to the client.
+    const db = dbOverride ?? getDb()
     const candidates = await db
       .select({
         userId: sysuser.userId,
@@ -57,10 +60,12 @@ export async function loginOnline(input: LoginInput, db: Database = getDb()): Pr
       sessionTtlDays: serverEnv.sessionTtlDays,
     }
   } catch (error) {
+    // Internal details (SQL, host, driver) stay in the server log only.
+    console.error('[auth] loginOnline gagal:', error)
     return {
       ok: false,
       code: 'SERVER_ERROR',
-      message: error instanceof Error ? error.message : 'Kesalahan server tidak dikenal.',
+      message: 'Server sedang bermasalah. Coba lagi beberapa saat lagi.',
     }
   }
 }
@@ -101,10 +106,41 @@ export async function checkCredentialRevocations(
     }
     const loginChanged = (row.loginId ?? '') !== credential.loginId
     const passwordChanged =
-      !row.password || computeFingerprint(row.password) !== credential.fingerprint
+      !row.password || !safeEqual(computeFingerprint(row.password), credential.fingerprint)
     if (loginChanged || passwordChanged) {
       revoked.push({ userId: credential.userId, reason: 'CHANGED' })
     }
   }
   return revoked
+}
+
+/** Returned/thrown when a request carries no credential the server still accepts. */
+export const UNAUTHORIZED_MESSAGE =
+  'Perangkat belum terautentikasi atau kredensial sudah tidak berlaku. Silakan login online ulang.'
+
+/**
+ * Device authentication for server functions. A device proves it is trusted by
+ * sending the fingerprints it received at online login; only the server can compute
+ * them (HMAC secret). Returns the userIds whose credential is still valid.
+ */
+export async function findAuthorizedUserIds(
+  credentials: readonly CredentialFingerprint[],
+  db: Database = getDb(),
+): Promise<string[]> {
+  if (credentials.length === 0) return []
+  const revoked = await checkCredentialRevocations(credentials, db)
+  const revokedIds = new Set(revoked.map((entry) => entry.userId))
+  const valid = credentials
+    .map((credential) => credential.userId)
+    .filter((userId) => !revokedIds.has(userId))
+  return [...new Set(valid)]
+}
+
+/** Throws when none of the device's cached credentials is still valid. */
+export async function assertAuthorizedDevice(
+  credentials: readonly CredentialFingerprint[],
+  db: Database = getDb(),
+): Promise<void> {
+  const authorized = await findAuthorizedUserIds(credentials, db)
+  if (authorized.length === 0) throw new Error(UNAUTHORIZED_MESSAGE)
 }

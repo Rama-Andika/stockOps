@@ -2,8 +2,18 @@ import type { LocalRepository } from '../db/local-repo'
 import type { LocalSession, LocalSessionItem } from '../db/local-db'
 import type { SyncTransport } from './transport'
 import { serverTransport } from './transport'
-import { DEFAULT_PULL_CHUNK_SIZE, PERMANENT_REJECT_CODES, SESSION_STATUS } from '~/shared/constants'
-import type { PullKind, ReceiveSessionInput, SyncSessionResult } from '~/shared/schemas'
+import {
+  DEFAULT_PULL_CHUNK_SIZE,
+  MAX_PUSH_SESSIONS,
+  PERMANENT_REJECT_CODES,
+  SESSION_STATUS,
+} from '~/shared/constants'
+import type {
+  CredentialFingerprint,
+  PullKind,
+  ReceiveSessionInput,
+  SyncSessionResult,
+} from '~/shared/schemas'
 
 /** Maximum timeout for a single sync request before considered failed. */
 const SYNC_TIMEOUT_MS = 30_000
@@ -22,6 +32,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       },
     )
   })
+}
+
+/** Credentials of every user cached on this device; the server uses them to authenticate the device. */
+async function credentialPayload(repo: LocalRepository): Promise<CredentialFingerprint[]> {
+  const cached = await repo.listCredentials()
+  return cached.map((credential) => ({
+    userId: credential.userId,
+    loginId: credential.loginId,
+    fingerprint: credential.fingerprint,
+  }))
 }
 
 export const PULL_KIND_ORDER: PullKind[] = [
@@ -54,6 +74,7 @@ export async function pullAllData(
   options: { chunkSize?: number; onProgress?: (event: PullProgressEvent) => void } = {},
 ): Promise<PullSummary> {
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
+  const credentials = await credentialPayload(repo)
   await repo.clearMasterData()
 
   const counts: Record<string, number> = {}
@@ -63,7 +84,7 @@ export async function pullAllData(
     let fetched = 0
     // Iteration limit as a safeguard against infinite loops.
     for (let guard = 0; guard < 100_000; guard += 1) {
-      const result = await transport.pull({ kind, offset, limit: chunkSize })
+      const result = await transport.pull({ kind, offset, limit: chunkSize, credentials })
       total = result.total
       if (result.rows.length > 0) {
         await storeChunk(repo, kind, result.rows)
@@ -116,6 +137,7 @@ export async function refreshPurchases(
   options: { chunkSize?: number; onProgress?: (event: PullProgressEvent) => void } = {},
 ): Promise<{ purchases: number; purchaseItems: number; removedCount: number; removedNumbers: string[] }> {
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
+  const credentials = await credentialPayload(repo)
   const before = await repo.listPurchases()
   await repo.clearPurchases()
   let purchases = 0
@@ -124,7 +146,7 @@ export async function refreshPurchases(
   for (const kind of ['purchases', 'purchaseItems'] as const) {
     let offset = 0
     for (let guard = 0; guard < 100_000; guard += 1) {
-      const result = await transport.pull({ kind, offset, limit: chunkSize })
+      const result = await transport.pull({ kind, offset, limit: chunkSize, credentials })
       if (result.rows.length > 0) {
         await storeChunk(repo, kind, result.rows)
         if (kind === 'purchases') purchases += result.rows.length
@@ -198,7 +220,8 @@ export async function syncOutbox(
   transport: SyncTransport = serverTransport,
   options: { deviceId?: string } = {},
 ): Promise<SyncOutcome> {
-  const pending = await repo.outboxSessions()
+  // FIFO batch within the server limit; the remaining sessions go with the next sync.
+  const pending = (await repo.outboxSessions()).slice(0, MAX_PUSH_SESSIONS)
   const emptyOutcome: SyncOutcome = {
     attempted: 0,
     synced: 0,
@@ -208,7 +231,7 @@ export async function syncOutbox(
   }
   if (pending.length === 0) return emptyOutcome
 
-  const credentials = await repo.listCredentials()
+  const credentials = await credentialPayload(repo)
   const payloads: ReceiveSessionInput[] = []
 
   for (const session of pending) {
@@ -243,11 +266,7 @@ export async function syncOutbox(
       transport.push({
         deviceId: options.deviceId ?? payloads[0]!.deviceId,
         sessions: payloads,
-        credentials: credentials.map((credential) => ({
-          userId: credential.userId,
-          loginId: credential.loginId,
-          fingerprint: credential.fingerprint,
-        })),
+        credentials,
       }),
       SYNC_TIMEOUT_MS,
     )

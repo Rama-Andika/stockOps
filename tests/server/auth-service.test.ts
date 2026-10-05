@@ -1,7 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { getDb, closeDb } from '~/server/db/client'
-import { loginOnline, checkCredentialRevocations } from '~/server/services/auth-service'
+import {
+  UNAUTHORIZED_MESSAGE,
+  assertAuthorizedDevice,
+  checkCredentialRevocations,
+  findAuthorizedUserIds,
+  loginOnline,
+} from '~/server/services/auth-service'
 import { computeFingerprint } from '~/server/auth/credentials'
 import { CREDENTIALS, FIXTURE, queryRows, seedAll } from './helpers'
 
@@ -151,6 +157,35 @@ describe('auth-service', () => {
 
     it('mengembalikan array kosong untuk input kosong', async () => {
       expect(await checkCredentialRevocations([])).toEqual([])
+    })
+  })
+
+  describe('otorisasi perangkat (server function)', () => {
+    const valid = () => ({
+      userId: FIXTURE.user.ACTIVE,
+      loginId: CREDENTIALS.ACTIVE.loginId,
+      fingerprint: computeFingerprint(CREDENTIALS.ACTIVE.password),
+    })
+    const stale = () => ({
+      userId: FIXTURE.user.ACTIVE_2,
+      loginId: CREDENTIALS.ACTIVE_2.loginId,
+      fingerprint: 'basi',
+    })
+
+    it('lolos bila minimal satu kredensial masih valid', async () => {
+      await expect(assertAuthorizedDevice([valid(), stale()])).resolves.toBeUndefined()
+    })
+
+    it('menolak bila tidak ada kredensial', async () => {
+      await expect(assertAuthorizedDevice([])).rejects.toThrow(UNAUTHORIZED_MESSAGE)
+    })
+
+    it('menolak bila semua kredensial sudah dicabut', async () => {
+      await expect(assertAuthorizedDevice([stale()])).rejects.toThrow(UNAUTHORIZED_MESSAGE)
+    })
+
+    it('findAuthorizedUserIds hanya mengembalikan user yang kredensialnya valid', async () => {
+      expect(await findAuthorizedUserIds([valid(), stale()])).toEqual([FIXTURE.user.ACTIVE])
     })
   })
 

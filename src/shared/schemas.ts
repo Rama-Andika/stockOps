@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod'
+import { MAX_PUSH_SESSIONS, MAX_SESSION_LINES } from './constants'
 
 export const bigintString = z
   .string()
@@ -90,6 +91,8 @@ export const pullInputSchema = z.object({
   kind: z.enum(PULL_KINDS),
   offset: z.number().int().min(0),
   limit: z.number().int().min(1).max(2000),
+  // Device authentication: fingerprints of every user cached on the device.
+  credentials: z.array(credentialFingerprintSchema).max(500).default([]),
 })
 
 export const purchaseRowSchema = z.object({
@@ -183,6 +186,8 @@ export const receiveSessionInputSchema = z.object({
   deviceId: z.string().trim().min(1).max(64),
   userId: bigintString,
   purchaseId: bigintString,
+  // vendorId/locationId/companyId are kept for payload compatibility only:
+  // the server reads them from the PO row and ignores these values.
   vendorId: bigintString,
   locationId: bigintString,
   companyId: bigintString,
@@ -191,14 +196,14 @@ export const receiveSessionInputSchema = z.object({
   invoiceNumber: z.string().trim().min(1, 'Nomor invoice wajib').max(45),
   doNumber: z.string().trim().min(1, 'Nomor DO wajib').max(45),
   finalizedAt: z.string().min(1),
-  items: z.array(receiveLineInputSchema).min(1, 'Minimal 1 item'),
+  items: z.array(receiveLineInputSchema).min(1, 'Minimal 1 item').max(MAX_SESSION_LINES),
 })
 
 export type ReceiveSessionInput = z.infer<typeof receiveSessionInputSchema>
 
 export const pushInputSchema = z.object({
   deviceId: z.string().trim().min(1).max(64),
-  sessions: z.array(receiveSessionInputSchema).min(1),
+  sessions: z.array(receiveSessionInputSchema).min(1).max(MAX_PUSH_SESSIONS),
   credentials: z.array(credentialFingerprintSchema).max(500).default([]),
 })
 
@@ -227,7 +232,15 @@ export const syncSessionResultSchema = z.object({
   excessTotal: z.number(),
   lines: z.array(syncLineResultSchema),
   code: z
-    .enum(['OK', 'IDEMPOTENT_REPLAY', 'PURCHASE_NOT_FOUND', 'PURCHASE_NOT_CHECKED', 'VALIDATION', 'SERVER_ERROR'])
+    .enum([
+      'OK',
+      'IDEMPOTENT_REPLAY',
+      'PURCHASE_NOT_FOUND',
+      'PURCHASE_NOT_CHECKED',
+      'VALIDATION',
+      'SERVER_ERROR',
+      'UNAUTHORIZED',
+    ])
     .optional(),
   message: z.string().nullish(),
 })
@@ -248,6 +261,7 @@ export type PushResult = z.infer<typeof pushResultSchema>
 
 export const overReceiveWorklistInputSchema = z.object({
   limit: z.number().int().min(1).max(200).default(50),
+  credentials: z.array(credentialFingerprintSchema).max(500).default([]),
 })
 
 export const overReceiveWorklistRowSchema = z.object({

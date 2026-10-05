@@ -16,6 +16,10 @@ const clientDir = join(rootDir, 'dist', 'client')
 const serverEntry = pathToFileURL(join(rootDir, 'dist', 'server', 'server.js')).href
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 
+// This script is the production entry point: enable the production checks in
+// src/server/env.ts (secrets and DB credentials must be explicitly configured).
+process.env.NODE_ENV ??= 'production'
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -131,9 +135,11 @@ const server = createServer((req, res) => {
       }
       await serveStatic(res, url.pathname)
     } catch (error) {
+      // Details stay in the server log; the client only receives a generic message.
+      console.error('[serve] request gagal:', error)
       res.statusCode = 500
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-      res.end(`Internal error: ${error instanceof Error ? error.message : String(error)}`)
+      res.end('Internal error')
     }
   })()
 })

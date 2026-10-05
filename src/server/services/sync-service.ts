@@ -14,7 +14,7 @@ import {
 } from '../db/schema'
 import { addDays, toMysqlDate, toMysqlDateTime } from '../db/sql-utils'
 import { serverEnv } from '../env'
-import { checkCredentialRevocations } from './auth-service'
+import { checkCredentialRevocations, UNAUTHORIZED_MESSAGE } from './auth-service'
 import { buildNumber, buildPrefix } from '~/shared/doc-number'
 import { IdGenerator, maxIdForApp, minIdForApp } from '~/shared/ids'
 import {
@@ -459,7 +459,7 @@ async function processSession(
           discountPercent: purchase.discountPercent ?? '0',
           discountTotal: String(headerFinance.discountTotal),
           paymentType: purchase.paymentType ?? null,
-          locationId: BigInt(session.locationId),
+          locationId: purchase.locationId ?? BigInt(0),
           userId: BigInt(session.userId),
           number,
           counter,
@@ -523,7 +523,7 @@ async function processSession(
             expiredDate: toMysqlDate(sanitized.parsed),
             apCoaId: BigInt(0),
             type: 0,
-            companyId: BigInt(session.companyId),
+            companyId: purchase.companyId ?? BigInt(0),
             isBonus: 0,
             memo,
             status: null,
@@ -575,17 +575,28 @@ export async function syncPush(input: PushInput, options: SyncOptions = {}): Pro
   // BR-19: check credentials first (applies to all cached users).
   const revoked = await checkCredentialRevocations(input.credentials, ctx.db)
 
+  // Device authentication: at least one cached credential must still be valid.
+  // Sessions of a user whose own credential was revoked are still accepted (the goods
+  // were physically received), as long as the device itself is trusted.
+  const revokedIds = new Set(revoked.map((entry) => entry.userId))
+  const deviceAuthorized = input.credentials.some((credential) => !revokedIds.has(credential.userId))
+  if (!deviceAuthorized) {
+    return {
+      results: input.sessions.map((session) => failed(session, 'UNAUTHORIZED', UNAUTHORIZED_MESSAGE)),
+      revoked,
+      serverTime: new Date().toISOString(),
+    }
+  }
+
   const results: SyncSessionResult[] = []
   for (const session of input.sessions) {
     try {
       results.push(await processSession(ctx, session))
     } catch (error) {
+      // Internal details (SQL, lock names) stay in the server log only.
+      console.error(`[sync] sesi ${session.sessionId} gagal:`, error)
       results.push(
-        failed(
-          session,
-          'SERVER_ERROR',
-          error instanceof Error ? error.message : 'Kesalahan server tidak dikenal.',
-        ),
+        failed(session, 'SERVER_ERROR', 'Kesalahan server saat menyimpan dokumen. Coba kirim ulang.'),
       )
     }
   }

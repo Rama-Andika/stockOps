@@ -50,3 +50,35 @@ export function assertDistinctAppIdx(env: ServerEnv = serverEnv): void {
     )
   }
 }
+
+/** Values that must never be used as the HMAC secret in production. */
+const WEAK_HMAC_SECRETS = new Set(['stockops-dev-secret', 'ganti-dengan-kunci-rahasia-anda'])
+const MIN_HMAC_SECRET_LENGTH = 32
+
+/** True only when the process runs as the production server (`npm start` sets NODE_ENV). */
+export function isProductionRuntime(raw: NodeJS.ProcessEnv = process.env): boolean {
+  return raw.NODE_ENV === 'production'
+}
+
+/**
+ * Production must not silently fall back to development defaults: a publicly known
+ * HMAC secret lets anyone turn cached fingerprints back into passwords, and the
+ * root/root database fallback must never be used implicitly.
+ */
+export function assertProductionSecrets(
+  env: ServerEnv = serverEnv,
+  raw: NodeJS.ProcessEnv = process.env,
+): void {
+  const problems: string[] = []
+  const secret = env.credentialHmacSecret
+  if (WEAK_HMAC_SECRETS.has(secret) || secret.length < MIN_HMAC_SECRET_LENGTH) {
+    problems.push(`CREDENTIAL_HMAC_SECRET wajib berisi nilai acak minimal ${MIN_HMAC_SECRET_LENGTH} karakter`)
+  }
+  for (const name of ['DB_USER', 'DB_PASSWORD', 'DB_NAME'] as const) {
+    const value = raw[name]
+    if (value === undefined || value.trim() === '') problems.push(`${name} wajib diisi`)
+  }
+  if (problems.length > 0) {
+    throw new Error(`Konfigurasi produksi tidak aman: ${problems.join('; ')}.`)
+  }
+}

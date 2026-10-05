@@ -66,6 +66,12 @@ export const PROGRESS_LABEL: Record<ProgressStatus, string> = {
 /** Chunk size when pulling master data (NF-4). */
 export const DEFAULT_PULL_CHUNK_SIZE = 500
 
+/** Max sessions per push request (validated by the server, enforced by the client outbox). */
+export const MAX_PUSH_SESSIONS = 200
+
+/** Max lines per receiving session in a push request. */
+export const MAX_SESSION_LINES = 5000
+
 /** Master data TTL (hours) before considered stale & re-downloaded upon online login (FR-2.1). */
 export const MASTER_DATA_STALE_HOURS = 12
 

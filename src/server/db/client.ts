@@ -2,7 +2,7 @@ import mysql from 'mysql2/promise'
 import { drizzle, type MySql2Database } from 'drizzle-orm/mysql2'
 import type { RowDataPacket } from 'mysql2/promise'
 import * as schema from './schema'
-import { assertDistinctAppIdx, serverEnv } from '../env'
+import { assertDistinctAppIdx, assertProductionSecrets, isProductionRuntime, serverEnv } from '../env'
 
 export type Database = MySql2Database<typeof schema>
 
@@ -34,6 +34,15 @@ export function createMysqlPool(database: string = serverEnv.database): mysql.Po
 export function getPool(): mysql.Pool {
   if (!poolInstance) {
     assertDistinctAppIdx()
+    // Fail closed: never open the production pool with development defaults.
+    if (isProductionRuntime()) {
+      try {
+        assertProductionSecrets()
+      } catch (error) {
+        console.error('[env]', error instanceof Error ? error.message : error)
+        throw error
+      }
+    }
     poolInstance = createMysqlPool()
   }
   return poolInstance

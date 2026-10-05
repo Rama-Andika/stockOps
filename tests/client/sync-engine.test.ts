@@ -5,7 +5,8 @@ import { closeDb, getDb } from '~/server/db/client'
 import { checkCredentialRevocations, loginOnline } from '~/server/services/auth-service'
 import { pullChunk } from '~/server/services/pull-service'
 import { syncPush } from '~/server/services/sync-service'
-import { StockOpsDb } from '~/client/db/local-db'
+import { StockOpsDb, type LocalCredential } from '~/client/db/local-db'
+import { computeFingerprint } from '~/server/auth/credentials'
 import { LocalRepository } from '~/client/db/local-repo'
 import {
   buildSessionPayload,
@@ -31,10 +32,36 @@ let db: StockOpsDb
 let repo: LocalRepository
 const DEVICE = 'pdt-test-1'
 
+/** Fingerprint the server issues to the ACTIVE user at online login. */
+function activeFingerprint() {
+  return {
+    userId: FIXTURE.user.ACTIVE,
+    loginId: CREDENTIALS.ACTIVE.loginId,
+    fingerprint: computeFingerprint(CREDENTIALS.ACTIVE.password),
+  }
+}
+
+/** Cached credential of the ACTIVE user, as saved after a real online login. */
+function activeCredential(): LocalCredential {
+  return {
+    ...activeFingerprint(),
+    key: `${DEVICE}:${FIXTURE.user.ACTIVE}`,
+    deviceId: DEVICE,
+    fullName: 'A',
+    companyId: '0',
+    salt: 's',
+    passwordHash: 'h',
+    iterations: 1000,
+    lastOnlineLoginAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+  }
+}
+
 beforeEach(async () => {
   await seedAll()
   db = new StockOpsDb(`stockops_engine_${Math.random().toString(36).slice(2)}`)
   repo = new LocalRepository(db)
+  await repo.saveCredential(activeCredential())
 })
 
 afterEach(async () => {
@@ -141,7 +168,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       const replay = await directTransport.push({
         deviceId: DEVICE,
         sessions: [payload],
-        credentials: [],
+        credentials: [activeFingerprint()],
       })
       expect(replay.results[0]?.code).toBe('IDEMPOTENT_REPLAY')
       expect(replay.results[0]?.receiveId).toBe(synced?.receiveId)
@@ -206,7 +233,36 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
 
       const outcome = await syncOutbox(repo, directTransport)
       expect(outcome.revokedUserIds).toContain(FIXTURE.user.ACTIVE_2)
-      expect(await repo.listCredentials()).toHaveLength(0)
+      // Only the revoked credential is removed; the valid ACTIVE credential stays.
+      expect((await repo.listCredentials()).map((credential) => credential.userId)).toEqual([
+        FIXTURE.user.ACTIVE,
+      ])
+    })
+  })
+
+  describe('otorisasi perangkat saat sinkronisasi', () => {
+    it('tanpa kredensial valid -> sesi FAILED (UNAUTHORIZED) dan tetap di antrian', async () => {
+      await pullAllData(repo, directTransport)
+      await repo.removeCredentialsForUsers([FIXTURE.user.ACTIVE])
+      const session = await repo.createSession({
+        purchaseId: FIXTURE.purchase.CHECKED,
+        userId: FIXTURE.user.ACTIVE,
+        deviceId: DEVICE,
+        receiveDate: toLocalDateTime(new Date()),
+      })
+      await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 1)
+      await repo.finalizeSession(session.sessionId, {
+        invoiceNumber: 'INV-12',
+        doNumber: 'DO-12',
+        receiveDate: session.receiveDate,
+      })
+
+      const outcome = await syncOutbox(repo, directTransport)
+      expect(outcome.failed).toBe(1)
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.FAILED)
+      expect(saved?.failureCode).toBe('UNAUTHORIZED')
+      expect(await repo.outboxSessions()).toHaveLength(1)
     })
   })
 
