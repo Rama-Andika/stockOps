@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAppStore } from '~/client/state/store/app-store'
+import { isInsecureContext } from '~/client/secure-context'
 import { Button, Card, Field, Notice, inputClass } from './ui'
+
+// The secure-context flag never changes while the page is open: nothing to subscribe to.
+const subscribeNever = () => () => {}
+// The SPA shell is prerendered in Node, where `window` does not exist: render without the banner there.
+const insecureOnServer = () => false
 
 export function LoginForm() {
   const online = useAppStore((state) => state.online)
@@ -13,6 +19,9 @@ export function LoginForm() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
   const idRef = useRef<HTMLInputElement>(null)
+  // Read synchronously on the client (no effect), so the banner is part of the first client render
+  // and does not shift the layout after paint.
+  const insecureContext = useSyncExternalStore(subscribeNever, isInsecureContext, insecureOnServer)
 
   useEffect(() => {
     idRef.current?.focus()
@@ -59,6 +68,13 @@ export function LoginForm() {
           </span>
         </p>
       </div>
+
+      {insecureContext ? (
+        <div role="alert" className="rounded-lg bg-amber-500/20 px-4 py-3 text-base text-amber-300">
+          Koneksi tidak aman (http://). Login dan mode offline membutuhkan alamat https://. Minta admin
+          alamat aplikasi yang benar.
+        </div>
+      ) : null}
 
       <Card title="Masuk">
         <form

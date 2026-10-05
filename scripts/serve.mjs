@@ -7,6 +7,7 @@
 // Run: npm run build && npm start
 
 import { createServer } from 'node:http'
+import { createServer as createHttpsServer } from 'node:https'
 import { stat, readFile } from 'node:fs/promises'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -19,6 +20,22 @@ const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 // This script is the production entry point: enable the production checks in
 // src/server/env.ts (secrets and DB credentials must be explicitly configured).
 process.env.NODE_ENV ??= 'production'
+
+// Optional HTTPS (strongly recommended for PDT devices). Browsers only expose service
+// workers and crypto.subtle on https:// or localhost, so plain http://<LAN-IP> cannot
+// log in or work offline. Set both variables in the shell environment (not in .env).
+const tlsCertFile = process.env.TLS_CERT_FILE?.trim()
+const tlsKeyFile = process.env.TLS_KEY_FILE?.trim()
+const useTls = Boolean(tlsCertFile && tlsKeyFile)
+const protocol = useTls ? 'https' : 'http'
+
+// Fail closed on a half-configured TLS setup: silently falling back to http would leave
+// the operator believing https is active while PDT devices still cannot log in.
+if (Boolean(tlsCertFile) !== Boolean(tlsKeyFile)) {
+  console.error('[serve] TLS_CERT_FILE dan TLS_KEY_FILE harus diisi bersamaan (hanya satu yang terisi).')
+  console.error('[serve] Isi keduanya untuk https, atau kosongkan keduanya untuk http.')
+  process.exit(1)
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -47,7 +64,7 @@ function isServerRequest(pathname) {
 
 function toWebRequest(req) {
   const host = req.headers.host ?? `localhost:${port}`
-  const url = `http://${host}${req.url ?? '/'}`
+  const url = `${protocol}://${host}${req.url ?? '/'}`
   const headers = new Headers()
   for (const [key, value] of Object.entries(req.headers)) {
     if (value === undefined) continue
@@ -123,28 +140,51 @@ async function serveStatic(res, pathname) {
   }
 }
 
-const server = createServer((req, res) => {
-  void (async () => {
-    try {
-      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-      if (isServerRequest(url.pathname)) {
-        const mod = await getHandler()
-        const response = await mod.default.fetch(toWebRequest(req))
-        await sendWebResponse(res, response)
-        return
-      }
-      await serveStatic(res, url.pathname)
-    } catch (error) {
-      // Details stay in the server log; the client only receives a generic message.
-      console.error('[serve] request gagal:', error)
-      res.statusCode = 500
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-      res.end('Internal error')
+async function handleRequest(req, res) {
+  try {
+    const url = new URL(req.url ?? '/', `${protocol}://${req.headers.host ?? 'localhost'}`)
+    if (isServerRequest(url.pathname)) {
+      const mod = await getHandler()
+      const response = await mod.default.fetch(toWebRequest(req))
+      await sendWebResponse(res, response)
+      return
     }
-  })()
-})
+    await serveStatic(res, url.pathname)
+  } catch (error) {
+    // Details stay in the server log; the client only receives a generic message.
+    console.error('[serve] request gagal:', error)
+    res.statusCode = 500
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+    res.end('Internal error')
+  }
+}
+
+const listener = (req, res) => {
+  void handleRequest(req, res)
+}
+
+async function loadTlsOptions() {
+  try {
+    return { cert: await readFile(tlsCertFile), key: await readFile(tlsKeyFile) }
+  } catch (error) {
+    // Clear message instead of a raw stack trace; never fall back to http.
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : 'ERROR'
+    console.error(`[serve] Gagal membaca file TLS (${code}).`)
+    console.error(`[serve] TLS_CERT_FILE=${tlsCertFile}`)
+    console.error(`[serve] TLS_KEY_FILE=${tlsKeyFile}`)
+    console.error('[serve] Periksa path, hak akses file, dan pastikan private key tidak terenkripsi (tanpa passphrase).')
+    process.exit(1)
+  }
+}
+
+const server = useTls ? createHttpsServer(await loadTlsOptions(), listener) : createServer(listener)
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`StockOps berjalan di http://localhost:${port}`)
-  console.log('Akses dari PDT di jaringan yang sama memakai IP komputer ini.')
+  console.log(`StockOps berjalan di ${protocol}://localhost:${port}`)
+  if (useTls) {
+    console.log(`Akses dari PDT: https://<IP-komputer-ini>:${port}`)
+  } else {
+    console.log('PERINGATAN: mode http. PDT yang membuka http://<IP-LAN> tidak bisa login maupun bekerja offline.')
+    console.log('Isi TLS_CERT_FILE dan TLS_KEY_FILE untuk mengaktifkan https (lihat README).')
+  }
 })

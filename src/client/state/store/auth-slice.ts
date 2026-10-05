@@ -10,6 +10,7 @@ import {
   verifyOfflineCredential,
 } from '../../auth/offline-auth'
 import { serverTransport } from '../../sync/transport'
+import { INSECURE_CONTEXT_MESSAGE, hasWebCrypto } from '../../secure-context'
 import { MASTER_DATA_STALE_HOURS } from '~/shared/constants'
 import { CURRENT_USER_KEY, isBrowser } from './helpers'
 import type { ActionResult, AppState, AuthState, CurrentUser } from './types'
@@ -47,6 +48,8 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthState> = (set, 
 
     loginOnline: async (loginId, password) => {
       if (!isBrowser()) return { ok: false, message: 'Tidak tersedia.' }
+      // Without WebCrypto the credential cannot be stored after the server accepts it.
+      if (!hasWebCrypto()) return { ok: false, message: INSECURE_CONTEXT_MESSAGE }
       const device = await localRepo.ensureDeviceId()
       const result = await serverTransport.login({ loginId, password, deviceId: device })
       if (!result.ok) return { ok: false, message: result.message }
@@ -95,6 +98,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthState> = (set, 
 
     loginOffline: async (loginId, password) => {
       if (!isBrowser()) return { ok: false, message: 'Tidak tersedia.' }
+      if (!hasWebCrypto()) return { ok: false, message: INSECURE_CONTEXT_MESSAGE }
       const device = await localRepo.ensureDeviceId()
       const credential = await localRepo.getCredential(device, loginId)
       if (!credential) {
