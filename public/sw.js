@@ -1,13 +1,13 @@
 /*
- * Service worker StockOps (ditulis manual, tanpa dependensi).
+ * StockOps service worker (handwritten, zero dependencies).
  *
- * Tujuan: aplikasi tetap bisa DIBUKA saat offline (shell SPA + SEMUA aset
- * hasil build, termasuk chunk per-route, tersimpan di cache). Data kerja
- * sendiri disimpan di IndexedDB (Dexie), dan panggilan server function
- * SELALU network-only (tidak pernah di-cache).
+ * Purpose: allow the application to OPEN while offline (SPA shell + ALL
+ * build assets, including per-route chunks, stored in cache). Working data
+ * is stored in IndexedDB (Dexie), and server function calls are
+ * ALWAYS network-only (never cached).
  *
- * Daftar aset hasil build dibaca dari /precache-manifest.json yang dibuat
- * oleh scripts/generate-precache.mjs (dijalankan setelah `vite build`).
+ * The build asset list is read from /precache-manifest.json generated
+ * by scripts/generate-precache.mjs (run after `vite build`).
  */
 
 const CACHE_VERSION = 'stockops-v3'
@@ -28,13 +28,13 @@ self.addEventListener('install', (event) => {
             const response = await fetch(new Request(url, { cache: 'reload' }))
             if (response && response.ok) await shell.put(url, response)
           } catch {
-            // Abaikan: satu aset gagal tidak boleh menggagalkan instalasi.
+            // Ignore: a single asset failure should not fail installation.
           }
         }),
       )
 
-      // Precache SEMUA aset hasil build (termasuk chunk per-route) supaya
-      // navigasi offline ke route apa pun tidak gagal memuat chunk.
+      // Precache ALL build assets (including per-route chunks) so that
+      // offline navigation to any route does not fail loading chunks.
       try {
         const manifestResponse = await fetch(new Request(PRECACHE_MANIFEST, { cache: 'reload' }))
         if (manifestResponse.ok) {
@@ -47,14 +47,14 @@ self.addEventListener('install', (event) => {
                   const response = await fetch(new Request(url, { cache: 'reload' }))
                   if (response && response.ok) await assets.put(url, response)
                 } catch {
-                  // abaikan
+                  // ignore
                 }
               }),
             )
           }
         }
       } catch {
-        // Manifest belum tersedia (mis. saat dev) — lanjut tanpa precache aset.
+        // Manifest not yet available (e.g. during dev) — proceed without asset precaching.
       }
 
       await self.skipWaiting()
@@ -84,12 +84,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
-  // Data/auth harus selalu segar dari server (offline-first pakai IndexedDB).
+  // Data/auth must always be fresh from server (offline-first uses IndexedDB).
   if (isServerCall(url.pathname)) return
-  // Manifest precache tidak perlu di-cache.
+  // Precache manifest does not need to be cached.
   if (url.pathname === PRECACHE_MANIFEST) return
 
-  // Navigasi: network-first, fallback ke shell yang tersimpan.
+  // Navigation: network-first, fallback to stored shell.
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
@@ -100,7 +100,7 @@ self.addEventListener('fetch', (event) => {
             try {
               await cache.put(SHELL_URL, response.clone())
             } catch {
-              // abaikan
+              // ignore
             }
           }
           return response
@@ -116,7 +116,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Aset statis (ber-hash) & chunk route: cache-first.
+  // Static assets (hashed) & route chunks: cache-first.
   event.respondWith(
     (async () => {
       const cache = await caches.open(ASSET_CACHE)
@@ -128,7 +128,7 @@ self.addEventListener('fetch', (event) => {
           try {
             await cache.put(request, response.clone())
           } catch {
-            // abaikan
+            // ignore
           }
         }
         return response

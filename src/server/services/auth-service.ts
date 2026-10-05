@@ -16,8 +16,8 @@ export interface LoginInput {
 }
 
 /**
- * FR-1.1: login online pertama di sebuah device.
- * Verifikasi ke `sysuser` (password legacy = plaintext).
+ * FR-1.1: First online login on a device.
+ * Verification against `sysuser` (legacy password = plaintext).
  */
 export async function loginOnline(input: LoginInput, db: Database = getDb()): Promise<LoginResult> {
   try {
@@ -51,7 +51,7 @@ export async function loginOnline(input: LoginInput, db: Database = getDb()): Pr
         fullName: match.fullName ?? input.loginId,
         companyId: String(match.companyId ?? 0n),
       },
-      // Password plaintext TIDAK dikirim/di-cache; hanya fingerprint (BR-19).
+      // Plaintext password is NOT sent/cached; only fingerprint (BR-19).
       fingerprint: computeFingerprint(input.password),
       serverTime: new Date().toISOString(),
       sessionTtlDays: serverEnv.sessionTtlDays,
@@ -66,10 +66,10 @@ export async function loginOnline(input: LoginInput, db: Database = getDb()): Pr
 }
 
 /**
- * BR-19 / FR-1.6: deteksi kredensial yang berubah / hilang.
- * Catatan: status aktif (user_status) sengaja TIDAK dicek lagi (lihat rencana
- * perubahan "abaikan user_status"); user non-aktif tetap dianggap valid.
- * Berlaku untuk SEMUA user yang ter-cache di device, bukan hanya yang login.
+ * BR-19 / FR-1.6: detect changed / missing credentials.
+ * Note: active status (user_status) is deliberately NOT checked anymore (see
+ * "ignore user_status" change plan); inactive users are still considered valid.
+ * Applies to ALL users cached on the device, not just the one currently logged in.
  */
 export async function checkCredentialRevocations(
   credentials: readonly CredentialFingerprint[],

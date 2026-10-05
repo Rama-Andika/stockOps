@@ -1,10 +1,10 @@
 /**
- * Perhitungan over-receive (BR-5, BR-6, FR-6.1, FR-5.4).
+ * Over-receive calculation (BR-5, BR-6, FR-6.1, FR-5.4).
  *
- * Aturan: TOTAL qty semua penerimaan untuk satu item PO tidak boleh melebihi
- * qty yang dipesan item PO tersebut. Perbandingan memakai satuan yang sama
- * (satuan PO). Dihitung lintas semua dokumen/device => ini fungsi murni yang
- * menerima snapshot "sudah diterima" dari server.
+ * Rule: The TOTAL qty of all receipts for a single PO item must not exceed
+ * the ordered qty for that PO item. Comparisons use the same unit
+ * (PO unit). Calculated across all documents/devices => this is a pure function
+ * that accepts an "already received" snapshot from the server.
  */
 
 import { PROGRESS_STATUS, type ProgressStatus } from './constants'
@@ -62,7 +62,7 @@ function receivedMap(lines: readonly AlreadyReceivedLine[]): Map<string, number>
   return map
 }
 
-/** Evaluasi satu baris penerimaan. */
+/** Evaluate a single receipt line. */
 export function evaluateLine(
   line: ReceiveLine,
   ordered: Map<string, number>,
@@ -84,7 +84,7 @@ export function evaluateLine(
   }
 }
 
-/** Evaluasi seluruh baris satu sesi. */
+/** Evaluate all lines of a session. */
 export function evaluateSession(
   lines: readonly ReceiveLine[],
   ordered: readonly OrderedLine[],
@@ -107,7 +107,7 @@ export function evaluateSession(
   }
 }
 
-/** FR-3.2: status kemajuan PO berdasarkan total dipesan vs total diterima. */
+/** FR-3.2: PO progress status based on ordered total vs received total. */
 export function progressOf(orderedTotal: number, receivedTotal: number): ProgressStatus {
   const ordered = dec2(orderedTotal)
   const received = dec2(receivedTotal)

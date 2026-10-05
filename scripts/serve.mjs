@@ -1,10 +1,10 @@
-// Server produksi sederhana untuk StockOps (SPA + server functions).
+// Simple production server for StockOps (SPA + server functions).
 //
-// Sesuai desain SPA mode TanStack Start:
-// - aset statis & shell SPA dilayani dari dist/client
-// - permintaan /_serverFn/* dan /api/* diteruskan ke handler fetch hasil build
+// According to TanStack Start SPA mode design:
+// - static assets & SPA shell are served from dist/client
+// - /_serverFn/* and /api/* requests are forwarded to the build fetch handler
 //
-// Jalankan: npm run build && npm start
+// Run: npm run build && npm start
 
 import { createServer } from 'node:http'
 import { stat, readFile } from 'node:fs/promises'
@@ -99,7 +99,7 @@ async function serveStatic(res, pathname) {
     filePath = null
   }
 
-  // Fallback SPA: rute apa pun yang bukan aset statis dilayani oleh shell.
+  // SPA fallback: any route that is not a static asset is served by the shell.
   if (!filePath) filePath = join(clientDir, '_shell.html')
 
   try {

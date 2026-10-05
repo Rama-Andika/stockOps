@@ -1,9 +1,9 @@
 /**
- * Sanitasi tanggal penerimaan (menutup celah "jam device salah").
+ * Receive date sanitization (closes the "wrong device clock" loophole).
  *
- * Sesi dibuat offline, sehingga `receiveDate` berasal dari jam device. Bila
- * jam device jelas tidak masuk akal (masa depan atau terlalu lampau), server
- * memakai waktu server dan menandainya `adjusted`.
+ * Sessions are created offline, so `receiveDate` comes from the device clock. If
+ * the device clock is clearly unreasonable (future or too far in the past), the server
+ * falls back to server time and marks it `adjusted`.
  */
 
 const MS_PER_DAY = 86_400_000
@@ -12,7 +12,7 @@ function pad(value: number): string {
   return value < 10 ? `0${value}` : String(value)
 }
 
-/** Date -> 'YYYY-MM-DD HH:MM:SS' (waktu lokal). */
+/** Date -> 'YYYY-MM-DD HH:MM:SS' (local time). */
 export function toLocalDateTime(date: Date): string {
   return (
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +

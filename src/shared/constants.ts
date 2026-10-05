@@ -1,4 +1,4 @@
-/** Konstanta domain bersama (dipakai server & klien). */
+/** Shared domain constants (used by server & client). */
 
 export const PURCHASE_STATUS = {
   DRAFT: 'DRAFT',
@@ -9,13 +9,13 @@ export const PURCHASE_STATUS = {
 
 export type PurchaseStatus = (typeof PURCHASE_STATUS)[keyof typeof PURCHASE_STATUS]
 
-/** BR-1: hanya PO CHECKED yang ditarik & boleh diproses. */
+/** BR-1: only CHECKED POs are pulled & allowed to be processed. */
 export const PULLABLE_PURCHASE_STATUS = PURCHASE_STATUS.CHECKED
 
-/** BR-2: dokumen penerimaan dari PDT selalu DRAFT. */
+/** BR-2: receiving documents from PDT are always DRAFT. */
 export const RECEIVE_STATUS_DRAFT = 'DRAFT'
 
-/** FR-7.3: status sesi di device. */
+/** FR-7.3: session status on device. */
 export const SESSION_STATUS = {
   RUNNING: 'RUNNING',
   PENDING: 'PENDING',
@@ -37,8 +37,8 @@ export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
 }
 
 /**
- * Kode kegagalan server yang bersifat PERMANEN: sesi ditolak & tidak bisa
- * dicoba ulang (mis. PO ditutup/dihapus, atau item tidak valid).
+ * Server failure codes that are PERMANENT: the session is rejected & cannot
+ * be retried (e.g., PO closed/deleted, or invalid items).
  */
 export const PERMANENT_REJECT_CODES: readonly string[] = [
   'PURCHASE_NOT_FOUND',
@@ -46,7 +46,7 @@ export const PERMANENT_REJECT_CODES: readonly string[] = [
   'VALIDATION',
 ]
 
-/** FR-3.2: status kemajuan PO. */
+/** FR-3.2: PO progress status. */
 export const PROGRESS_STATUS = {
   NONE: 'NONE',
   PARTIAL: 'PARTIAL',
@@ -63,21 +63,21 @@ export const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   OVER: 'Lebih',
 }
 
-/** Ukuran chunk saat unduh data master (NF-4). */
+/** Chunk size when pulling master data (NF-4). */
 export const DEFAULT_PULL_CHUNK_SIZE = 500
 
-/** Batas umur data master (jam) sebelum dianggap kedaluwarsa & diunduh ulang saat login online (FR-2.1). */
+/** Master data TTL (hours) before considered stale & re-downloaded upon online login (FR-2.1). */
 export const MASTER_DATA_STALE_HOURS = 12
 
-/** Batas panjang kolom memo (pos_receive_item.memo = varchar(120)). */
+/** Column length limit for memo (pos_receive_item.memo = varchar(120)). */
 export const MEMO_MAX_LENGTH = 120
 
-/** Konvensi penanda sesi PDT pada kolom pos_receive.note (idempotensi, FR-5.3). */
+/** PDT session marker convention on pos_receive.note column (idempotency, FR-5.3). */
 export const NOTE_SESSION_PREFIX = 'PDT|SESS='
-/** Konvensi penanda over-receive pada kolom pos_receive_item.memo (FR-6.2). */
+/** Over-receive marker convention on pos_receive_item.memo column (FR-6.2). */
 export const MEMO_OVER_PREFIX = 'PDT|OVER'
 
 export const DEVICE_ID_STORAGE_KEY = 'stockops.deviceId'
 
-/** Batas aman simpul ID agar tetap muat di kolom bigint(20). */
+/** Safe upper bound for ID node to fit in a bigint(20) column. */
 export const MAX_BIGINT = 9223372036854775807n

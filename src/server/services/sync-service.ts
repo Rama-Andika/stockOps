@@ -71,8 +71,8 @@ export interface SyncOptions {
   docHistoryIdGen?: IdGenerator
 }
 
-// Registry generator per-proses agar ID tetap monotonik & unik antar pemanggilan
-// (dua request bersamaan tidak boleh menghasilkan ID yang sama).
+// Per-process generator registry so IDs remain monotonic & unique across calls
+// (two concurrent requests must not generate the same ID).
 const generatorRegistry = new Map<
   number,
   { receive: IdGenerator; item: IdGenerator; docHistory: IdGenerator }
@@ -120,8 +120,8 @@ async function findExistingReceive(
   sessionId: string,
   pdtAppIdx: number,
 ): Promise<ExistingReceive | null> {
-  // Batasi pencarian ke namespace ID milik PDT (pakai index PK) supaya murah,
-  // lalu cocokkan sessionId secara PERSIS di JS (hindari masalah wildcard LIKE).
+  // Constrain lookup to PDT ID namespace (using PK index) for efficiency,
+  // then match sessionId EXACTLY in JS (avoids LIKE wildcard issues).
   const pattern = `%${NOTE_SESSION_PREFIX}${escapeLike(sessionId)};%`
   const rows = await db
     .select({
@@ -281,11 +281,11 @@ async function processSession(
   const sessionLockName = `stockops:sess:${session.sessionId}`
 
   return withNamedLock(sessionLockName, async () => {
-    // 1) Idempotensi cepat (FR-5.3).
+    // 1) Fast idempotency check (FR-5.3).
     const existing = await findExistingReceive(ctx.db, session.sessionId, ctx.pdtAppIdx)
     if (existing) return buildReplayResult(ctx.db, session, existing)
 
-    // 2) Validasi PO (BR-1).
+    // 2) PO validation (BR-1).
     const purchaseRows = await ctx.db
       .select({
         purchaseId: posPurchase.purchaseId,
@@ -317,7 +317,7 @@ async function processSession(
 
     const vendorId = purchase.vendorId ?? BigInt(0)
 
-    // 3) Ambil item PO yang dirujuk & pastikan benar milik PO ini (BR-14).
+    // 3) Fetch referenced PO items & verify they belong to this PO (BR-14).
     const purchaseItemIds = [...new Set(session.items.map((item) => BigInt(item.purchaseItemId)))]
     const purchaseItemRows = await ctx.db
       .select({
@@ -356,7 +356,7 @@ async function processSession(
       }
     }
 
-    // 4) Unit stok terkecil per barang (PRD 12.4).
+    // 4) Smallest stock unit per item (PRD 12.4).
     const itemIds = [...new Set(session.items.map((item) => BigInt(item.itemMasterId)))]
     const itemRows = await ctx.db
       .select({ itemMasterId: posItemMaster.itemMasterId, uomStockId: posItemMaster.uomStockId })
@@ -364,7 +364,7 @@ async function processSession(
       .where(inArray(posItemMaster.itemMasterId, itemIds))
     const stockUomByItem = new Map(itemRows.map((row) => [String(row.itemMasterId), row.uomStockId]))
 
-    // 5) Total yang sudah diterima lintas semua dokumen (FR-5.4, BR-4, BR-6).
+    // 5) Total already received across all documents (FR-5.4, BR-4, BR-6).
     const alreadyRows = await ctx.db
       .select({
         purchaseItemId: posReceiveItem.purchaseItemId,
@@ -386,10 +386,10 @@ async function processSession(
       })),
     )
 
-    // 5b) Finansial dokumen: hitung per baris & total (data diambil dari PO).
-    //     - diskon item diprorata terhadap qty yang diterima
-    //     - pajak mengikuti price_include_tax PO (0 = harga belum termasuk pajak)
-    //     - semua angka dibulatkan 2 desimal (round half-up) lewat dec2()
+    // 5b) Document finances: compute per-line & total (data sourced from PO).
+    //     - item discount prorated against received qty
+    //     - tax follows PO price_include_tax (0 = price excludes tax)
+    //     - all figures rounded to 2 decimals (round half-up) via dec2()
     const lineFinancials: ReturnType<typeof computeLineFinance>[] = []
     let itemsTotalAmount = 0
     for (let index = 0; index < evaluation.lines.length; index += 1) {
@@ -411,15 +411,15 @@ async function processSession(
       priceIncludeTax: Number(purchase.priceIncludeTax ?? 0),
     })
 
-    // 6) Tanggal penerimaan & prefix nomor dokumen.
+    // 6) Receive date & document number prefix.
     const now = ctx.now()
     const sanitized = sanitizeReceiveDate(session.receiveDate, now)
     const prefixNumber = buildPrefix(ctx.prefix, sanitized.parsed)
 
-    // 7) Simpan dalam satu transaksi (FR-5.7), penomoran diserialisasi lock (BR-8).
+    // 7) Save in a single transaction (FR-5.7), numbering serialized by lock (BR-8).
     return withNamedLock(`stockops:doc:${prefixNumber}`, async () =>
       ctx.db.transaction(async (tx) => {
-        // Cek ulang idempotensi di dalam lock.
+        // Re-check idempotency inside the lock.
         const existingInTx = await findExistingReceive(tx, session.sessionId, ctx.pdtAppIdx)
         if (existingInTx) return buildReplayResult(tx, session, existingInTx)
 
@@ -432,7 +432,7 @@ async function processSession(
         const number = buildNumber(prefixNumber, counter)
         const receiveId = ctx.receiveIdGen.next()
 
-        // Jatuh tempo mengikuti termin vendor (vendor.due_date = jumlah hari).
+        // Due date follows vendor terms (vendor.due_date = number of days).
         const vendorRows = await tx
           .select({ dueDate: vendor.dueDate })
           .from(vendor)
@@ -476,7 +476,7 @@ async function processSession(
           createdAt: sanitized.value,
         })
 
-        // Riwayat dokumen untuk sistem admin: incoming baru dibuat dari PDT.
+        // Document history for admin system: new incoming receipt created from PDT.
         await tx.insert(documentHistory).values({
           documentHistoryId: ctx.docHistoryIdGen.next(),
           type: 2,
@@ -567,12 +567,12 @@ async function processSession(
 }
 
 /**
- * FR-5.1/5.3/5.4/5.5/5.6/5.7: sinkronisasi sesi (FIFO) + cek pencabutan kredensial.
+ * FR-5.1/5.3/5.4/5.5/5.6/5.7: session synchronization (FIFO) + credential revocation check.
  */
 export async function syncPush(input: PushInput, options: SyncOptions = {}): Promise<PushResult> {
   const ctx = buildContext(options)
 
-  // BR-19: cek kredensial lebih dulu (berlaku semua user ter-cache).
+  // BR-19: check credentials first (applies to all cached users).
   const revoked = await checkCredentialRevocations(input.credentials, ctx.db)
 
   const results: SyncSessionResult[] = []
@@ -590,13 +590,13 @@ export async function syncPush(input: PushInput, options: SyncOptions = {}): Pro
     }
   }
 
-  // Agregat "sudah diterima" berubah => buang cache agar pull berikutnya benar.
+  // "Already received" aggregate changed => bust cache so subsequent pulls are accurate.
   invalidateCache('receivedAggregate')
 
   return { results, revoked, serverTime: new Date().toISOString() }
 }
 
-/** Worklist over-receive untuk admin (FR-6.4) — dipakai untuk verifikasi & demo. */
+/** Over-receive worklist for admin (FR-6.4) — used for verification & demo. */
 export async function overReceiveWorklist(db: Database = getDb(), limit = 50) {
   const rows = await db
     .select({

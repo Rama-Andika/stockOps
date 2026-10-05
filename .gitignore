@@ -10,5 +10,6 @@ coverage/
 .vite/
 .tanstack/
 
-# Rencana implementasi internal (tidak di-commit ke repository)
+# Internal implementation plans (not committed to repository)
 /plans/
+prompt.txt

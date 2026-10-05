@@ -18,14 +18,14 @@ export default defineConfig({
   },
   plugins: [
     tailwindcss(),
-    // TanStack Start dijalankan sebagai SPA (offline-first); server functions
-    // tetap aktif untuk sinkronisasi ke MySQL.
+    // TanStack Start runs as an SPA (offline-first); server functions
+    // remain active for synchronization to MySQL.
     tanstackStart({
       spa: {
         enabled: true,
       },
     }),
-    // Plugin React HARUS setelah plugin Start.
+    // React plugin MUST come after Start plugin.
     viteReact(),
   ],
 })

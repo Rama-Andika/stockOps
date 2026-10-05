@@ -14,8 +14,8 @@ export interface ScanResolution {
 }
 
 /**
- * FR-4.3 / BR-14: mengubah hasil scan menjadi item + baris PO + faktor konversi.
- * Barang yang bukan bagian dari PO ditolak dengan pesan (bukan exception).
+ * FR-4.3 / BR-14: Resolves scan result into item + PO line + conversion factor.
+ * Items not part of the PO are rejected with a message (not an exception).
  */
 export async function resolveScan(
   repo: LocalRepository,
@@ -73,7 +73,7 @@ export interface AddScanResult {
   line?: LocalSessionItem
 }
 
-/** FR-4.4/FR-4.5: menambahkan hasil scan ke sesi penerimaan. */
+/** FR-4.4/FR-4.5: Adds scanned item to receiving session. */
 export async function addScannedItem(
   repo: LocalRepository,
   sessionId: string,

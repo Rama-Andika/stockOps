@@ -3,8 +3,8 @@ import { pullInputSchema } from '~/shared/schemas'
 import { pullChunk } from '../services/pull-service'
 
 /**
- * FR-2.1 / FR-2.3 / NF-4 — Unduh data master & PO CHECKED secara bertahap.
- * BR-13 — tanpa filter lokasi.
+ * FR-2.1 / FR-2.3 / NF-4 — Paginated download of master data & CHECKED POs.
+ * BR-13 — without location filter.
  */
 export const pullDataFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => pullInputSchema.parse(data))

@@ -42,7 +42,7 @@ export const serverEnv: ServerEnv = {
   receivePrefix: readString('RECEIVE_DOC_PREFIX', 'IN'),
 }
 
-/** appIdx PDT harus berbeda dari admin, kalau tidak ID bisa bertabrakan (BR-17). */
+/** PDT appIdx must differ from admin, otherwise IDs can collide (BR-17). */
 export function assertDistinctAppIdx(env: ServerEnv = serverEnv): void {
   if (env.pdtAppIdx === env.adminAppIdx) {
     throw new Error(

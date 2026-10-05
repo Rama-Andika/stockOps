@@ -156,8 +156,8 @@ function SessionDetailPage() {
         const tone = result.resolution.status === 'ITEM_NOT_FOUND' ? 'danger' : 'warn'
         setScanFeedback({ tone, text: result.message, key: Date.now() })
         playFeedback(tone)
-        // Scanner mengirim karakter seperti keyboard; selalu kosongkan field agar
-        // scan berikutnya tidak tertempel pada barcode yang ditolak.
+        // Scanners send keystrokes like a keyboard; always clear the field so
+        // subsequent scans are not appended to the rejected barcode.
         setScan('')
         scanRef.current?.focus()
       }

@@ -10,8 +10,8 @@ let poolInstance: mysql.Pool | undefined
 let dbInstance: Database | undefined
 
 /**
- * Pool MySQL. `supportBigNumbers` + `bigNumberStrings` WAJIB agar BIGINT
- * dikembalikan sebagai string, bukan Number yang kehilangan presisi (BR-12).
+ * MySQL Pool. `supportBigNumbers` + `bigNumberStrings` are MANDATORY so BIGINT
+ * is returned as a string, rather than a Number that loses precision (BR-12).
  */
 export function createMysqlPool(database: string = serverEnv.database): mysql.Pool {
   return mysql.createPool({
@@ -56,12 +56,12 @@ export async function closeDb(): Promise<void> {
 }
 
 /**
- * Kunci bernama MySQL (GET_LOCK) untuk mengserialisasi bagian kritis:
- * - nomor dokumen (counter) antar proses/instance
- * - satu sesi agar tidak diproses dua kali bersamaan (idempotensi)
+ * MySQL named lock (GET_LOCK) to serialize critical sections:
+ * - document numbers (counter) across processes/instances
+ * - a single session so it is not processed concurrently twice (idempotency)
  *
- * GET_LOCK bersifat global per nama, sehingga aman walau koneksinya berbeda
- * dari koneksi transaksi.
+ * GET_LOCK is global per lock name, so it is safe even if its connection differs
+ * from the transaction connection.
  */
 export async function withNamedLock<T>(
   name: string,
@@ -88,7 +88,7 @@ export async function withNamedLock<T>(
   }
 }
 
-/** Menjalankan fn dengan database (schema) tertentu; dipakai oleh skrip & test. */
+/** Runs fn with a specific database (schema); used by scripts & tests. */
 export async function withDatabase<T>(
   database: string,
   fn: (db: Database, pool: mysql.Pool) => Promise<T>,

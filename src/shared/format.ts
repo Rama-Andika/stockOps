@@ -1,6 +1,6 @@
-/** Pemformatan tampilan (bahasa Indonesia). */
+/** Display formatting (Indonesian locale). */
 
-// Formatter dibuat SEKALI di level modul (Intl mahal bila dibuat tiap panggilan).
+// Formatters are created ONCE at the module level (Intl is expensive if recreated on each call).
 const qtyFormatter = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 })
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',

@@ -3,8 +3,8 @@ import { checkCredentialsInputSchema, loginInputSchema } from '~/shared/schemas'
 import { checkCredentialRevocations, loginOnline } from '../services/auth-service'
 
 /**
- * FR-1.1 — Login online pertama di sebuah device.
- * FR-1.6/BR-19 — Cek pencabutan kredensial untuk semua user ter-cache.
+ * FR-1.1 — First online login on a device.
+ * FR-1.6/BR-19 — Check credential revocation for all cached users.
  */
 export const loginOnlineFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => loginInputSchema.parse(data))

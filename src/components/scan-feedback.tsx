@@ -21,7 +21,7 @@ const TONE_ICON = {
   danger: X,
 } as const
 
-/** Banner umpan balik scan yang mudah terlihat dan otomatis hilang. */
+/** Prominent scan feedback banner that dismisses automatically. */
 export function ScanFeedback({
   feedback,
   onDismiss,

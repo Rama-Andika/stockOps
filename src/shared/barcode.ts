@@ -1,8 +1,8 @@
 /**
- * Identifikasi barang via barcode/kode (FR-4.3, B-4, BR-14).
+ * Item identification via barcode/code (FR-4.3, B-4, BR-14).
  *
- * Pencocokan barcode dilakukan terhadap barcode, barcode_2, dan barcode_3.
- * Bila barcode rusak, operator boleh mencari berdasarkan `code` (B-4).
+ * Barcode matching is performed against barcode, barcode_2, and barcode_3.
+ * If a barcode is damaged, the operator may search by `code` (B-4).
  */
 
 export interface ScannableItem {
@@ -23,7 +23,7 @@ function barcodeFields(item: ScannableItem): string[] {
     .filter((value) => value.length > 0)
 }
 
-/** Semua barang yang cocok dengan barcode hasil scan (bisa lebih dari satu). */
+/** All items matching the scanned barcode (can be more than one). */
 export function findItemsByBarcode(
   items: readonly ScannableItem[],
   scanned: string,
@@ -33,7 +33,7 @@ export function findItemsByBarcode(
   return items.filter((item) => barcodeFields(item).includes(needle))
 }
 
-/** Satu barang yang cocok (null bila tidak ada). */
+/** A single matching item (null if none). */
 export function findItemByBarcode(
   items: readonly ScannableItem[],
   scanned: string,
@@ -41,7 +41,7 @@ export function findItemByBarcode(
   return findItemsByBarcode(items, scanned)[0] ?? null
 }
 
-/** Pencarian manual berdasarkan kode barang (barcode rusak). */
+/** Manual search by item code (damaged barcode). */
 export function findItemByCode(
   items: readonly ScannableItem[],
   code: string,

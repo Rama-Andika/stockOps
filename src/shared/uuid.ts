@@ -1,4 +1,4 @@
-/** UUID v4 (fallback bila crypto.randomUUID tidak tersedia, mis. WebView lawas). */
+/** UUID v4 (fallback when crypto.randomUUID is not available, e.g. legacy WebView). */
 export function newUuid(): string {
   const cryptoObj = globalThis.crypto
   if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {

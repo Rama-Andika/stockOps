@@ -1,4 +1,4 @@
-/** Cache in-memory TTL kecil untuk agregat yang mahal (mis. total diterima per item PO). */
+/** Short-TTL in-memory cache for expensive aggregates (e.g. total received per PO item). */
 
 interface CacheEntry<T> {
   value: T

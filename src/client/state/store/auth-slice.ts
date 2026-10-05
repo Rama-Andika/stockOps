@@ -16,12 +16,12 @@ import type { ActionResult, AppState, AuthState, CurrentUser } from './types'
 
 const DEVICE_SECRET_ITERATIONS = DEFAULT_PBKDF2_ITERATIONS
 
-/** Ambang kedaluwarsa data master dalam milidetik (FR-2.1). */
+/** Master data stale threshold in milliseconds (FR-2.1). */
 const MASTER_STALE_MS = MASTER_DATA_STALE_HOURS * 60 * 60 * 1000
 
 /**
- * FR-2.1: unduh PENUH hanya bila data belum pernah diunduh (lastPullAt kosong),
- * nilainya tidak valid, atau sudah lebih tua dari ambang kedaluwarsa (12 jam).
+ * FR-2.1: FULL download only if data has never been downloaded (lastPullAt empty),
+ * its value is invalid, or older than the stale threshold (12 hours).
  */
 function shouldFullDownload(lastPullAt: string | null, now: Date): boolean {
   if (!lastPullAt) return true
@@ -78,8 +78,8 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthState> = (set, 
       })
       await get().refresh()
 
-      // FR-2.1: unduh penuh hanya saat data belum ada atau sudah kedaluwarsa (> 12 jam).
-      // Selain itu cukup refresh PO ringan agar master tidak diunduh ulang tiap login.
+      // FR-2.1: full download only when data does not exist or is stale (> 12 hours).
+      // Otherwise, a lightweight PO refresh suffices so master data is not re-downloaded on every login.
       if (shouldFullDownload(get().lastPullAt, new Date())) {
         const pull = await get().downloadData()
         return pull.ok
@@ -119,7 +119,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthState> = (set, 
 
     logout: async () => {
       persistUser(null)
-      // FR-1.5: data lokal tetap tersimpan, hanya akses aplikasi yang dikunci.
+      // FR-1.5: local data remains stored, only application access is locked.
     },
   }
 }

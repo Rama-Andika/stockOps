@@ -19,8 +19,8 @@ function nullableStr(value: unknown): string | null {
 }
 
 /**
- * Total qty yang sudah diterima per item PO, dari SEMUA dokumen/device (FR-5.4).
- * Di-cache sebentar karena agregat ini dipakai berulang saat pull bertahap.
+ * Total qty already received per PO item, from ALL documents/devices (FR-5.4).
+ * Cached briefly because this aggregate is used repeatedly during chunked pulls.
  */
 export async function getReceivedAggregate(db: Database = getDb()): Promise<Map<string, string>> {
   return memoize(RECEIVED_AGGREGATE_CACHE_KEY, RECEIVED_AGGREGATE_TTL_MS, async () => {
@@ -91,7 +91,7 @@ async function loadPurchaseItems(db: Database, offset: number, limit: number): P
       WHERE p.status = ${PULLABLE_PURCHASE_STATUS}
     `,
   )
-  // receivedQty diambil dari cache agregat (bukan per baris) agar tetap cepat.
+  // receivedQty is retrieved from aggregate cache (not per row) to keep it fast.
   for (const row of rows) {
     row.received_qty = received.get(str(row.purchase_item_id)) ?? '0.00'
   }
@@ -219,8 +219,8 @@ const LOADERS: Record<PullKind, (db: Database, offset: number, limit: number) =>
 }
 
 /**
- * FR-2.1/FR-2.4/NF-4: unduh bertahap (chunking) data master & PO CHECKED.
- * Semua PO CHECKED ditarik tanpa filter lokasi (BR-13).
+ * FR-2.1/FR-2.4/NF-4: Paginated download (chunking) of master data & CHECKED POs.
+ * All CHECKED POs are pulled without location filter (BR-13).
  */
 export async function pullChunk(
   kind: PullKind,

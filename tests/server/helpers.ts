@@ -3,7 +3,7 @@ import { getDb } from '~/server/db/client'
 import { invalidateCache } from '~/server/db/cache'
 import { rowsOf } from '~/server/db/rows'
 
-/** Tabel yang dikloning ke schema uji. */
+/** Tables cloned to the test schema. */
 export const TEST_TABLES = [
   'document_history',
   'pos_receive_item',
@@ -17,7 +17,7 @@ export const TEST_TABLES = [
   'sysuser',
 ] as const
 
-/** Data acuan (dibuat ulang setiap test). */
+/** Reference fixture data (recreated for each test). */
 export const FIXTURE = {
   uom: {
     PCS: '504404793498968532',
@@ -84,7 +84,7 @@ export async function seedBase(): Promise<void> {
       (${item.I3_INACTIVE}, '48000003', '22001776', NULL, NULL, 'BARANG NONAKTIF', ${uom.PCS}, ${uom.PCS}, 0)
   `)
 
-  // Konversi: 1 KARTON = 12 PCS ; 1 PACK = 6 PCS
+  // Conversion: 1 KARTON = 12 PCS ; 1 PACK = 6 PCS
   await db.execute(sql`
     INSERT INTO pos_vendor_item (vendor_item_id, vendor_id, item_master_id, uom_purchase, conv_qty, company_id) VALUES
       ('900001', ${vendor.V1}, ${item.I1}, ${uom.KARTON}, 12, 0),
@@ -138,7 +138,7 @@ export async function countRows(table: string): Promise<number> {
   return Number(rows[0]?.total ?? 0)
 }
 
-/** Membuat payload sesi penerimaan yang valid (siap dikirim ke syncPush). */
+/** Creates a valid receiving session payload (ready to send to syncPush). */
 export function makeSessionPayload(overrides: Partial<Record<string, unknown>> = {}) {
   const base = {
     sessionId: '11111111-2222-4333-8444-555555555555',

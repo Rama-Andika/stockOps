@@ -19,7 +19,7 @@ import { toLocalDateTime } from '~/shared/receive-date'
 import { SESSION_STATUS } from '~/shared/constants'
 import { CREDENTIALS, FIXTURE, seedAll } from '../server/helpers'
 
-/** Transport yang memanggil service server langsung (tanpa HTTP). */
+/** Transport that calls server services directly (without HTTP). */
 const directTransport: SyncTransport = {
   login: (input) => loginOnline(input),
   checkCredentials: async (input) => ({ revoked: await checkCredentialRevocations(input.credentials) }),
@@ -76,7 +76,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     it('scan -> finalisasi -> sinkron -> nomor resmi tersimpan lokal', async () => {
       await pullAllData(repo, directTransport)
 
-      // Operator memilih PO & mulai sesi (FR-3.3, FR-4.1).
+      // Operator selects PO & starts session (FR-3.3, FR-4.1).
       const session = await repo.createSession({
         purchaseId: FIXTURE.purchase.CHECKED,
         userId: FIXTURE.user.ACTIVE,
@@ -90,14 +90,14 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(scan.line?.convQty).toBe(12)
       expect(scan.line?.convFound).toBe(true)
 
-      // Finalisasi (FR-4.7) dengan invoice & DO (BR-9).
+      // Finalize (FR-4.7) with invoice & DO (BR-9).
       await repo.finalizeSession(session.sessionId, {
         invoiceNumber: 'INV-100',
         doNumber: 'DO-100',
         receiveDate: session.receiveDate,
       })
 
-      // Sinkronisasi otomatis/manual (FR-5.1).
+      // Automatic/manual synchronization (FR-5.1).
       const outcome = await syncOutbox(repo, directTransport)
       expect(outcome.synced).toBe(1)
       expect(outcome.failed).toBe(0)
@@ -107,7 +107,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(saved?.number).toMatch(/^IN\d{4}0001$/)
       expect(saved?.receiveId).toBeTruthy()
 
-      // Sesi tersinkron = read-only: tidak lagi ada di outbox (FR-4.8).
+      // Synced session = read-only: no longer present in outbox (FR-4.8).
       expect(await repo.outboxSessions()).toHaveLength(0)
     })
 
@@ -130,7 +130,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       const synced = await repo.getSession(session.sessionId)
       expect(first.synced).toBe(1)
 
-      // Kirim ulang payload yang sama -> server mengenali (idempoten).
+      // Resend identical payload -> server recognizes it (idempotent).
       const purchase = (await repo.getPurchase(session.purchaseId))!
       const items = await repo.sessionItems(session.sessionId)
       const payload = buildSessionPayload(synced!, items, {
@@ -157,7 +157,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
         deviceId: DEVICE,
         receiveDate: toLocalDateTime(new Date()),
       })
-      // PI1 dipesan 10; kirim 12 -> over 2.
+      // PI1 ordered 10; sent 12 -> over 2.
       await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 12)
       await repo.finalizeSession(session.sessionId, {
         invoiceNumber: 'INV-2',
@@ -243,7 +243,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
   describe('validasi scan di klien', () => {
     it('menolak barang di luar PO (BR-14)', async () => {
       await pullAllData(repo, directTransport)
-      // Barcode I2 ada di PO ini, jadi gunakan PO lain untuk memicu penolakan.
+      // Barcode I2 exists in this PO, so use another PO to trigger rejection.
       const resolution = await resolveScan(repo, FIXTURE.purchase.CHECKED_OTHER_LOC, '22001773')
       expect(resolution.status).toBe('NOT_IN_PO')
       expect(resolution.message).toContain('bukan bagian dari PO')
@@ -257,7 +257,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
 
     it('memakai faktor 1 & menandai convFound=false bila konversi tidak ada (BR-7)', async () => {
       await pullAllData(repo, directTransport)
-      // Item & baris PO lokal tanpa data konversi di vendor-item.
+      // Local item & PO line without conversion data in vendor-item.
       await repo.upsertItems([
         {
           itemMasterId: 'I-NOCONV',
@@ -305,7 +305,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
         receiveDate: session.receiveDate,
       })
 
-      // Admin menutup PO di sistem pusat setelah data ditarik ke device.
+      // Admin closes the PO in central system after data has been pulled to the device.
       await getDb().execute(sql`
         UPDATE pos_purchase SET status = 'CLOSED' WHERE purchase_id = ${FIXTURE.purchase.CHECKED}
       `)

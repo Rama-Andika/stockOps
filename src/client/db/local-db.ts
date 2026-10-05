@@ -61,8 +61,8 @@ export interface LocalVendorItem {
 }
 
 /**
- * Kredensial offline per (device, user) — FR-1.4.
- * Password TIDAK disimpan; hanya hash bersalt + fingerprint (BR-19).
+ * Offline credentials per (device, user) — FR-1.4.
+ * Passwords are NOT stored; only salted hash + fingerprint (BR-19).
  */
 export interface LocalCredential {
   key: string
@@ -82,9 +82,9 @@ export interface LocalCredential {
 export interface LocalSession {
   sessionId: string
   purchaseId: string
-  /** Nomor PO (denormalisasi) agar tetap tampil walau PO sudah dihapus/CLOSED. */
+  /** PO number (denormalized) so it displays even if the PO is deleted/CLOSED. */
   purchaseNumber: string | null
-  /** Nama vendor (denormalisasi). */
+  /** Vendor name (denormalized). */
   vendorName: string | null
   userId: string
   deviceId: string
@@ -164,9 +164,9 @@ export class StockOpsDb extends Dexie {
 }
 
 /**
- * Instance Dexie dibuat LAZAT. Alasannya penting: shell SPA TanStack Start
- * di-prerender di Node (tanpa `indexedDB`), sehingga modul ini tidak boleh
- * membuat koneksi IndexedDB saat di-import.
+ * Dexie instance is created LAZILY. Important reason: TanStack Start SPA shell
+ * is prerendered in Node (without `indexedDB`), so this module must not
+ * establish an IndexedDB connection upon import.
  */
 let offlineDbInstance: StockOpsDb | undefined
 

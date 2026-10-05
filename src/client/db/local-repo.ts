@@ -100,8 +100,8 @@ function nowIso(): string {
 }
 
 /**
- * Repositori data lokal (Dexie). Satu instance per database; `offlineDb`
- * dipakai aplikasi, sedangkan test boleh membuat instance terpisah.
+ * Local data repository (Dexie). One instance per database; `offlineDb`
+ * is used by the app, while tests may create separate instances.
  */
 export class LocalRepository {
   constructor(private readonly explicitDb?: StockOpsDb) {}
@@ -121,7 +121,7 @@ export class LocalRepository {
     await this.db.meta.put({ key, value })
   }
 
-  /** Identitas device ini (dipakai untuk kredensial per device — FR-1.4). */
+  /** Identity of this device (used for per-device credentials — FR-1.4). */
   async ensureDeviceId(): Promise<string> {
     const existing = await this.getMeta('deviceId')
     if (existing) return existing
@@ -183,8 +183,8 @@ export class LocalRepository {
   }
 
   /**
-   * FR-2.2: unduh ulang TIDAK boleh menghapus dokumen penerimaan yang belum
-   * tersinkron. Karena itu hanya tabel master/PO yang dibersihkan.
+   * FR-2.2: Re-downloading MUST NOT delete receiving documents that have not yet
+   * been synchronized. Therefore only master/PO tables are cleared.
    */
   async clearMasterData(): Promise<void> {
     await this.db.transaction(
@@ -203,7 +203,7 @@ export class LocalRepository {
     )
   }
 
-  /** FR-2.3: hanya menyegarkan daftar PO (tanpa menyentuh master barang). */
+  /** FR-2.3: Only refreshes PO list (without touching item master). */
   async clearPurchases(): Promise<void> {
     await this.db.transaction('rw', [this.db.purchases, this.db.purchaseItems], async () => {
       await this.db.purchases.clear()
@@ -234,8 +234,8 @@ export class LocalRepository {
   }
 
   /**
-   * Daftar PO + ringkasan kemajuan (dihitung sekali jalan, bukan per PO).
-   * Kemajuan = qty tersinkron (snapshot server) + qty sesi lokal yang belum terkirim.
+   * PO list + progress summary (computed in a single pass, not per PO).
+   * Progress = synced qty (server snapshot) + unsent local session qty.
    */
   async listPurchaseSummaries(): Promise<
     Array<
@@ -312,7 +312,7 @@ export class LocalRepository {
     return this.db.purchaseItems.where('purchaseId').equals(purchaseId).toArray()
   }
 
-  /** FR-4.3: cocokkan barcode/barcode_2/barcode_3; B-4: fallback ke kode. */
+  /** FR-4.3: Match barcode/barcode_2/barcode_3; B-4: fallback to item code. */
   async getItemByBarcodeOrCode(scanned: string): Promise<LocalItem | undefined> {
     const needle = scanned.trim()
     if (!needle) return undefined
@@ -390,7 +390,7 @@ export class LocalRepository {
     return this.db.sessions.where('status').equals(SESSION_STATUS.RUNNING).toArray()
   }
 
-  /** FR-4.6: sesi belum final tersimpan lokal & bisa dilanjutkan. */
+  /** FR-4.6: Unfinalized session is stored locally & can be resumed. */
   async sessionItems(sessionId: string): Promise<LocalSessionItem[]> {
     return this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
   }
@@ -459,7 +459,7 @@ export class LocalRepository {
     await this.db.sessions.put({ ...session, ...patch, updatedAt: nowIso() })
   }
 
-  /** FR-4.7: finalisasi -> masuk outbox "Menunggu Sinkronisasi". */
+  /** FR-4.7: Finalization -> enters "Pending Synchronization" outbox. */
   async finalizeSession(
     sessionId: string,
     input: { invoiceNumber: string; doNumber: string; receiveDate: string },
@@ -481,7 +481,7 @@ export class LocalRepository {
     return updated
   }
 
-  /** FR-5.1: antrian FIFO sesi yang menunggu/gagal. */
+  /** FR-5.1: FIFO queue of pending/failed sessions. */
   async outboxSessions(): Promise<LocalSession[]> {
     const pending = await this.db.sessions.where('status').equals(SESSION_STATUS.PENDING).toArray()
     const failed = await this.db.sessions.where('status').equals(SESSION_STATUS.FAILED).toArray()
@@ -498,7 +498,7 @@ export class LocalRepository {
     await this.setSessionStatus(sessionId, SESSION_STATUS.SYNCING)
   }
 
-  /** Reset sesi yang nyangkut di status SYNCING (mis. aplikasi tertutup di tengah sinkronisasi). */
+  /** Reset sessions stuck in SYNCING state (e.g. app closed mid-sync). */
   async resetStaleSyncingSessions(): Promise<number> {
     const syncing = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCING).toArray()
     if (syncing.length === 0) return 0
@@ -514,7 +514,7 @@ export class LocalRepository {
     return syncing.length
   }
 
-  /** FR-5.5/FR-4.8: simpan nomor resmi & kunci sesi (read-only). */
+  /** FR-5.5/FR-4.8: Store official number & lock session (read-only). */
   async markSynced(
     sessionId: string,
     result: { receiveId: string; number: string; overReceive: boolean; excessTotal: number },
@@ -534,11 +534,11 @@ export class LocalRepository {
       updatedAt: nowIso(),
     })
 
-    // Perbaikan bug "Diterima": sesi yang baru tersinkron sebelumnya dihitung sebagai
-    // "belum terkirim" (localPending). Setelah status berubah menjadi SYNCED, qty sesi
-    // dikeluarkan dari localPending, tetapi snapshot receivedQty dari server belum diperbarui.
-    // Akibatnya angka "Diterima" turun. Solusi: naikkan receivedQty lokal sebesar qty sesi
-    // yang baru tersinkron. Nilai ini akan ditimpa oleh pull berikutnya (tidak double-count).
+    // Fix for "Received" regression bug: newly synced session was previously counted as
+    // "unsent" (localPending). Once status transitions to SYNCED, the session qty is
+    // removed from localPending, but the receivedQty snapshot from the server has not yet been refreshed.
+    // As a result, the "Received" number dropped. Solution: increment local receivedQty by the qty of the
+    // newly synced session. This value will be overwritten by subsequent pulls (no double-counting).
     const lines = await this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
     if (lines.length > 0) {
       await this.db.transaction('rw', this.db.purchaseItems, async () => {
@@ -555,7 +555,7 @@ export class LocalRepository {
     }
   }
 
-  /** FR-5.6: gagal SEMENTARA -> tetap di antrian, data tidak dihapus. */
+  /** FR-5.6: TEMPORARY failure -> remains in queue, data is not deleted. */
   async markFailed(sessionId: string, error: string, code?: string | null): Promise<void> {
     const session = await this.db.sessions.get(sessionId)
     if (!session) return
@@ -568,7 +568,7 @@ export class LocalRepository {
     })
   }
 
-  /** Ditolak PERMANEN (PO ditutup/dihapus/validasi): terminal, keluar dari antrian. */
+  /** PERMANENT rejection (PO closed/deleted/validation): terminal, exits queue. */
   async markRejected(sessionId: string, error: string, code: string): Promise<void> {
     const session = await this.db.sessions.get(sessionId)
     if (!session) return
@@ -581,7 +581,7 @@ export class LocalRepository {
     })
   }
 
-  /** FR-8.2: bersihkan sesi yang sudah tersinkron (dengan konfirmasi di UI). */
+  /** FR-8.2: Clear synced sessions (with UI confirmation). */
   async deleteSyncedSessions(): Promise<number> {
     const synced = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCED).toArray()
     const ids = synced.map((session) => session.sessionId)
@@ -700,7 +700,7 @@ export class LocalRepository {
     await this.db.credentials.delete(key)
   }
 
-  /** BR-19: pencabutan berlaku untuk semua user ter-cache. */
+  /** BR-19: Revocation applies to all cached users. */
   async removeCredentialsForUsers(userIds: readonly string[]): Promise<number> {
     if (userIds.length === 0) return 0
     const keys = await this.db.credentials.where('userId').anyOf([...userIds]).primaryKeys()

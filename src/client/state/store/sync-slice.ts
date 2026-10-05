@@ -77,8 +77,8 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
         deviceId: (await localRepo.ensureDeviceId()) ?? undefined,
       })
 
-      // Auto-refresh daftar PO bila ada sesi ditolak karena PO ditutup/dihapus,
-      // supaya PO yang tidak lagi CHECKED hilang dari daftar lokal.
+      // Auto-refresh PO list if a session is rejected because the PO was closed/deleted,
+      // so POs that are no longer CHECKED are removed from the local list.
       const hasRejectedPurchase = outcome.results.some(
         (result) =>
           result.status === 'FAILED' &&
@@ -88,7 +88,7 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
         try {
           await refreshPurchases(localRepo, serverTransport)
         } catch {
-          // Kegagalan refresh PO tidak boleh menggagalkan hasil sinkronisasi.
+          // PO refresh failure should not fail the sync result.
         }
       }
       await get().refresh()

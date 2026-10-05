@@ -1,12 +1,12 @@
 /**
- * Skema Drizzle untuk tabel EXISTING sistem admin (BR-18).
+ * Drizzle schema for the admin system's EXISTING tables (BR-18).
  *
- * Definisi di sini SENGAJA hanya mencakup kolom yang dibaca/ditulis aplikasi.
- * Tabel aslinya TIDAK diubah: kita tidak menjalankan migrasi/Drizzle Kit.
- * Kolom yang tidak dideklarasikan tetap memakai nilai default dari database
- * saat INSERT.
+ * The definitions here INTENTIONALLY cover only columns read/written by the application.
+ * The underlying tables are NOT modified: we do not run migrations/Drizzle Kit.
+ * Undeclared columns retain their database default values
+ * during INSERT.
  *
- * bigint memakai mode 'bigint' (BUKAN number) agar presisi terjaga (BR-12).
+ * bigint uses mode 'bigint' (NOT number) to preserve precision (BR-12).
  */
 
 import {

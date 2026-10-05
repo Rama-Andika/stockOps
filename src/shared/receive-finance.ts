@@ -1,30 +1,30 @@
 /**
- * Perhitungan finansial dokumen penerimaan (pos_receive & pos_receive_item).
+ * Financial calculation for receiving documents (pos_receive & pos_receive_item).
  *
- * Aturan (diselaraskan dengan data website admin):
- * - amount             = harga satuan dalam satuan PO (disalin dari pos_purchase_item.amount).
- * - discount_amount    = diskon item, diprorata terhadap qty yang diterima.
- * - total_amount item  = qty diterima x amount - discount_amount.
- * - total_amount header = jumlah seluruh total_amount item.
- * - discount_percent   = disalin dari pos_purchase.discount_percent.
+ * Rules (aligned with admin website data):
+ * - amount             = unit price in PO unit (copied from pos_purchase_item.amount).
+ * - discount_amount    = item discount, prorated against received qty.
+ * - item total_amount  = received qty x amount - discount_amount.
+ * - header total_amount = sum of all item total_amounts.
+ * - discount_percent   = copied from pos_purchase.discount_percent.
  * - discount_total     = total_amount x discount_percent / 100.
- * - dasar pajak        = total_amount - discount_total.
+ * - tax base           = total_amount - discount_total.
  * - total_tax:
- *     price_include_tax = 0 -> dasar pajak x tax_percent / 100
- *     price_include_tax = 1 -> dasar pajak x tax_percent / (100 + tax_percent)
- * - Semua hasil dibulatkan 2 desimal (round half-up) memakai dec2().
+ *     price_include_tax = 0 -> tax base x tax_percent / 100
+ *     price_include_tax = 1 -> tax base x tax_percent / (100 + tax_percent)
+ * - All results rounded to 2 decimals (round half-up) using dec2().
  */
 
 import { dec2 } from './num'
 
 export interface LineFinanceInput {
-  /** Qty diterima (satuan PO). */
+  /** Received qty (PO unit). */
   qtyReceived: number
-  /** Qty dipesan pada item PO (pos_purchase_item.qty). */
+  /** Ordered qty on PO item (pos_purchase_item.qty). */
   qtyOrdered: number
-  /** Harga satuan dalam satuan PO (pos_purchase_item.amount). */
+  /** Unit price in PO unit (pos_purchase_item.amount). */
   amount: number
-  /** Total diskon item untuk qty pesanan penuh (pos_purchase_item.discount_amount). */
+  /** Total item discount for full ordered qty (pos_purchase_item.discount_amount). */
   discountAmountOrdered: number
 }
 
@@ -34,7 +34,7 @@ export interface LineFinance {
   totalAmount: number
 }
 
-/** Hitung finansial satu baris item penerimaan. */
+/** Calculate finance for a single receiving item line. */
 export function computeLineFinance(input: LineFinanceInput): LineFinance {
   const qtyOrdered = input.qtyOrdered > 0 ? input.qtyOrdered : 1
   const amount = dec2(input.amount)
@@ -44,13 +44,13 @@ export function computeLineFinance(input: LineFinanceInput): LineFinance {
 }
 
 export interface HeaderFinanceInput {
-  /** Jumlah seluruh totalAmount item (hasil komputasi per baris). */
+  /** Sum of all item totalAmount (computed per line). */
   itemsTotalAmount: number
   /** pos_purchase.discount_percent. */
   discountPercent: number
   /** pos_purchase.tax_percent. */
   taxPercent: number
-  /** pos_purchase.price_include_tax (0 = harga belum termasuk pajak, 1 = sudah termasuk). */
+  /** pos_purchase.price_include_tax (0 = price excludes tax, 1 = price includes tax). */
   priceIncludeTax: number
 }
 
@@ -61,7 +61,7 @@ export interface HeaderFinance {
   totalTax: number
 }
 
-/** Hitung total dokumen penerimaan (header). */
+/** Calculate total for receiving document (header). */
 export function computeHeaderFinance(input: HeaderFinanceInput): HeaderFinance {
   const totalAmount = dec2(input.itemsTotalAmount)
   const discountPercent = dec2(input.discountPercent)

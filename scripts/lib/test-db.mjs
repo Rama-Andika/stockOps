@@ -1,12 +1,12 @@
-// Utilitas pembuatan schema database UJI.
+// Test database schema creation utilities.
 //
-// Prinsip penting:
-// - Database produksi (`demo`) TIDAK PERNAH diubah. Kita hanya membaca DDL-nya
-//   lewat SHOW CREATE TABLE untuk meniru struktur tabelnya di schema uji.
-// - Nama tabel di schema uji SAMA dengan produksi, supaya kode/schema Drizzle
-//   yang sama bisa diuji apa adanya.
-// - Foreign key dilepas di schema uji agar tidak bergantung pada tabel lain
-//   yang tidak ikut dikloning.
+// Key principles:
+// - Production database (`demo`) is NEVER modified. We only read its DDL
+//   via SHOW CREATE TABLE to replicate table structures in the test schema.
+// - Table names in the test schema are IDENTICAL to production, so that
+//   the same Drizzle code/schema can be tested as-is.
+// - Foreign keys are stripped in the test schema so as not to depend on other
+//   tables that are not cloned.
 
 import mysql from 'mysql2/promise'
 import 'dotenv/config'
@@ -36,7 +36,7 @@ export function resolveDbConfig() {
     throw new Error(`DB_TEST_NAME tidak boleh sama dengan DB_NAME (${production})`)
   }
   if (!/test/i.test(test)) {
-    // Pengaman tambahan: nama schema uji harus mengandung "test".
+    // Extra safety guard: test schema name must contain "test".
     throw new Error(`Nama schema uji tidak aman: "${test}" (harus mengandung "test")`)
   }
   return { host, port, user, password, production, test }
@@ -103,7 +103,7 @@ export async function dropTestSchema(options = {}) {
   }
 }
 
-// Jalankan langsung: `node scripts/setup-test-db.mjs`
+// Run directly: `node scripts/setup-test-db.mjs`
 const invokedDirectly =
   process.argv[1] && import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href
 if (invokedDirectly) {

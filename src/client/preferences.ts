@@ -1,11 +1,11 @@
-/** Preferensi perangkat yang bisa diatur operator/IT di layar Pengaturan. */
+/** Device preferences configurable by operators/IT on the Settings screen. */
 
 export interface Preferences {
-  /** 'pad' = tampilkan keypad numerik di layar; 'keyboard' = pakai keyboard fisik PDT. */
+  /** 'pad' = display on-screen numeric keypad; 'keyboard' = use PDT physical keyboard. */
   qtyInput: 'pad' | 'keyboard'
-  /** Bunyi beep saat scan sukses/ditolak. */
+  /** Beep sound on scan success/reject. */
   feedbackBeep: boolean
-  /** Getar saat scan sukses/ditolak. */
+  /** Vibration on scan success/reject. */
   feedbackVibrate: boolean
 }
 
@@ -17,7 +17,7 @@ const DEFAULTS: Preferences = {
   feedbackVibrate: true,
 }
 
-/** Baca preferensi dari localStorage. Aman dipanggil saat prerender (tanpa `window`). */
+/** Read preferences from localStorage. Safe to call during prerender (without `window`). */
 export function loadPreferences(): Preferences {
   if (typeof window === 'undefined') return { ...DEFAULTS }
 
@@ -40,12 +40,12 @@ export function loadPreferences(): Preferences {
   }
 }
 
-/** Simpan preferensi ke localStorage. Aman dipanggil saat prerender (tanpa `window`). */
+/** Save preferences to localStorage. Safe to call during prerender (without `window`). */
 export function savePreferences(next: Preferences): void {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   } catch {
-    // Preferensi bukan data kerja; kegagalan penyimpanan tidak boleh memblokir operator.
+    // Preferences are not working data; storage failure must not block the operator.
   }
 }

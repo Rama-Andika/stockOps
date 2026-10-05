@@ -1,11 +1,11 @@
 /**
- * Konvensi penandaan pada kolom yang SUDAH ADA (BR-18: tanpa mengubah schema).
+ * Marking conventions on EXISTING columns (BR-18: without schema changes).
  *
- * 1. `pos_receive.note`         -> penanda sesi PDT (kunci idempotensi, FR-5.3)
- * 2. `pos_receive_item.memo`    -> penanda over-receive (FR-6.2)
+ * 1. `pos_receive.note`         -> PDT session marker (idempotency key, FR-5.3)
+ * 2. `pos_receive_item.memo`    -> over-receive marker (FR-6.2)
  *
- * Format sengaja dibuat stabil & mudah di-parse agar tim admin dapat memakainya
- * untuk worklist persetujuan.
+ * The format is intentionally stable & easy to parse so that the admin team can use it
+ * for the approval worklist.
  */
 
 import { MEMO_MAX_LENGTH, MEMO_OVER_PREFIX, NOTE_SESSION_PREFIX } from './constants'

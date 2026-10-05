@@ -37,11 +37,11 @@ function playBeep(frequency: number, durationMs: number): void {
     oscillator.start()
     oscillator.stop(ctx.currentTime + durationMs / 1000 + 0.02)
   } catch {
-    // Audio tidak tersedia / ditolak browser — bukan error aplikasi.
+    // Audio not available / blocked by browser — not an application error.
   }
 }
 
-/** Mainkan umpan balik scan sesuai preferensi perangkat. */
+/** Play scan feedback according to device preferences. */
 export function playFeedback(tone: FeedbackTone): void {
   const preferences = loadPreferences()
 
@@ -57,7 +57,7 @@ export function playFeedback(tone: FeedbackTone): void {
       else if (tone === 'danger') navigator.vibrate([120, 60, 120])
       else navigator.vibrate(80)
     } catch {
-      // Vibration API tidak didukung atau diblokir perangkat.
+      // Vibration API not supported or blocked by device.
     }
   }
 }

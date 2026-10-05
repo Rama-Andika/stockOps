@@ -29,9 +29,9 @@ export function LoginForm() {
         try {
           response = await loginOnline(loginId.trim(), password)
         } catch {
-          // Status jaringan dapat tertinggal dari koneksi ke server. Coba kredensial
-          // lokal hanya bila request online gagal secara transport; penolakan login
-          // dari server tetap ditampilkan dan tidak dilewati dengan login offline.
+          // Network status can lag behind actual server connection. Try local
+          // credentials only if the online request failed at the transport level; login
+          // rejection from the server is still displayed and not bypassed with offline login.
           response = await loginOffline(loginId.trim(), password)
         }
       }

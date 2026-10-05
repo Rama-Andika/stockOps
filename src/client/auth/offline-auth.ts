@@ -1,10 +1,10 @@
 /**
- * Autentikasi offline (FR-1.2, FR-1.3, NF-5).
+ * Offline authentication (FR-1.2, FR-1.3, NF-5).
  *
- * Password TIDAK pernah disimpan sebagai teks biasa: yang disimpan adalah
- * hash PBKDF2-SHA256 dengan salt acak per (device, user). Fingerprint HMAC
- * (dihitung server) disimpan terpisah hanya untuk deteksi perubahan kredensial
- * (BR-19) dan bukan pengganti password.
+ * Passwords are NEVER stored as plain text: what is stored is a
+ * PBKDF2-SHA256 hash with a random salt per (device, user). HMAC fingerprint
+ * (computed by server) is stored separately only for credential change detection
+ * (BR-19) and does not substitute for passwords.
  */
 
 import type { LocalCredential } from '../db/local-db'
@@ -91,7 +91,7 @@ export interface OfflineVerifyResult {
   reason?: OfflineLoginFailure
 }
 
-/** FR-1.2/FR-1.3: verifikasi login offline terhadap kredensial lokal. */
+/** FR-1.2/FR-1.3: verify offline login against local credentials. */
 export async function verifyOfflineCredential(
   credential: LocalCredential | undefined,
   password: string,

@@ -1,10 +1,10 @@
-/** Utilitas SQL kecil (format tanggal untuk kolom datetime/date MySQL). */
+/** Small SQL utilities (date formatting for MySQL datetime/date columns). */
 
 function pad(value: number): string {
   return value < 10 ? `0${value}` : String(value)
 }
 
-/** Date -> 'YYYY-MM-DD HH:MM:SS' memakai waktu LOKAL server (selaras dgn admin). */
+/** Date -> 'YYYY-MM-DD HH:MM:SS' using server LOCAL time (aligned with admin). */
 export function toMysqlDateTime(date: Date): string {
   return (
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
@@ -17,7 +17,7 @@ export function toMysqlDate(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-/** Menambahkan n hari ke sebuah 'YYYY-MM-DD' atau Date. */
+/** Adds n days to a 'YYYY-MM-DD' or Date. */
 export function addDays(base: Date, days: number): Date {
   const result = new Date(base.getTime())
   result.setDate(result.getDate() + days)

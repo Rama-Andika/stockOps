@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
 /* ============================================================
-   StockOps - Tema UI keypad-first untuk perangkat PDT (layar kecil & keypad)
-   (NF-8: font besar, tombol besar, kontras tinggi)
+   StockOps - Keypad-first UI theme for PDT devices (small screen & keypad)
+   (NF-8: large fonts, large buttons, high contrast)
    ============================================================ */
 
 @theme {
@@ -26,12 +26,12 @@ body {
   background: #0b1220;
   color: #e2e8f0;
   font-family: var(--font-sans);
-  /* Layar kecil PDT: font dasar besar agar mudah dibaca. */
+  /* Small PDT screen: large base font for readability. */
   font-size: 18px;
   -webkit-text-size-adjust: 100%;
 }
 
-/* Target sentuh besar untuk jari/gloves dan navigasi keypad. */
+/* Large touch target for fingers/gloves and keypad navigation. */
 .touch-target {
   min-height: 56px;
 }
@@ -43,7 +43,7 @@ button {
   font: inherit;
 }
 
-/* Fokus selalu terlihat jelas (navigasi keyboard). */
+/* Focus is always clearly visible (keyboard navigation). */
 :focus-visible {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;

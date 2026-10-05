@@ -6,7 +6,7 @@ function keyClass(wide: boolean): string {
   }`
 }
 
-/** Keypad numerik on-screen untuk input qty satuan PO. */
+/** On-screen numeric keypad for entering PO unit qty. */
 export function NumericPad({
   value,
   onChange,

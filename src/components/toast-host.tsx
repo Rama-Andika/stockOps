@@ -8,7 +8,7 @@ const TONE_STYLES: Record<ToastTone, string> = {
   warn: 'bg-amber-500 text-slate-950',
 }
 
-/** Render tumpukan toast di kanan-atas. Dipasang sekali di AppShell. */
+/** Renders the toast stack in the top-right corner. Mounted once in AppShell. */
 export function ToastHost() {
   const toasts = useSyncExternalStore(subscribeToasts, getToasts)
   if (toasts.length === 0) return null

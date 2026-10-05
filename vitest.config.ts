@@ -23,7 +23,7 @@ export default defineConfig({
       include: ['src/shared/**', 'src/server/**', 'src/client/**'],
       exclude: ['src/**/*.d.ts', 'src/routes/**'],
     },
-    // Integration test ke MySQL butuh waktu lebih untuk seeding.
+    // Integration tests against MySQL need more time for seeding.
     testTimeout: 30000,
     hookTimeout: 60000,
     pool: 'forks',

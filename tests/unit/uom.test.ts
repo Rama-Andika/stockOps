@@ -28,7 +28,7 @@ describe('resolveConvQty', () => {
       itemMasterId: ITEM,
       uomPurchaseId: 'tidak-ada',
     })
-    // fallback ke kombinasi vendor+item mana pun yang tersedia
+    // Fall back to any available vendor+item combination
     expect(result.found).toBe(true)
     expect(result.source).toBe('vendor-item')
   })

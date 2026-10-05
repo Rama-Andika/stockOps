@@ -12,9 +12,9 @@ import type {
 } from '~/shared/schemas'
 
 /**
- * Abstraksi transport ke server. Aplikasi memakai `serverTransport`
- * (TanStack Start server functions); test boleh menyuntik transport palsu
- * yang memanggil service server secara langsung.
+ * Transport abstraction to server. The application uses `serverTransport`
+ * (TanStack Start server functions); tests may inject a mock transport
+ * that calls the server services directly.
  */
 export interface SyncTransport {
   login(input: { loginId: string; password: string; deviceId: string }): Promise<LoginResult>

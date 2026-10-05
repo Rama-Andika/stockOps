@@ -10,7 +10,7 @@ import {
 } from '~/client/auth/offline-auth'
 import type { LocalCredential } from '~/client/db/local-db'
 
-const ITERATIONS = 1_000 // dipercepat untuk test
+const ITERATIONS = 1_000 // sped up for tests
 
 async function makeCredential(password: string, now = new Date('2026-01-01T00:00:00Z')): Promise<LocalCredential> {
   const salt = generateSalt()

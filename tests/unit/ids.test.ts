@@ -16,7 +16,7 @@ describe('ids', () => {
   })
 
   it('menghasilkan nilai yang persis sama dengan ID admin nyata (regresi)', () => {
-    // receive_id nyata dari database demo: 720593690680598725
+    // Real receive_id from demo database: 720593690680598725
     const id = composeId(1, 1_775_030_131_936, 5)
     expect(id.toString()).toBe('720593690680598725')
   })

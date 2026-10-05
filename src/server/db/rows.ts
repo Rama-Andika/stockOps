@@ -1,7 +1,7 @@
 /**
- * Normalisasi hasil `db.execute()` Drizzle.
- * Bergantung versi driver, hasilnya bisa berupa array baris ATAU tuple
- * [rows, fields] ATAU objek { rows }. Helper ini menerima ketiganya.
+ * Normalization of Drizzle `db.execute()` results.
+ * Depending on the driver version, the result can be a row array OR a tuple
+ * [rows, fields] OR an object { rows }. This helper accepts all three.
  */
 export function rowsOf<T extends Record<string, unknown>>(result: unknown): T[] {
   if (Array.isArray(result)) {

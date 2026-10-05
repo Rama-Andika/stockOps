@@ -74,7 +74,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(items).toHaveLength(1)
       const item = items[0]!
       expect(Number(item.qty)).toBe(6)
-      expect(Number(item.qty_purchase)).toBe(12) // conv_qty (BR-7), bukan qty x conv
+      expect(Number(item.qty_purchase)).toBe(12) // conv_qty (BR-7), not qty x conv
       expect(Number(item.conv_unit)).toBe(1)
       expect(item.uom_purchase_id).toBe(FIXTURE.uom.KARTON)
       expect(item.uom_id).toBe(FIXTURE.uom.PCS)
@@ -102,7 +102,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(Number(item.expired_check_id)).toBe(0)
       expect(item.status).toBeNull()
 
-      // Riwayat dokumen (document_history) dibuat tepat satu baris.
+      // Document history (document_history) is created with exactly one row.
       const history = await queryRows<Record<string, string>>(sql`SELECT * FROM document_history`)
       expect(history).toHaveLength(1)
       const hist = history[0]!
@@ -126,7 +126,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       const id = BigInt(receiveId)
       expect(id).toBeGreaterThanOrEqual(minIdForApp(2))
       expect(id).toBeLessThanOrEqual(maxIdForApp(2))
-      // Jelas berbeda dari namespace admin (appIdx 1).
+      // Clearly distinct from admin namespace (appIdx 1).
       expect(id).toBeGreaterThan(maxIdForApp(1))
     })
 
@@ -158,7 +158,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
         { now: NOW },
       )
       const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
-      expect(Number(items[0]?.qty_purchase)).toBe(6) // conv_qty, bukan 2 x 6
+      expect(Number(items[0]?.qty_purchase)).toBe(6) // conv_qty, not 2 x 6
       expect(Number(items[0]?.conv_unit)).toBe(1)
     })
   })
@@ -266,9 +266,9 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
 
   describe('over-receive lintas device (Skenario B)', () => {
     it('menandai item yang melebihi pesanan dan tetap menyimpan sebagai DRAFT', async () => {
-      // Device 1 menerima 6 dari 10.
+      // Device 1 receives 6 out of 10.
       await syncPush(pushInput([session()]), { now: NOW })
-      // Device 2 (sesi berbeda) menerima 5 -> total 11 > 10.
+      // Device 2 (different session) receives 5 -> total 11 > 10.
       const device2 = session({
         sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
         deviceId: 'device-test-2',
@@ -296,14 +296,14 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(res.lines[0]?.excess).toBe(1)
       expect(res.message).toContain('menunggu persetujuan admin')
 
-      // Dokumen tetap DRAFT (BR-5), bukan ditolak.
+      // Document remains DRAFT (BR-5), not rejected.
       const headers = await queryRows<Record<string, string>>(
         sql`SELECT status, note FROM pos_receive ORDER BY receive_id`,
       )
       expect(headers).toHaveLength(2)
       expect(headers.every((row) => row.status === 'DRAFT')).toBe(true)
 
-      // Item over-receive ditandai lewat kolom memo (FR-6.2).
+      // Over-received item is flagged via memo column (FR-6.2).
       const overItems = await queryRows<Record<string, string>>(
         sql`SELECT * FROM pos_receive_item WHERE memo IS NOT NULL`,
       )
@@ -316,7 +316,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
         items: [
           {
             clientLineId: 'l1',
-            purchaseItemId: FIXTURE.purchaseItem.PI1, // dipesan 10
+            purchaseItemId: FIXTURE.purchaseItem.PI1, // ordered 10
             itemMasterId: FIXTURE.item.I1,
             qty: 12,
             uomPurchaseId: FIXTURE.uom.KARTON,
@@ -326,7 +326,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
           },
           {
             clientLineId: 'l2',
-            purchaseItemId: FIXTURE.purchaseItem.PI2, // dipesan 5
+            purchaseItemId: FIXTURE.purchaseItem.PI2, // ordered 5
             itemMasterId: FIXTURE.item.I2,
             qty: 1,
             uomPurchaseId: FIXTURE.uom.PACK,
@@ -452,7 +452,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
             items: [
               {
                 clientLineId: 'l1',
-                purchaseItemId: FIXTURE.purchaseItem.PI1, // milik PO lain
+                purchaseItemId: FIXTURE.purchaseItem.PI1, // belongs to another PO
                 itemMasterId: FIXTURE.item.I1,
                 qty: 1,
                 uomPurchaseId: FIXTURE.uom.KARTON,
@@ -477,7 +477,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
               {
                 clientLineId: 'l1',
                 purchaseItemId: FIXTURE.purchaseItem.PI1,
-                itemMasterId: FIXTURE.item.I2, // tidak cocok
+                itemMasterId: FIXTURE.item.I2, // does not match
                 qty: 1,
                 uomPurchaseId: FIXTURE.uom.KARTON,
                 uomId: FIXTURE.uom.PCS,
@@ -495,7 +495,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
 
   describe('transaksi utuh (FR-5.7)', () => {
     it('membatalkan SELURUH dokumen bila satu item gagal disimpan', async () => {
-      // Generator ID item yang selalu sama -> INSERT item kedua melanggar PK.
+      // Item ID generator that always returns the same ID -> second item INSERT violates PK.
       class ConstantIdGen {
         constructor(private readonly id: bigint) {}
         next(): bigint {
@@ -533,7 +533,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       })
 
       expect(result.results[0]?.status).toBe('FAILED')
-      // Tidak ada sisa header/item (rollback penuh).
+      // No leftover header/items (full rollback).
       expect(await countRows('pos_receive')).toBe(0)
       expect(await countRows('pos_receive_item')).toBe(0)
     })
@@ -547,7 +547,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
             items: [
               {
                 clientLineId: 'l1',
-                purchaseItemId: FIXTURE.purchaseItem.PI3, // item tanpa baris vendor-item
+                purchaseItemId: FIXTURE.purchaseItem.PI3, // item without vendor-item row
                 itemMasterId: FIXTURE.item.I3_INACTIVE,
                 qty: 3,
                 uomPurchaseId: FIXTURE.uom.PCS,
@@ -562,7 +562,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       )
       const items = await queryRows<Record<string, string>>(sql`SELECT * FROM pos_receive_item`)
       expect(Number(items[0]?.conv_unit)).toBe(1)
-      expect(Number(items[0]?.qty_purchase)).toBe(1) // conv_qty default = 1, bukan qty (3)
+      expect(Number(items[0]?.qty_purchase)).toBe(1) // default conv_qty = 1, not qty (3)
     })
   })
 
@@ -579,7 +579,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
         { now: NOW },
       )
       expect(result.revoked).toEqual([{ userId: FIXTURE.user.ACTIVE_2, reason: 'CHANGED' }])
-      // Sesi tetap tersinkron walau ada kredensial dicabut.
+      // Session still syncs even if credential was revoked.
       expect(result.results[0]?.status).toBe('SYNCED')
     })
 

@@ -9,7 +9,7 @@ interface ConfirmButtonProps
   tone?: 'default' | 'danger'
 }
 
-/** Aksi hanya dipanggil setelah tombol ditahan penuh selama durasi konfirmasi. */
+/** Action is only triggered after button is held for the full confirmation duration. */
 export function ConfirmButton({
   label,
   confirmLabel,

@@ -1,4 +1,4 @@
-/** Utilitas angka desimal (qty DB = decimal(10,2) / decimal(22,2)). */
+/** Decimal number utilities (DB qty = decimal(10,2) / decimal(22,2)). */
 
 export function toNumber(value: string | number | null | undefined): number {
   if (value === null || value === undefined) return 0
@@ -6,7 +6,7 @@ export function toNumber(value: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0
 }
 
-/** Bulatkan ke 2 desimal, aman dari galat floating point. */
+/** Round to 2 decimals, safe from floating-point errors. */
 export function dec2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }

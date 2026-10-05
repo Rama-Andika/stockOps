@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import '@testing-library/jest-dom/vitest'
 
-// Semua test berjalan melawan schema uji terpisah, BUKAN database admin `demo`.
+// All tests run against a dedicated test schema, NOT the admin `demo` database.
 process.env.DB_NAME = process.env.DB_TEST_NAME ?? 'stockops_test'
 process.env.CREDENTIAL_HMAC_SECRET ??= 'test-credential-secret'
 process.env.SESSION_TTL_DAYS ??= '7'

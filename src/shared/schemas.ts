@@ -1,6 +1,6 @@
 /**
- * Kontrak data (Zod) untuk server functions dan payload sinkronisasi.
- * Semua kolom bigint selalu diangkut sebagai string (BR-12).
+ * Data contracts (Zod) for server functions and sync payloads.
+ * All bigint columns are always transported as strings (BR-12).
  */
 
 import { z } from 'zod'
@@ -72,7 +72,7 @@ export const checkCredentialsResultSchema = z.object({
 export type CheckCredentialsResult = z.infer<typeof checkCredentialsResultSchema>
 
 /* ------------------------------------------------------------------ */
-/* Pull (unduh data master & PO)                                       */
+/* Pull (download master data & PO)                                    */
 /* ------------------------------------------------------------------ */
 
 export const PULL_KINDS = [
@@ -154,7 +154,7 @@ export const pullResultSchema = z.object({
   offset: z.number().int().min(0),
   nextOffset: z.number().int().min(0).nullable(),
   total: z.number().int().min(0),
-  // Nilai baris selalu berupa primitif yang aman diserialisasi (BR-12: bigint = string).
+  // Row values are always serializable primitives (BR-12: bigint = string).
   rows: z.array(z.record(z.string(), pullCellSchema)),
   pulledAt: z.string(),
 })
@@ -162,7 +162,7 @@ export const pullResultSchema = z.object({
 export type PullResult = z.infer<typeof pullResultSchema>
 
 /* ------------------------------------------------------------------ */
-/* Push (sinkronisasi sesi penerimaan)                                 */
+/* Push (receiving session synchronization)                            */
 /* ------------------------------------------------------------------ */
 
 export const receiveLineInputSchema = z.object({
@@ -243,7 +243,7 @@ export const pushResultSchema = z.object({
 export type PushResult = z.infer<typeof pushResultSchema>
 
 /* ------------------------------------------------------------------ */
-/* Worklist admin (untuk verifikasi & demo)                            */
+/* Admin worklist (for verification & demo)                            */
 /* ------------------------------------------------------------------ */
 
 export const overReceiveWorklistInputSchema = z.object({

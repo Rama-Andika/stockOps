@@ -1,6 +1,6 @@
-// Menghasilkan dist/client/precache-manifest.json: daftar SEMUA aset hasil build
-// agar service worker bisa mem-precache semuanya (termasuk chunk per-route).
-// Jalankan setelah `vite build` (lihat package.json → script "build").
+// Generates dist/client/precache-manifest.json: list of ALL build assets
+// so that the service worker can precache everything (including per-route chunks).
+// Run after `vite build` (see package.json -> script "build").
 
 import { readdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'

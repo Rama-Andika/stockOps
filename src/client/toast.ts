@@ -1,4 +1,4 @@
-/** Sistem toast minimal (kanan-atas), dipakai lintas halaman. */
+/** Minimal toast system (top-right), used across pages. */
 
 export type ToastTone = 'success' | 'danger' | 'info' | 'warn'
 
@@ -32,7 +32,7 @@ export function dismissToast(id: number): void {
   emit()
 }
 
-/** Tampilkan toast selama ±3 detik. Aman dipanggil saat prerender (tanpa window). */
+/** Display toast for ~3 seconds. Safe to call during prerender (without window). */
 export function toast(tone: ToastTone, text: string): void {
   const item: ToastItem = { id: nextId, tone, text }
   nextId += 1

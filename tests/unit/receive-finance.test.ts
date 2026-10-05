@@ -55,7 +55,7 @@ describe('computeHeaderFinance (total dokumen penerimaan)', () => {
       taxPercent: 11,
       priceIncludeTax: 0,
     })
-    // round half-up memberi 1940.60; data admin 1940.59 (selisih ±1 sen diterima).
+    // Round half-up yields 1940.60; admin data is 1940.59 (difference of ±1 cent is accepted).
     expect(result.discountTotal).toBe(1940.6)
     expect(result.totalTax).toBe(21133.11)
   })
@@ -67,7 +67,7 @@ describe('computeHeaderFinance (total dokumen penerimaan)', () => {
       taxPercent: 11,
       priceIncludeTax: 1,
     })
-    // round half-up memberi 29729.73; data admin 29729.72 (selisih ±1 sen diterima).
+    // Round half-up yields 29729.73; admin data is 29729.72 (difference of ±1 cent is accepted).
     expect(result.totalTax).toBe(29729.73)
   })
 

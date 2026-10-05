@@ -1,9 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 
 /**
- * Pembungkus `useLiveQuery` yang aman untuk prerender SPA di Node:
- * saat `indexedDB` tidak tersedia, querier tidak dijalankan dan nilai awal
- * (fallback) dikembalikan.
+ * Wrapper for `useLiveQuery` that is safe for SPA prerendering in Node:
+ * when `indexedDB` is unavailable, the querier is not executed and the initial value
+ * (fallback) is returned.
  */
 export function useLive<T>(
   querier: () => Promise<T>,

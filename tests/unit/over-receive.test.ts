@@ -18,7 +18,7 @@ describe('evaluateLine', () => {
   })
 
   it('menandai over-receive dan menghitung kelebihan (Skenario B)', () => {
-    // Device 1 terima 6, device 2 terima 5, dipesan 10 -> total 11 > 10
+    // Device 1 receives 6, device 2 receives 5, ordered 10 -> total 11 > 10
     const result = evaluateLine({ purchaseItemId: 'PI-1', qty: 5 }, ordered, already)
     expect(result.newTotal).toBe(11)
     expect(result.overReceive).toBe(true)

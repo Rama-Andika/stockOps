@@ -1,24 +1,24 @@
-// Seed data DEMO untuk database `demo`.
+// DEMO data seed for the `demo` database.
 //
-// Prinsip:
-// - Hanya INSERT baris baru dengan ID yang jelas khusus demo (mis. purchase_id
-//   990001). Schema TIDAK diubah (BR-18).
-// - Tidak menimpa data admin yang sudah ada; barang memakai master item yang
-//   SUDAH ADA (menghindari pelanggaran foreign key).
-// - SEMUA nilai bigint dikirim sebagai STRING, bukan number. Ini penting:
-//   ID sistem admin > 2^53 sehingga akan kehilangan presisi bila dikirim
-//   sebagai number JavaScript (BR-12).
-// - Idempoten; `--clean` menghapus hanya baris demo ini.
+// Principles:
+// - Only INSERT new rows with IDs clearly specific to the demo (e.g. purchase_id
+//   990001). The schema is NOT modified (BR-18).
+// - Do not overwrite existing admin data; items use master items that
+//   ALREADY EXIST (avoiding foreign key violations).
+// - ALL bigint values are passed as STRINGS, not numbers. This is critical:
+//   Admin system IDs > 2^53, so precision is lost if passed
+//   as JavaScript numbers (BR-12).
+// - Idempotent; `--clean` deletes only these demo rows.
 //
-// Pemakaian: npm run db:seed  |  npm run db:seed:clean
+// Usage: npm run db:seed  |  npm run db:seed:clean
 
 import mysql from 'mysql2/promise'
 import 'dotenv/config'
 
-// ID bigint sebagai string (BR-12).
+// bigint IDs as strings (BR-12).
 const DEMO = {
   vendorId: '990001',
-  itemIds: ['4000001', '4000002'], // master barang yang sudah ada di demo
+  itemIds: ['4000001', '4000002'], // master items that already exist in demo
   vendorItemIds: ['990201', '990202'],
   purchaseId: '990001',
   purchaseItemIds: ['990101', '990102'],

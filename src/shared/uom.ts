@@ -1,15 +1,15 @@
 /**
- * Semantik UOM (BR-7, PRD 12.4).
+ * UOM semantics (BR-7, PRD 12.4).
  *
- * - qty           : qty diterima DALAM SATUAN PO (dipakai validasi vs pesanan)
- * - uom_id        : satuan stok terkecil (pos_item_master.uom_stock_id)
- * - uom_purchase_id: satuan PO (pos_purchase_item.uom_id)
- * - qty_purchase  : qty dikonversi ke satuan stok (untuk pembukuan stok)
+ * - qty           : received qty IN PO UNITS (used for validation vs order)
+ * - uom_id        : smallest stock unit (pos_item_master.uom_stock_id)
+ * - uom_purchase_id: PO unit (pos_purchase_item.uom_id)
+ * - qty_purchase  : qty converted to stock units (for stock accounting)
  *
- * Konversi diambil dari pos_vendor_item.conv_qty dengan kunci
- * (vendor_id, item_master_id, uom_purchase). Bila tidak ditemukan, faktor
- * yang dipakai adalah 1 DAN hasilnya ditandai `found = false` agar UI bisa
- * memberi peringatan.
+ * Conversion is retrieved from pos_vendor_item.conv_qty using key
+ * (vendor_id, item_master_id, uom_purchase). If not found, the factor
+ * used is 1 AND the result is flagged `found = false` so the UI can
+ * display a warning.
  */
 
 import { dec2 } from './num'
@@ -43,10 +43,10 @@ function toQty(value: string | number): number {
 }
 
 /**
- * Mencari faktor konversi conv_qty dengan urutan:
- * 1. exact  : (vendor, item, uom_purchase) cocok
- * 2. vendor-item : (vendor, item) cocok dengan uom apa pun (fallback toleran)
- * 3. default: faktor 1 tanpa data konversi
+ * Resolves conv_qty conversion factor in order of priority:
+ * 1. exact  : (vendor, item, uom_purchase) matches
+ * 2. vendor-item : (vendor, item) matches with any uom (tolerant fallback)
+ * 3. default: factor 1 without conversion data
  */
 export function resolveConvQty(rows: readonly VendorItemRow[], key: ConvKey): ConvResult {
   const samePair = rows.filter(
@@ -67,11 +67,11 @@ export function resolveConvQty(rows: readonly VendorItemRow[], key: ConvKey): Co
   return { convQty: 1, found: false, source: 'default' }
 }
 
-/** Bulatkan qty ke 2 desimal (kolom DB: decimal(10,2)/(22,2)). */
+/** Round qty to 2 decimals (DB column: decimal(10,2)/(22,2)). */
 
 /**
- * Menghitung qty_purchase = qty (satuan PO) x conv_qty.
- * Hasil dibulatkan 2 desimal agar cocok dengan kolom decimal(22,2).
+ * Computes qty_purchase = qty (PO unit) x conv_qty.
+ * Result is rounded to 2 decimals to match the decimal(22,2) column.
  */
 export function computeQtyPurchase(qtyInPoUom: number, convQty: number): number {
   return dec2(toQty(qtyInPoUom) * toQty(convQty))

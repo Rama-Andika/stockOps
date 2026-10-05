@@ -21,7 +21,7 @@ export function AppStoreProvider({
   const user = useStore(resolved, (state) => state.user)
   const sync = useStore(resolved, (state) => state.sync)
 
-  // Inisialisasi saat mount + pemantau status online/offline.
+  // Initialize on mount + monitor online/offline status.
   useEffect(() => {
     if (!isBrowser()) {
       resolved.setState({ ready: true })
@@ -42,7 +42,7 @@ export function AppStoreProvider({
     }
   }, [resolved, refresh])
 
-  // Sinkronisasi otomatis saat kembali online (FR-5.1).
+  // Automatic sync when returning online (FR-5.1).
   useEffect(() => {
     if (!isBrowser() || !online || !user) return
     void (async () => {

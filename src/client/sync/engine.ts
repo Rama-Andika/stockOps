@@ -5,7 +5,7 @@ import { serverTransport } from './transport'
 import { DEFAULT_PULL_CHUNK_SIZE, PERMANENT_REJECT_CODES, SESSION_STATUS } from '~/shared/constants'
 import type { PullKind, ReceiveSessionInput, SyncSessionResult } from '~/shared/schemas'
 
-/** Batas waktu maksimal satu permintaan sinkronisasi sebelum dianggap gagal. */
+/** Maximum timeout for a single sync request before considered failed. */
 const SYNC_TIMEOUT_MS = 30_000
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -45,8 +45,8 @@ export interface PullSummary {
 }
 
 /**
- * FR-2.1 / FR-2.2 / BR-16: unduh PENUH data master & PO CHECKED, bertahap
- * (chunking) dengan progres. Tidak menyentuh sesi penerimaan lokal.
+ * FR-2.1 / FR-2.2 / BR-16: FULL download of master data & CHECKED POs, paginated
+ * (chunking) with progress. Does not touch local receiving sessions.
  */
 export async function pullAllData(
   repo: LocalRepository,
@@ -61,7 +61,7 @@ export async function pullAllData(
     let offset = 0
     let total = 0
     let fetched = 0
-    // Batas iterasi sebagai pengaman agar tidak loop tanpa henti.
+    // Iteration limit as a safeguard against infinite loops.
     for (let guard = 0; guard < 100_000; guard += 1) {
       const result = await transport.pull({ kind, offset, limit: chunkSize })
       total = result.total
@@ -109,7 +109,7 @@ async function storeChunk(
   }
 }
 
-/** FR-2.3: menyegarkan daftar PO tanpa menyentuh sesi yang sedang berjalan. */
+/** FR-2.3: Refresh PO list without touching ongoing sessions. */
 export async function refreshPurchases(
   repo: LocalRepository,
   transport: SyncTransport = serverTransport,
@@ -147,7 +147,7 @@ export async function refreshPurchases(
   }
 }
 
-/** Mengubah sesi lokal menjadi payload sinkronisasi (FR-5.2, BR-8/BR-12). */
+/** Transforms local session into sync payload (FR-5.2, BR-8/BR-12). */
 export function buildSessionPayload(
   session: LocalSession,
   items: readonly LocalSessionItem[],
@@ -189,9 +189,9 @@ export interface SyncOutcome {
 }
 
 /**
- * FR-5.1/5.3/5.5/5.6: mengirim seluruh isi outbox secara FIFO, lalu
- * memperbarui status setiap sesi. Data lokal tidak pernah dihapus sebelum
- * server mengonfirmasi sukses.
+ * FR-5.1/5.3/5.5/5.6: Send entire outbox in FIFO order, then
+ * update each session status. Local data is never deleted before
+ * the server confirms success.
  */
 export async function syncOutbox(
   repo: LocalRepository,
@@ -296,7 +296,7 @@ export async function syncOutbox(
       results: response.results,
     }
   } catch (error) {
-    // FR-5.6: kegagalan transport -> semua sesi kembali "Gagal — coba lagi".
+    // FR-5.6: transport failure -> all sessions revert to "Failed — retry".
     const message = error instanceof Error ? error.message : 'Koneksi ke server gagal.'
     for (const payload of payloads) {
       await repo.markFailed(payload.sessionId, message)
@@ -313,7 +313,7 @@ export async function syncOutbox(
   }
 }
 
-/** Ringkasan antrian untuk indikator (FR-7.2). */
+/** Queue summary for indicators (FR-7.2). */
 export async function countPendingSessions(repo: LocalRepository): Promise<number> {
   const pending = await repo.db.sessions.where('status').equals(SESSION_STATUS.PENDING).count()
   const failed = await repo.db.sessions.where('status').equals(SESSION_STATUS.FAILED).count()
