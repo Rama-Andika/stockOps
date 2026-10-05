@@ -636,27 +636,32 @@ export class LocalRepository {
 
   /** FR-5.6: TEMPORARY failure -> remains in queue, data is not deleted. */
   async markFailed(sessionId: string, error: string, code?: string | null): Promise<void> {
-    const session = await this.db.sessions.get(sessionId)
-    if (!session) return
-    await this.db.sessions.put({
-      ...session,
-      status: SESSION_STATUS.FAILED,
-      lastError: error,
-      failureCode: code ?? null,
-      updatedAt: nowIso(),
+    await this.db.transaction('rw', this.db.sessions, async () => {
+      const session = await this.db.sessions.get(sessionId)
+      // A session the server already stored must never go back to the queue (it would only replay).
+      if (!session || session.status === SESSION_STATUS.SYNCED) return
+      await this.db.sessions.put({
+        ...session,
+        status: SESSION_STATUS.FAILED,
+        lastError: error,
+        failureCode: code ?? null,
+        updatedAt: nowIso(),
+      })
     })
   }
 
   /** PERMANENT rejection (PO closed/deleted/validation): terminal, exits queue. */
   async markRejected(sessionId: string, error: string, code: string): Promise<void> {
-    const session = await this.db.sessions.get(sessionId)
-    if (!session) return
-    await this.db.sessions.put({
-      ...session,
-      status: SESSION_STATUS.REJECTED,
-      lastError: error,
-      failureCode: code,
-      updatedAt: nowIso(),
+    await this.db.transaction('rw', this.db.sessions, async () => {
+      const session = await this.db.sessions.get(sessionId)
+      if (!session || session.status === SESSION_STATUS.SYNCED) return
+      await this.db.sessions.put({
+        ...session,
+        status: SESSION_STATUS.REJECTED,
+        lastError: error,
+        failureCode: code,
+        updatedAt: nowIso(),
+      })
     })
   }
 

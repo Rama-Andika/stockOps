@@ -242,6 +242,17 @@ describe('LocalRepository (Dexie)', () => {
       expect(await repo.outboxSessions()).toHaveLength(0)
     })
 
+    it('markFailed dan markRejected tidak pernah mengubah sesi yang sudah SYNCED', async () => {
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.markSynced(session.sessionId, { receiveId: '1', number: 'IN1', overReceive: false, excessTotal: 0 })
+      await repo.markFailed(session.sessionId, 'Gagal lokal')
+      await repo.markRejected(session.sessionId, 'Ditolak', 'VALIDATION')
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.SYNCED)
+      expect(saved?.number).toBe('IN1')
+      expect(saved?.lastError).toBeNull()
+    })
+
     it('markFailed menyimpan kode kegagalan dan tetap di antrian', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.markFailed(session.sessionId, 'Koneksi putus', 'SERVER_ERROR')

@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sql } from 'drizzle-orm'
 import { closeDb, getDb } from '~/server/db/client'
 import { checkCredentialRevocations, loginOnline } from '~/server/services/auth-service'
@@ -352,6 +352,75 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       }
       await expect(refreshPurchases(repo, failing)).rejects.toThrow('Koneksi terputus')
       expect(await repo.getMeta(PURCHASES_STALE_META_KEY)).toBe('1')
+    })
+  })
+
+  describe('hasil sinkronisasi diproses per sesi', () => {
+    /** Pulls the data and creates one finalized session ready for syncOutbox. */
+    async function finalizedSession(invoice: string) {
+      await pullAllData(repo, directTransport)
+      const session = await repo.createSession({
+        purchaseId: FIXTURE.purchase.CHECKED,
+        userId: FIXTURE.user.ACTIVE,
+        deviceId: DEVICE,
+        receiveDate: toLocalDateTime(new Date()),
+      })
+      await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 1)
+      await repo.finalizeSession(session.sessionId, {
+        invoiceNumber: invoice,
+        doNumber: `DO-${invoice}`,
+        receiveDate: session.receiveDate,
+      })
+      return session
+    }
+
+    it('kegagalan menulis log tidak membalik sesi yang sudah tersinkron', async () => {
+      const session = await finalizedSession('INV-L1')
+      vi.spyOn(repo, 'log').mockRejectedValue(new Error('log error'))
+
+      const outcome = await syncOutbox(repo, directTransport)
+
+      expect(outcome.synced).toBe(1)
+      expect(outcome.failed).toBe(0)
+      expect((await repo.getSession(session.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
+    })
+
+    it('kegagalan lokal pada satu sesi tidak membalik sesi lain yang sudah tersinkron', async () => {
+      const first = await finalizedSession('INV-L2A')
+      const second = await finalizedSession('INV-L2B')
+      // Saving the result of the SECOND session fails locally; the first one is saved normally.
+      const realMarkSynced = repo.markSynced.bind(repo)
+      vi.spyOn(repo, 'markSynced').mockImplementation(async (sessionId, result) => {
+        if (sessionId === second.sessionId) throw new Error('storage error')
+        return realMarkSynced(sessionId, result)
+      })
+
+      const outcome = await syncOutbox(repo, directTransport)
+
+      expect(outcome.synced).toBe(1)
+      expect(outcome.failed).toBe(1)
+      expect((await repo.getSession(first.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
+      expect((await repo.getSession(second.sessionId))?.status).toBe(SESSION_STATUS.FAILED)
+      expect(await repo.outboxSessions()).toHaveLength(1)
+
+      // The server stored both documents, so sending the second one again is an idempotent replay.
+      vi.restoreAllMocks()
+      const retry = await syncOutbox(repo, directTransport)
+      expect(retry.results[0]?.code).toBe('IDEMPOTENT_REPLAY')
+      expect((await repo.getSession(second.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
+    })
+
+    it('sesi yang tidak dijawab server tidak menggantung di SYNCING', async () => {
+      const session = await finalizedSession('INV-L3')
+      const silent: SyncTransport = {
+        ...directTransport,
+        push: async () => ({ results: [], revoked: [], serverTime: new Date().toISOString() }),
+      }
+
+      const outcome = await syncOutbox(repo, silent)
+
+      expect(outcome.failed).toBe(1)
+      expect((await repo.getSession(session.sessionId))?.status).toBe(SESSION_STATUS.FAILED)
     })
   })
 

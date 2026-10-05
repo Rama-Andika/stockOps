@@ -12,6 +12,7 @@ import {
 import type {
   CredentialFingerprint,
   PullKind,
+  PushResult,
   ReceiveSessionInput,
   SyncSessionResult,
 } from '~/shared/schemas'
@@ -40,6 +41,20 @@ function withTimeout<T>(
       },
     )
   })
+}
+
+/** Logging is diagnostics only: a failing log write must never change the outcome of a session. */
+async function safeLog(
+  repo: LocalRepository,
+  level: 'info' | 'error',
+  message: string,
+  sessionId?: string,
+): Promise<void> {
+  try {
+    await repo.log(level, message, sessionId)
+  } catch {
+    // Ignore: see above.
+  }
 }
 
 /** Credentials of every user cached on this device; the server uses them to authenticate the device. */
@@ -288,8 +303,9 @@ export async function syncOutbox(
     await repo.markSyncing(payload.sessionId)
   }
 
+  let response: PushResult
   try {
-    const response = await withTimeout(
+    response = await withTimeout(
       transport.push({
         deviceId: options.deviceId ?? payloads[0]!.deviceId,
         sessions: payloads,
@@ -297,58 +313,13 @@ export async function syncOutbox(
       }),
       SYNC_TIMEOUT_MS,
     )
-
-    let synced = 0
-    let failed = 0
-    for (const result of response.results) {
-      if (result.status === 'SYNCED') {
-        await repo.markSynced(result.sessionId, {
-          receiveId: result.receiveId ?? '',
-          number: result.number ?? '',
-          overReceive: result.overReceive,
-          excessTotal: result.excessTotal,
-          replay: result.code === 'IDEMPOTENT_REPLAY',
-        })
-        await repo.log(
-          result.overReceive ? 'error' : 'info',
-          result.overReceive
-            ? `Sesi tersinkron dengan over-receive: ${result.message ?? ''}`
-            : `Sesi tersinkron: ${result.number ?? ''}`,
-          result.sessionId,
-        )
-        synced += 1
-      } else {
-        const code = result.code ?? ''
-        const message = result.message ?? 'Gagal sinkronisasi.'
-        if (PERMANENT_REJECT_CODES.includes(code)) {
-          await repo.markRejected(result.sessionId, message, code)
-          await repo.log('error', `Sesi ditolak server (${code}): ${message}`, result.sessionId)
-        } else {
-          await repo.markFailed(result.sessionId, message, code)
-          await repo.log('error', message, result.sessionId)
-        }
-        failed += 1
-      }
-    }
-
-    if (response.revoked.length > 0) {
-      await repo.removeCredentialsForUsers(response.revoked.map((entry) => entry.userId))
-    }
-
-    return {
-      attempted: payloads.length,
-      synced,
-      failed,
-      revokedUserIds: response.revoked.map((entry) => entry.userId),
-      results: response.results,
-    }
   } catch (error) {
     // FR-5.6: transport failure -> all sessions revert to "Failed — retry".
     const message = error instanceof Error ? error.message : 'Koneksi ke server gagal.'
     for (const payload of payloads) {
       await repo.markFailed(payload.sessionId, message)
     }
-    await repo.log('error', `Sinkronisasi gagal: ${message}`)
+    await safeLog(repo, 'error', `Sinkronisasi gagal: ${message}`)
     return {
       attempted: payloads.length,
       synced: 0,
@@ -357,6 +328,79 @@ export async function syncOutbox(
       results: [],
       error: message,
     }
+  }
+
+  // The server's answer is in. From here on a local write error must never undo a session the
+  // server already stored, so every result is handled on its own.
+  let synced = 0
+  let failed = 0
+  const answered = new Set<string>()
+  for (const result of response.results) {
+    answered.add(result.sessionId)
+    try {
+      if (result.status === 'SYNCED') {
+        await repo.markSynced(result.sessionId, {
+          receiveId: result.receiveId ?? '',
+          number: result.number ?? '',
+          overReceive: result.overReceive,
+          excessTotal: result.excessTotal,
+          replay: result.code === 'IDEMPOTENT_REPLAY',
+        })
+        synced += 1
+        await safeLog(
+          repo,
+          result.overReceive ? 'error' : 'info',
+          result.overReceive
+            ? `Sesi tersinkron dengan over-receive: ${result.message ?? ''}`
+            : `Sesi tersinkron: ${result.number ?? ''}`,
+          result.sessionId,
+        )
+      } else {
+        const code = result.code ?? ''
+        const message = result.message ?? 'Gagal sinkronisasi.'
+        if (PERMANENT_REJECT_CODES.includes(code)) {
+          await repo.markRejected(result.sessionId, message, code)
+          await safeLog(repo, 'error', `Sesi ditolak server (${code}): ${message}`, result.sessionId)
+        } else {
+          await repo.markFailed(result.sessionId, message, code)
+          await safeLog(repo, 'error', message, result.sessionId)
+        }
+        failed += 1
+      }
+    } catch {
+      // The local write failed (e.g. a storage error). The session must not stay in SYNCING:
+      // it goes back to the queue (markFailed never overrides a SYNCED session), and the next
+      // sync receives IDEMPOTENT_REPLAY from the server.
+      failed += 1
+      await repo
+        .markFailed(result.sessionId, 'Gagal menyimpan hasil sinkronisasi di perangkat. Akan dicoba lagi.')
+        .catch(() => undefined)
+    }
+  }
+
+  // A session the server did not answer for must not stay in SYNCING until the app restarts.
+  for (const payload of payloads) {
+    if (answered.has(payload.sessionId)) continue
+    failed += 1
+    await repo
+      .markFailed(payload.sessionId, 'Server tidak mengembalikan hasil untuk sesi ini. Akan dicoba lagi.')
+      .catch(() => undefined)
+  }
+
+  if (response.revoked.length > 0) {
+    try {
+      await repo.removeCredentialsForUsers(response.revoked.map((entry) => entry.userId))
+    } catch {
+      // The server reports the revocation again on the next sync.
+    }
+  }
+
+  return {
+    attempted: payloads.length,
+    synced,
+    failed,
+    revokedUserIds: response.revoked.map((entry) => entry.userId),
+    results: response.results,
   }
 }
 

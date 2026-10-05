@@ -198,14 +198,14 @@ tests/                    unit, server, client, component
 
 ## 5. Pengujian
 
-`npm test` menjalankan 212 test pada 21 berkas:
+`npm test` menjalankan 242 test pada 24 berkas:
 
 | Lapisan | Berkas | Fokus |
 | --- | --- | --- |
 | Unit | `tests/unit/*` | ID bigint, nomor dokumen, UOM, barcode, over-receive (termasuk baris ganda), memo, angka desimal, kalkulasi finansial, validasi secret produksi, deteksi secure context |
 | Server (integrasi MySQL uji) | `tests/server/auth-service`, `pull-service`, `sync-service` | login, pencabutan kredensial, **otorisasi perangkat**, pull bertahap, **idempotensi**, **over-receive lintas device**, penomoran, **rollback transaksi**, sanitasi tanggal, data dokumen dari PO |
-| Klien (Dexie) | `tests/client/local-repo`, `offline-auth`, `auth-webcrypto-guard` | repositori lokal (transaksi baris sesi, `markSynced` idempoten), progress PO, hash & kedaluwarsa kredensial, guard WebCrypto saat login |
-| Klien ↔ server ↔ MySQL | `tests/client/sync-engine` | alur offline lengkap: pull → scan → finalisasi → sinkron → nomor resmi; replay idempoten; pencabutan kredensial; unduhan gagal tidak menghapus data lama; refresh PO tidak menghapus sesi |
+| Klien (Dexie) | `tests/client/local-repo`, `offline-auth`, `auth-webcrypto-guard`, `sync-slice-queue`, `sync-slice-refresh` | repositori lokal (transaksi baris sesi, `markSynced` idempoten, `markFailed` tidak menimpa SYNCED), progress PO, hash & kedaluwarsa kredensial, guard WebCrypto saat login, antrean eksklusif sync/unduh/refresh PO, penanda "PO perlu diperbarui" |
+| Klien ↔ server ↔ MySQL | `tests/client/sync-engine` | alur offline lengkap: pull → scan → finalisasi → sinkron → nomor resmi; replay idempoten; pencabutan kredensial; unduhan gagal atau timeout tidak menghapus data lama; hasil sinkronisasi diproses per sesi; refresh PO tidak menghapus sesi |
 | Komponen UI | `tests/component/*` | komponen dasar, kontrol scan, form login, peringatan http di layar login (jsdom + Testing Library) |
 
 > Jumlah test di atas dihitung manual dari `npm test`; perbarui bila menambah/menghapus test.
