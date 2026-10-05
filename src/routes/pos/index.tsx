@@ -23,7 +23,12 @@ function PosListPage() {
 
   const filtered = useMemo(() => {
     const needle = term.trim().toLowerCase()
-    const list = [...summaries].sort((a, b) => (a.number ?? '').localeCompare(b.number ?? ''))
+    const list = [...summaries].sort((a, b) => {
+      const timeA = a.purchDate ? new Date(a.purchDate.replace(' ', 'T')).getTime() || 0 : 0
+      const timeB = b.purchDate ? new Date(b.purchDate.replace(' ', 'T')).getTime() || 0 : 0
+      if (timeB !== timeA) return timeB - timeA
+      return (b.number ?? '').localeCompare(a.number ?? '')
+    })
     if (!needle) return list
     return list.filter(
       (row) =>
