@@ -63,8 +63,9 @@ function TopBar() {
         )}
         <button
           type="button"
-          aria-label="Upload"
-          className={`flex items-center justify-center rounded-lg p-2 transition ${
+          aria-label={syncing ? "Sedang mengupload…" : "Upload"}
+          title="Upload dokumen menunggu ke server"
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
             pendingCount > 0
               ? "bg-cyan-500 text-slate-900 hover:bg-cyan-400"
               : "bg-slate-700 text-slate-100 hover:bg-slate-600"
@@ -72,7 +73,8 @@ function TopBar() {
           disabled={!online || syncing}
           onClick={() => void sync()}
         >
-          <Upload className="h-5 w-5" aria-hidden="true" />
+          <Upload className="h-4 w-4" aria-hidden="true" />
+          <span>{syncing ? "Mengupload…" : "Upload"}</span>
         </button>
       </div>
     </header>
