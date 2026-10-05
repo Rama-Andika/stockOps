@@ -178,7 +178,7 @@ function SessionDetailPage() {
             excess,
             unit: purchaseUnit,
           })
-          playFeedback('warn')
+          playFeedback('over')
         } else {
           setHeroState({
             kind: 'OK',

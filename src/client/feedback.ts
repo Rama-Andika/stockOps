@@ -1,6 +1,6 @@
 import { loadPreferences } from './preferences'
 
-export type FeedbackTone = 'success' | 'warn' | 'danger'
+export type FeedbackTone = 'success' | 'warn' | 'over' | 'danger'
 
 let audioCtx: AudioContext | null = null
 
@@ -48,13 +48,19 @@ export function playFeedback(tone: FeedbackTone): void {
   if (preferences.feedbackBeep) {
     if (tone === 'success') playBeep(1000, 80)
     else if (tone === 'danger') playBeep(220, 220)
-    else playBeep(520, 100)
+    // Over-receive is recorded but needs approval: two short mid beeps, told apart from
+    // the single 'warn' beep that means "nothing was recorded".
+    else if (tone === 'over') {
+      playBeep(700, 90)
+      window.setTimeout(() => playBeep(700, 90), 150)
+    } else playBeep(520, 100)
   }
 
   if (preferences.feedbackVibrate && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
     try {
       if (tone === 'success') navigator.vibrate(40)
       else if (tone === 'danger') navigator.vibrate([120, 60, 120])
+      else if (tone === 'over') navigator.vibrate([60, 80, 60])
       else navigator.vibrate(80)
     } catch {
       // Vibration API not supported or blocked by device.

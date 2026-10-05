@@ -7,6 +7,7 @@ import { ConfirmButton } from '~/components/confirm-button'
 import { Badge, Button, Card, EmptyState } from '~/components/ui'
 import { toast } from '~/client/toast'
 import { loadPreferences, savePreferences, type Preferences } from '~/client/preferences'
+import { applyContrastPreference } from '~/client/theme'
 import { isCredentialExpired, remainingDays } from '~/client/auth/offline-auth'
 import { formatDateTime, formatRelativeDateTime } from '~/shared/format'
 
@@ -77,6 +78,8 @@ function SettingsPage() {
     const next = { ...preferences, ...patch }
     setPreferences(next)
     savePreferences(next)
+    // The contrast layer lives on <html>, outside React's tree: re-apply it right away.
+    applyContrastPreference()
   }
 
   return (
@@ -133,6 +136,21 @@ function SettingsPage() {
                 Keyboard fisik
               </Button>
             </div>
+          </div>
+          <div>
+            <p className="mb-1 text-sm font-semibold text-slate-300">Tampilan</p>
+            <Button
+              variant={preferences.highContrast ? 'primary' : 'secondary'}
+              className="w-full"
+              aria-pressed={preferences.highContrast}
+              onClick={() => updatePreferences({ highContrast: !preferences.highContrast })}
+            >
+              Kontras tinggi: {preferences.highContrast ? 'Aktif' : 'Mati'}
+            </Button>
+            <p className="mt-1 text-xs text-slate-400">
+              Untuk gudang atau dok bongkar yang terang. Permukaan dibuat pekat dan garis batas
+              dipertegas.
+            </p>
           </div>
           <div>
             <p className="mb-1 text-sm font-semibold text-slate-300">Umpan balik scan</p>

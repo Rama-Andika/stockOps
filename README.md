@@ -309,6 +309,18 @@ berganti, lalu jalankan ulang `npm start`; sertifikat hanya dibaca saat server d
   muat ulang satu kali. Perangkat yang masih menjalankan versi lama (sebelum otorisasi perangkat) akan
   ditolak saat pull/push sampai halaman dimuat ulang.
 
+### Mode kontras tinggi
+
+Pengaturan → Tampilan → **Kontras tinggi**. Ditujukan untuk gudang atau dok bongkar yang terang:
+permukaan tembus pandang dibuat pekat, garis batas dipertegas, teks keterangan dinaikkan ke putih, dan
+cincin fokus dipertebal. Pilihannya disimpan per perangkat di `localStorage`
+(`stockops.preferences`, field `highContrast`) dan diterapkan sebagai atribut
+`data-contrast="high"` pada elemen `<html>`.
+
+Ini **bukan** tema terang. Warna aplikasi ditulis sebagai kelas Tailwind `slate-*` yang tersebar di
+seluruh komponen, sehingga tema terang penuh menuntut migrasi kelas-kelas itu menjadi kelas semantik —
+pekerjaan terpisah yang belum dijadwalkan.
+
 ## 7. Keterbatasan yang Disadari
 
 - Target perangkat (varian GMS/non-GMS, versi Android) masih perlu dikonfirmasi.

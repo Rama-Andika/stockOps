@@ -66,6 +66,13 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
 - `markSynced` is idempotent and skips the local `receivedQty` increment on `IDEMPOTENT_REPLAY`; the PO list is then refreshed from the server. `runSync` raises the local `meta` flag `purchasesStale` (`PURCHASES_STALE_META_KEY`) BEFORE that refresh and clears it only once the refresh succeeds, so a crash or closed tab mid-refresh still leaves a trace. The flag is also raised when the refresh is skipped (right after a failed push, or when the current user's credential was revoked, because the pull would fail anyway). If the refresh fails, `runSync` tells the operator; it is retried on every later `sync()` and on auto-sync when the device is online again, and any successful refresh/download also clears the flag.
 - `syncOutbox` handles the server's answer per session: a local write error (or a failing log write) never reverts a session that is already `SYNCED`, a session the server did not answer for becomes `FAILED` instead of staying `SYNCING`, and `markFailed`/`markRejected` never override `SYNCED`. Answers for an unknown or an already answered session id are ignored (and logged), so `synced`/`failed` never exceed `attempted`. Every `syncOutbox` run first calls `resetStaleSyncingSessions()` (atomic, one transaction): sync runs never overlap, so anything still `SYNCING` is stale and goes back to the queue.
 - Code that touches IndexedDB must tolerate running without it (SPA prerender in Node): use `useLive` (`src/client/hooks/use-live.ts`) instead of raw `useLiveQuery`, and `isBrowser()` guards in the store.
+- **UI invariants (plans/implementation-plan-ux-refresh-*):** the scan loop must fit 360×640 without
+  scrolling; only a successful scan result disappears on its own, the other three scan states wait for
+  the operator; undo subtracts the last scanned qty from the line (`addOrIncrementLine` merges repeated
+  scans, so `removeLine` would delete too much); `Progress` in `ui.tsx` is kept only because
+  `tests/component/ui.test.tsx` asserts its colour classes — new screens use `SegmentedProgress`;
+  high-contrast mode is an override layer on `data-contrast="high"`, NOT a light theme, because colours
+  are hard-coded Tailwind `slate-*` classes across every component.
 
 ## Repo conventions
 

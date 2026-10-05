@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAppStore } from "~/client/state/store/app-store";
 import { registerServiceWorker } from "~/client/pwa";
+import { applyContrastPreference } from "~/client/theme";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Settings } from "lucide-react";
@@ -104,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     registerServiceWorker();
+    applyContrastPreference();
   }, []);
 
   useEffect(() => {

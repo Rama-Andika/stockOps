@@ -1,12 +1,14 @@
 /** Device preferences configurable by operators/IT on the Settings screen. */
 
 export interface Preferences {
-  /** 'pad' = display on-screen numeric keypad; 'keyboard' = use PDT physical keyboard. */
+  /** 'pad' = numeric keypad starts open; 'keyboard' = use PDT physical keyboard. */
   qtyInput: 'pad' | 'keyboard'
   /** Beep sound on scan success/reject. */
   feedbackBeep: boolean
   /** Vibration on scan success/reject. */
   feedbackVibrate: boolean
+  /** Solid surfaces + stronger borders, for a bright loading dock. */
+  highContrast: boolean
 }
 
 const STORAGE_KEY = 'stockops.preferences'
@@ -15,6 +17,7 @@ const DEFAULTS: Preferences = {
   qtyInput: 'keyboard',
   feedbackBeep: true,
   feedbackVibrate: true,
+  highContrast: false,
 }
 
 /** Read preferences from localStorage. Safe to call during prerender (without `window`). */
@@ -34,6 +37,8 @@ export function loadPreferences(): Preferences {
       feedbackBeep: typeof value.feedbackBeep === 'boolean' ? value.feedbackBeep : DEFAULTS.feedbackBeep,
       feedbackVibrate:
         typeof value.feedbackVibrate === 'boolean' ? value.feedbackVibrate : DEFAULTS.feedbackVibrate,
+      highContrast:
+        typeof value.highContrast === 'boolean' ? value.highContrast : DEFAULTS.highContrast,
     }
   } catch {
     return { ...DEFAULTS }

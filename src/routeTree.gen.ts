@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OverReceiveRouteImport } from './routes/over-receive'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PosIndexRouteImport } from './routes/pos/index'
 import { Route as PosPurchaseIdRouteImport } from './routes/pos/$purchaseId'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OverReceiveRoute = OverReceiveRouteImport.update({
+  id: '/over-receive',
+  path: '/over-receive',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -56,6 +62,7 @@ const SessionsSessionIdRoute = SessionsSessionIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/over-receive': typeof OverReceiveRoute
   '/settings': typeof SettingsRoute
   '/pos/$purchaseId': typeof PosPurchaseIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/over-receive': typeof OverReceiveRoute
   '/settings': typeof SettingsRoute
   '/pos/$purchaseId': typeof PosPurchaseIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/over-receive': typeof OverReceiveRoute
   '/settings': typeof SettingsRoute
   '/pos/$purchaseId': typeof PosPurchaseIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/over-receive'
     | '/settings'
     | '/pos/$purchaseId'
     | '/sessions/$sessionId'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/over-receive'
     | '/settings'
     | '/pos/$purchaseId'
     | '/sessions/$sessionId'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/login'
+    | '/over-receive'
     | '/settings'
     | '/pos/$purchaseId'
     | '/sessions/$sessionId'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   LoginRoute: typeof LoginRoute
+  OverReceiveRoute: typeof OverReceiveRoute
   SettingsRoute: typeof SettingsRoute
   PosPurchaseIdRoute: typeof PosPurchaseIdRoute
   SessionsSessionIdRoute: typeof SessionsSessionIdRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/over-receive': {
+      id: '/over-receive'
+      path: '/over-receive'
+      fullPath: '/over-receive'
+      preLoaderRoute: typeof OverReceiveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
+  OverReceiveRoute: OverReceiveRoute,
   SettingsRoute: SettingsRoute,
   PosPurchaseIdRoute: PosPurchaseIdRoute,
   SessionsSessionIdRoute: SessionsSessionIdRoute,
