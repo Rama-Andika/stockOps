@@ -29,7 +29,7 @@ Testing notes:
 - **Every test run needs a running MySQL/MariaDB** (from `.env`): Vitest `globalSetup` (`tests/global-setup.mjs` → `scripts/lib/test-db.mjs`) always recreates the `stockops_test` schema by cloning the real DDL via `SHOW CREATE TABLE` (foreign keys stripped). `tests/setup.ts` forces `DB_NAME=stockops_test` so tests never touch `demo`.
 - Tests run serially (`fileParallelism: false`, `pool: 'forks'`); default environment is `node`. Component tests opt into jsdom; client tests use `fake-indexeddb`.
 - Server test fixtures (IDs, rows) are in `tests/server/helpers.ts`.
-- The service worker is registered in every environment (`registerServiceWorker()` in `src/components/app-shell.tsx`), but full offline behavior only works on a build (`npm run build && npm start`); under `npm run dev` the cached shell goes stale. Bump `CACHE_VERSION` in `public/sw.js` when cached assets misbehave. README §6 still says "production only" — that is outdated.
+- The service worker is registered in every environment (`registerServiceWorker()` in `src/components/app-shell.tsx`), but full offline behavior only works on a build (`npm run build && npm start`); under `npm run dev` the cached shell goes stale. Bump `CACHE_VERSION` in `public/sw.js` when cached assets misbehave.
 - `crypto.subtle` and service workers need a secure context: `localhost` works, but a PDT opening `http://<LAN-IP>` cannot log in or work offline.
 
 ## Architecture
@@ -53,7 +53,11 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
 - Document numbers `IN<MMYY><NNNN>` use a per-month counter and are assigned only at sync time.
 - Financial fields (`amount`, discounts, `total_amount`, `total_tax`) are **recomputed server-side** from PO data at sync, prorated by received qty, rounded half-up to 2 decimals (`src/shared/receive-finance.ts`).
 - Over-receive is **flagged, not rejected**, using totals aggregated across all devices/documents.
-- If the server rejects a session (PO closed/deleted/validation), it becomes `REJECTED` locally, leaves the queue, and the PO list is refreshed.
+- If the server rejects a session (PO closed/deleted/validation), it becomes `REJECTED` locally, leaves the queue, and the PO list is refreshed. `UNAUTHORIZED` is deliberately *not* permanent: the session stays `FAILED` in the queue.
+- **Device authentication:** server functions that read or write ERP data (`pullDataFn`, `syncPushFn`, `overReceiveWorklistFn`) require the fingerprint of at least one still-valid cached user (`assertAuthorizedDevice` in `src/server/services/auth-service.ts`; `syncPush` checks it inline). Any new server function touching ERP data must do the same. Sessions of a user whose own credential was revoked are still accepted (product decision) as long as the device is authorized.
+- `vendor_id`/`location_id`/`company_id` written to `pos_receive*` come from the PO row, never from the client payload.
+- `npm start` (`scripts/serve.mjs`) sets `NODE_ENV=production`, which makes `getPool()` refuse weak `CREDENTIAL_HMAC_SECRET` or implicit DB credentials. Changing the secret revokes every cached credential on every device.
+- `sync()` in the store is serialized (one push at a time); `markSynced` is idempotent and skips the local `receivedQty` increment on `IDEMPOTENT_REPLAY`. Pulls download everything first and swap local tables in one Dexie transaction (`replaceMasterData` / `replacePurchases`).
 - Code that touches IndexedDB must tolerate running without it (SPA prerender in Node): use `useLive` (`src/client/hooks/use-live.ts`) instead of raw `useLiveQuery`, and `isBrowser()` guards in the store.
 
 ## Repo conventions
