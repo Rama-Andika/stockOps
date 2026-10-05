@@ -10,7 +10,7 @@
  * by scripts/generate-precache.mjs (run after `vite build`).
  */
 
-const CACHE_VERSION = 'stockops-v5'
+const CACHE_VERSION = 'stockops-v11'
 const SHELL_CACHE = `${CACHE_VERSION}-shell`
 const ASSET_CACHE = `${CACHE_VERSION}-assets`
 const SHELL_URL = '/_shell.html'

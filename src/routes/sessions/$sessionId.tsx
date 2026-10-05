@@ -1,18 +1,19 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
-import { localRepo } from '~/client/db/local-repo'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { localRepo, sessionTabKey } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
-import { loadPreferences, type Preferences } from '~/client/preferences'
+import { loadPreferences } from '~/client/preferences'
 import { playFeedback } from '~/client/feedback'
 import { toast } from '~/client/toast'
 import { Upload } from 'lucide-react'
 import { AppBar } from '~/components/app-bar'
 import { ConfirmButton } from '~/components/confirm-button'
-import { NumericPad } from '~/components/numeric-pad'
+import { ScanBar } from '~/components/scan-bar'
 import { ScanHero, type ScanHeroState } from '~/components/scan-hero'
+import { SessionContextStrip } from '~/components/session-context-strip'
 import { Badge, Button, Card, EmptyState, Field, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
@@ -74,6 +75,11 @@ function SessionDetailPage() {
     {},
   )
   const units = useLive(() => localRepo.db.units.toArray(), [], [])
+  const purchaseProgress = useLive(
+    async () => (session ? localRepo.getPurchaseProgress(session.purchaseId) : null),
+    [session?.purchaseId],
+    null,
+  )
 
   const purchaseItemMap = useMemo(
     () => new Map(purchaseItems.map((row) => [row.purchaseItemId, row])),
@@ -85,18 +91,23 @@ function SessionDetailPage() {
   const [qty, setQty] = useState('1')
   const [qtyTouched, setQtyTouched] = useState(false)
   const [heroState, setHeroState] = useState<ScanHeroState>({ kind: 'IDLE' })
-  // What the last successful scan added, so undo can subtract exactly that much.
-  const [lastScan, setLastScan] = useState<{ lineId: string; addedQty: number } | null>(null)
+  // What the last successful scan added, so undo can subtract exactly that much. A ref, not state:
+  // it is never rendered, and as state every scan would cost one extra render of the whole cockpit.
+  const lastScanRef = useRef<{ lineId: string; addedQty: number } | null>(null)
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
-  const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences())
+  // Lives here, not in ScanBar: ScanBar unmounts on every tab switch, so keeping it there would
+  // reopen the keypad each time the operator comes back to the scan tab.
+  const [padOpen, setPadOpen] = useState(() => loadPreferences().qtyInput === 'pad')
   const [invoice, setInvoice] = useState('')
   const [doNumber, setDoNumber] = useState('')
   const [confirmingFinalize, setConfirmingFinalize] = useState(false)
-  const tabMetaKey = `sessionTab:${sessionId}`
+  const tabMetaKey = sessionTabKey(sessionId)
   const savedTab = useLive(() => localRepo.getMeta(tabMetaKey), [tabMetaKey], null)
   const tab: SessionTab = savedTab === 'items' || savedTab === 'docs' ? savedTab : 'scan'
   const setTab = (next: SessionTab) => {
-    void localRepo.setMeta(tabMetaKey, next)
+    localRepo.setMeta(tabMetaKey, next).catch(() => {
+      toast('danger', 'Gagal berpindah bagian. Coba lagi.')
+    })
   }
   const [invoiceError, setInvoiceError] = useState(false)
   const [doNumberError, setDoNumberError] = useState(false)
@@ -114,15 +125,55 @@ function SessionDetailPage() {
   // Keep the scanner's keystrokes landing in the barcode field. While a dialog is open focus
   // belongs to it; when it closes (e.g. finalize cancelled) the field gets focus back, otherwise
   // the scanner's Enter would press the previously focused button and reopen the dialog.
+  // `tab` is in the deps because the barcode field only exists on the scan tab: coming back from
+  // the item or document tab remounts it, and without this the focus would stay on the tab button.
   useEffect(() => {
     if (session?.status !== SESSION_STATUS.RUNNING || editingLineId || confirmingFinalize) return
+    if (tab !== 'scan') return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [session?.status, editingLineId, confirmingFinalize])
+  }, [session?.status, tab, editingLineId, confirmingFinalize])
+
+  // Scanner wedge. The effect above only runs when one of its deps changes, so a tap on dead space
+  // (the context strip, the empty area of the scan result, the app bar title) drops focus to <body>
+  // and nothing brings it back: the scanner then types into nowhere and the scan is lost in silence.
+  // This catches printable keystrokes that landed outside any text field and redirects them — the
+  // triggering character included — into the barcode field. From the second character onwards the
+  // field has focus and receives them normally, and the scanner's closing Enter lands there too.
+  useEffect(() => {
+    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId || confirmingFinalize) return
+    if (tab !== 'scan') return
+    const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+      // Printable characters only: Enter, Tab, Escape and the arrows must keep working.
+      if (event.key.length !== 1) return
+      // Space activates a focused button; swallowing it would break keyboard operation.
+      if (event.key === ' ') return
+      const target = event.target
+      // Every element that legitimately swallows typing. `<select>` and contenteditable do not
+      // exist in this screen today; they are listed so that adding one later cannot silently
+      // start redirecting its keystrokes into the barcode field.
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+      const field = scanRef.current
+      if (!field) return
+      event.preventDefault()
+      field.focus()
+      setScan((previous) => previous + event.key)
+    }
+    window.addEventListener('keydown', onWindowKeyDown)
+    return () => window.removeEventListener('keydown', onWindowKeyDown)
+  }, [session?.status, tab, editingLineId, confirmingFinalize])
 
   const dismissHero = useCallback(() => setHeroState({ kind: 'IDLE' }), [])
 
-  const totalOver = useMemo(() => {
+  const overLineIds = useMemo(() => {
     const qtyByPurchaseItem = new Map<string, number>()
     for (const line of lines) {
       qtyByPurchaseItem.set(
@@ -130,13 +181,16 @@ function SessionDetailPage() {
         (qtyByPurchaseItem.get(line.purchaseItemId) ?? 0) + line.qty,
       )
     }
-    return lines.filter((line) => {
+    // A Set, not an array: the item list looks this up once per rendered line.
+    const overLineIds = new Set<string>()
+    for (const line of lines) {
       const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-      if (!purchaseItem) return false
+      if (!purchaseItem) continue
       const received = Number(purchaseItem.receivedQty ?? 0)
       const localQty = qtyByPurchaseItem.get(line.purchaseItemId) ?? 0
-      return received + localQty > Number(purchaseItem.qty ?? 0)
-    })
+      if (received + localQty > Number(purchaseItem.qty ?? 0)) overLineIds.add(line.lineId)
+    }
+    return overLineIds
   }, [lines, purchaseItemMap])
 
   if (!session) return <Loading label="Memuat sesi…" />
@@ -168,7 +222,7 @@ function SessionDetailPage() {
         const itemTotal = serverReceived + line.qty
         const excess = itemTotal - ordered
         const purchaseUnit = unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId
-        setLastScan({ lineId: line.lineId, addedQty })
+        lastScanRef.current = { lineId: line.lineId, addedQty }
         if (excess > 0) {
           setHeroState({
             kind: 'OVER',
@@ -196,19 +250,25 @@ function SessionDetailPage() {
         setQty('1')
         setQtyTouched(false)
       } else if (result.resolution.status === 'ITEM_NOT_FOUND') {
-        setLastScan(null)
+        lastScanRef.current = null
         setHeroState({ kind: 'NOT_FOUND', scannedCode: code })
         playFeedback('danger')
-      } else {
-        setLastScan(null)
+      } else if (result.resolution.status === 'NOT_IN_PO') {
+        lastScanRef.current = null
         setHeroState({
           kind: 'NOT_IN_PO',
           itemName: result.resolution.item?.name ?? code,
         })
         playFeedback('warn')
+      } else {
+        // Resolution succeeded but the line was rejected (today: qty <= 0). Show the real reason
+        // instead of mislabelling it as "not part of this PO".
+        lastScanRef.current = null
+        toast('danger', result.message)
+        playFeedback('danger')
       }
     } catch (error) {
-      setLastScan(null)
+      lastScanRef.current = null
       setHeroState({ kind: 'NOT_FOUND', scannedCode: code })
       toast('danger', error instanceof Error ? error.message : 'Gagal menyimpan hasil scan.')
       playFeedback('danger')
@@ -223,9 +283,9 @@ function SessionDetailPage() {
    * the last scan; the line is only removed when nothing would be left.
    */
   const handleUndo = async () => {
-    const target = lastScan
+    const target = lastScanRef.current
     if (!target) return
-    setLastScan(null)
+    lastScanRef.current = null
     setHeroState({ kind: 'IDLE' })
     try {
       const line = await localRepo.db.sessionItems.get(target.lineId)
@@ -305,179 +365,198 @@ function SessionDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <AppBar
-        title="Terima barang"
-        backTo="/sessions"
-        backLabel="Kembali ke daftar sesi"
-        actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
-      />
-      <Card title={session.number ?? 'Sesi baru'}>
-        <p className="text-slate-300">
-          {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
-        </p>
-        <p className="text-xs text-slate-400">ID sesi: {session.sessionId}</p>
-        {session.receiveDate ? (
-          <p className="text-sm text-slate-400">Tanggal penerimaan: {session.receiveDate}</p>
-        ) : null}
-        {session.overReceive ? (
-          <p className="mt-2 text-sm text-amber-300">
-            Terdapat kelebihan terima {formatQty(session.excessTotal)} — menunggu persetujuan admin.
-          </p>
-        ) : null}
-      </Card>
-
-      {editable ? (
-        <SessionTabs
-          value={tab}
-          onChange={setTab}
+    <div className="flex h-full flex-col">
+      {/* Fixed header: never scrolls. */}
+      <div className="shrink-0 px-3 pt-2">
+        <AppBar
+          title="Terima barang"
+          backTo="/sessions"
+          backLabel="Kembali ke daftar sesi"
+          actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
+        />
+        <SessionContextStrip
+          purchaseLabel={session.purchaseNumber ?? session.purchaseId}
+          vendorName={session.vendorName ?? '-'}
           itemCount={lines.length}
-          docsComplete={Boolean(invoice.trim() && doNumber.trim())}
+          ordered={purchaseProgress?.orderedTotal ?? 0}
+          serverReceived={purchaseProgress?.serverReceivedTotal ?? 0}
+          localPending={purchaseProgress?.localPendingTotal ?? 0}
+          overReceive={session.overReceive}
+          excessTotal={session.excessTotal}
         />
-      ) : null}
+      </div>
 
-      {editable && tab === 'scan' ? (
-        <ScanHero state={heroState} onUndo={() => void handleUndo()} onDismiss={dismissHero} />
-      ) : null}
+      {/* The only scrollable region. It is the tab panel while the session is editable. */}
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
+        role={editable ? 'tabpanel' : undefined}
+        id={editable ? 'session-tab-panel' : undefined}
+        aria-labelledby={editable ? `session-tab-${tab}` : undefined}
+      >
+        {editable && tab === 'scan' ? (
+          <ScanHero state={heroState} onUndo={() => void handleUndo()} onDismiss={dismissHero} />
+        ) : null}
 
-      {editable && tab === 'scan' ? (
-        <ScanCard
-          scan={scan}
-          qty={qty}
-          qtyTouched={qtyTouched}
-          scanRef={scanRef}
-          qtyInput={preferences.qtyInput}
-          onScanChange={setScan}
-          onQtyChange={(value) => {
-            setQty(value)
-            setQtyTouched(true)
-          }}
-          onAdd={() => void handleAdd()}
-        />
-      ) : null}
-
-      {editable && tab === 'scan' && lines.length > 0 ? (
-        <Button variant="secondary" className="w-full" onClick={() => setTab('docs')}>
-          Selesai scan — lanjut ke dokumen ({lines.length} item)
-        </Button>
-      ) : null}
-
-      {!editable || tab === 'items' ? (
-        <Card title={`Item dalam sesi (${lines.length})`}>
-          {editable ? (
-            <p className="mb-1 text-sm text-slate-400">Ketuk item untuk mengubah qty atau menghapus.</p>
-          ) : null}
-          <ul className="flex flex-col divide-y divide-slate-800">
-            {lines.map((line) => {
-              const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-              const item = items[line.itemMasterId]
-              const isOver = totalOver.some((row) => row.lineId === line.lineId)
-              return (
-                <li key={line.lineId}>
-                  <button
-                    type="button"
-                    className="touch-target w-full py-3 text-left"
-                    disabled={!editable}
-                    onClick={() => setEditingLineId(line.lineId)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
-                        <p className="text-sm text-slate-400">
-                          {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
-                          {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
-                          {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
-                        </p>
-                        <p className="text-sm tabular-nums text-slate-400">
-                          = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
-                        </p>
-                        {purchaseItem ? (
-                          <p className="text-sm tabular-nums text-slate-300">
-                            Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+        {!editable || tab === 'items' ? (
+          <Card title={`Item dalam sesi (${lines.length})`}>
+            {editable ? (
+              <p className="mb-1 text-sm text-slate-400">Ketuk item untuk mengubah qty atau menghapus.</p>
+            ) : null}
+            <ul className="flex flex-col divide-y divide-slate-800">
+              {lines.map((line) => {
+                const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
+                const item = items[line.itemMasterId]
+                const isOver = overLineIds.has(line.lineId)
+                return (
+                  <li key={line.lineId}>
+                    <button
+                      type="button"
+                      className="touch-target w-full py-3 text-left"
+                      disabled={!editable}
+                      onClick={() => setEditingLineId(line.lineId)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
+                          <p className="text-sm text-slate-400">
+                            {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
+                            {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
+                            {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
                           </p>
-                        ) : null}
+                          <p className="text-sm tabular-nums text-slate-400">
+                            = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
+                          </p>
+                          {purchaseItem ? (
+                            <p className="text-sm tabular-nums text-slate-300">
+                              Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+                            </p>
+                          ) : null}
+                        </div>
+                        {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
                       </div>
-                      {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
-                    </div>
-                  </button>
-                </li>
-              )
-            })}
-            {lines.length === 0 ? <EmptyState>Belum ada item. Scan barcode untuk menambah.</EmptyState> : null}
-          </ul>
-        </Card>
-      ) : null}
+                    </button>
+                  </li>
+                )
+              })}
+              {lines.length === 0 ? <EmptyState>Belum ada item. Scan barcode untuk menambah.</EmptyState> : null}
+            </ul>
+          </Card>
+        ) : null}
 
-      {!editable || tab === 'docs' ? (
-        <VendorDocCard
-          invoice={invoice}
-          doNumber={doNumber}
-          editable={editable}
-          invoiceError={invoiceError}
-          doNumberError={doNumberError}
-          onInvoiceChange={(value) => {
-            setInvoice(value)
-            setInvoiceError(false)
-          }}
-          onDoNumberChange={(value) => {
-            setDoNumber(value)
-            setDoNumberError(false)
-          }}
-        />
-      ) : null}
+        {!editable || tab === 'docs' ? (
+          <div className={!editable || tab === 'items' ? 'mt-2' : ''}>
+            <VendorDocCard
+              invoice={invoice}
+              doNumber={doNumber}
+              editable={editable}
+              invoiceError={invoiceError}
+              doNumberError={doNumberError}
+              onInvoiceChange={(value) => {
+                setInvoice(value)
+                setInvoiceError(false)
+              }}
+              onDoNumberChange={(value) => {
+                setDoNumber(value)
+                setDoNumberError(false)
+              }}
+            />
+            {session.receiveDate ? (
+              <p className="mt-2 text-sm text-slate-400">
+                Tanggal penerimaan: {session.receiveDate}
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-slate-400">ID sesi: {session.sessionId}</p>
+          </div>
+        ) : null}
 
-      {editable && tab === 'docs' ? (
-        <div className="flex flex-col gap-2">
-          <Button className="w-full" onClick={requestFinalize}>
-            Selesaikan &amp; kirim
-          </Button>
-          <ConfirmButton
-            tone="danger"
-            className="w-full"
-            label="Batalkan sesi ini"
-            confirmLabel="Tahan terus… sesi akan dibatalkan"
-            onConfirm={() => void handleCancel()}
-          />
-          <p className="text-center text-sm text-slate-400">
-            Tombol merah perlu ditahan 1,5 detik supaya tidak tersenggol.
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
-            <>
-              {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
-              <Button
-                className="flex w-full items-center justify-center gap-1"
-                aria-label="Upload"
-                disabled={syncing}
-                onClick={() => void handleRetrySync()}
-              >
-                <Upload className="h-5 w-5" aria-hidden="true" />  Upload
-              </Button>
-            </>
-          ) : null}
-          {session.status === SESSION_STATUS.REJECTED ? (
-            <>
-              <Notice tone="danger">
-                Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
-              </Notice>
-              <ConfirmButton
-                tone="danger"
-                className="w-full"
-                label="Hapus sesi dari perangkat"
-                confirmLabel="Tahan terus… sesi akan dihapus"
-                onConfirm={() => void handleCancel()}
+        {!editable || tab === 'docs' ? (
+          <div className="mt-2">
+            {editable ? (
+              <div className="flex flex-col gap-2">
+                <Button className="w-full" onClick={requestFinalize}>
+                  Selesaikan &amp; kirim
+                </Button>
+                <ConfirmButton
+                  tone="danger"
+                  className="w-full"
+                  label="Batalkan sesi ini"
+                  confirmLabel="Tahan terus… sesi akan dibatalkan"
+                  onConfirm={() => void handleCancel()}
+                />
+                <p className="text-center text-sm text-slate-400">
+                  Tombol merah perlu ditahan 1,5 detik supaya tidak tersenggol.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
+                  <>
+                    {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
+                    <Button
+                      className="flex w-full items-center justify-center gap-1"
+                      aria-label="Upload"
+                      disabled={syncing}
+                      onClick={() => void handleRetrySync()}
+                    >
+                      <Upload className="h-5 w-5" aria-hidden="true" />  Upload
+                    </Button>
+                  </>
+                ) : null}
+                {session.status === SESSION_STATUS.REJECTED ? (
+                  <>
+                    <Notice tone="danger">
+                      Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
+                    </Notice>
+                    <ConfirmButton
+                      tone="danger"
+                      className="w-full"
+                      label="Hapus sesi dari perangkat"
+                      confirmLabel="Tahan terus… sesi akan dihapus"
+                      onConfirm={() => void handleCancel()}
+                    />
+                  </>
+                ) : null}
+                {session.status === SESSION_STATUS.SYNCED ? (
+                  <Notice tone="success">
+                    Tersinkron sebagai {session.number}. Dokumen bersifat baca-saja di perangkat.
+                  </Notice>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Fixed bottom: scan bar + tab bar. Never scrolls. */}
+      {editable ? (
+        <div className="shrink-0 border-t border-slate-700 bg-slate-950/95 pb-[env(safe-area-inset-bottom)]">
+          {tab === 'scan' ? (
+            <div className="px-3 py-2">
+              <ScanBar
+                scan={scan}
+                qty={qty}
+                qtyTouched={qtyTouched}
+                scanRef={scanRef}
+                padOpen={padOpen}
+                onPadOpenChange={setPadOpen}
+                onScanChange={setScan}
+                onQtyChange={(value) => {
+                  setQty(value)
+                  setQtyTouched(true)
+                }}
+                onAdd={() => void handleAdd()}
               />
-            </>
+            </div>
           ) : null}
-          {session.status === SESSION_STATUS.SYNCED ? (
-            <Notice tone="success">
-              Tersinkron sebagai {session.number}. Dokumen bersifat baca-saja di perangkat.
-            </Notice>
-          ) : null}
+          <SessionTabs
+            value={tab}
+            onChange={setTab}
+            itemCount={lines.length}
+            docsComplete={Boolean(invoice.trim() && doNumber.trim())}
+          />
         </div>
-      )}
+      ) : null}
+
       {editable && editingLine && editingItem ? (
         <LineEditSheet
           key={editingLine.lineId}
@@ -509,100 +588,6 @@ function SessionDetailPage() {
   )
 }
 
-/** Qty shortcuts for the common cases; anything else goes through the keypad. */
-const QTY_CHIPS = [1, 2, 5, 12] as const
-
-function ScanCard({
-  scan,
-  qty,
-  qtyTouched,
-  scanRef,
-  qtyInput,
-  onScanChange,
-  onQtyChange,
-  onAdd,
-}: {
-  scan: string
-  qty: string
-  qtyTouched: boolean
-  scanRef: RefObject<HTMLInputElement | null>
-  qtyInput: 'pad' | 'keyboard'
-  onScanChange: (value: string) => void
-  onQtyChange: (value: string) => void
-  onAdd: () => void
-}) {
-  // The 'pad' preference now means "keypad already open", not "keypad always visible".
-  const [padOpen, setPadOpen] = useState(qtyInput === 'pad')
-
-  return (
-    <Card title="Scan barang">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
-        <Field label="Barcode / Kode Barang" hint="Scan lalu Enter otomatis.">
-          <input
-            ref={scanRef}
-            className={inputClass}
-            value={scan}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                onAdd()
-              }
-            }}
-            onChange={(event) => onScanChange(event.target.value)}
-          />
-        </Field>
-        <Field label="Qty">
-          <input
-            className={inputClass}
-            inputMode="decimal"
-            value={qty}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => onQtyChange(event.target.value)}
-          />
-        </Field>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <span className="shrink-0 text-sm font-semibold text-slate-300">Qty</span>
-        <div className="flex flex-1 gap-2">
-          {QTY_CHIPS.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              aria-pressed={qty === String(chip)}
-              aria-label={`Qty ${chip} satuan PO`}
-              className={`touch-target flex-1 rounded-lg px-2 font-semibold transition ${
-                qty === String(chip)
-                  ? 'bg-cyan-500 text-slate-900'
-                  : 'bg-slate-700 text-slate-100 hover:bg-slate-600'
-              }`}
-              onClick={() => onQtyChange(String(chip))}
-            >
-              ×{chip}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          aria-expanded={padOpen}
-          aria-label={padOpen ? 'Tutup keypad angka' : 'Buka keypad angka'}
-          className="touch-target w-14 shrink-0 rounded-lg bg-slate-700 font-semibold text-slate-100 transition hover:bg-slate-600"
-          onClick={() => setPadOpen((open) => !open)}
-        >
-          123
-        </button>
-      </div>
-      {padOpen ? (
-        <div className="mt-3">
-          <NumericPad value={qtyTouched ? qty : ''} onChange={onQtyChange} />
-        </div>
-      ) : null}
-      <Button className="mt-3 w-full" disabled={!scan.trim()} onClick={onAdd}>
-        Tambah ke sesi
-      </Button>
-    </Card>
-  )
-}
-
 function VendorDocCard({
   invoice,
   doNumber,
@@ -625,7 +610,7 @@ function VendorDocCard({
       <div className="flex flex-col gap-3">
         <Field label="Nomor Invoice (wajib)">
           <input
-            className={`${inputClass} ${invoiceError ? 'border-red-500' : ''}`}
+            className={`${inputClass} ${invoiceError ? 'border-red-500!' : ''}`}
             value={invoice}
             disabled={!editable}
             onChange={(event) => onInvoiceChange(event.target.value)}
@@ -634,7 +619,7 @@ function VendorDocCard({
         </Field>
         <Field label="Nomor Surat Jalan / DO (wajib)">
           <input
-            className={`${inputClass} ${doNumberError ? 'border-red-500' : ''}`}
+            className={`${inputClass} ${doNumberError ? 'border-red-500!' : ''}`}
             value={doNumber}
             disabled={!editable}
             onChange={(event) => onDoNumberChange(event.target.value)}
@@ -876,6 +861,8 @@ function FinalizeDialog({
   )
 }
 
+const SESSION_TAB_IDS: readonly SessionTab[] = ['scan', 'items', 'docs']
+
 function SessionTabs({
   value,
   onChange,
@@ -887,48 +874,69 @@ function SessionTabs({
   itemCount: number
   docsComplete: boolean
 }) {
+  // Bottom tab bar: a top border marks the active tab instead of a pill, so the bar reads as
+  // part of the shell rather than as three floating buttons.
   const tabClass = (active: boolean): string =>
-    `touch-target flex-1 rounded-lg px-2 text-sm font-semibold transition ${
-      active ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+    `touch-target flex-1 border-t-2 px-2 text-sm font-semibold transition ${
+      active
+        ? 'border-cyan-400 bg-slate-800 text-cyan-300'
+        : 'border-transparent text-slate-300 hover:bg-slate-800'
     }`
 
+  // Roving tabindex + arrow keys: on a keypad-first device, reaching the third tab must not cost
+  // three Tab presses.
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const index = SESSION_TAB_IDS.indexOf(value)
+    const delta = event.key === 'ArrowRight' ? 1 : -1
+    const next = SESSION_TAB_IDS[(index + delta + SESSION_TAB_IDS.length) % SESSION_TAB_IDS.length]
+    if (!next) return
+    onChange(next)
+    // The scan tab is excluded on purpose: its own focus effect puts focus in the barcode field,
+    // and moving it to the tab button here would fight that. For the other two, the new `tab`
+    // value only arrives on a later commit (it round-trips through Dexie), hence the frame wait.
+    if (next !== 'scan') {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`session-tab-${next}`)?.focus()
+      })
+    }
+  }
+
   return (
-    <div role="tablist" aria-label="Bagian sesi penerimaan" className="flex gap-2">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === 'scan'}
-        className={tabClass(value === 'scan')}
-        onClick={() => onChange('scan')}
-      >
-        Scan
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === 'items'}
-        className={tabClass(value === 'items')}
-        onClick={() => onChange('items')}
-      >
-        Item ({itemCount})
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === 'docs'}
-        className={tabClass(value === 'docs')}
-        onClick={() => onChange('docs')}
-      >
-        <span className="inline-flex items-center gap-1.5">
-          Dokumen
-          {docsComplete ? null : (
-            <span
-              aria-label="belum lengkap"
-              className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400"
-            />
-          )}
-        </span>
-      </button>
+    <div
+      role="tablist"
+      aria-label="Bagian sesi penerimaan"
+      className="flex"
+      onKeyDown={handleKeyDown}
+    >
+      {SESSION_TAB_IDS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          id={`session-tab-${id}`}
+          aria-selected={value === id}
+          aria-controls="session-tab-panel"
+          tabIndex={value === id ? 0 : -1}
+          className={tabClass(value === id)}
+          onClick={() => onChange(id)}
+        >
+          {id === 'scan' ? 'Scan' : null}
+          {id === 'items' ? `Item (${itemCount})` : null}
+          {id === 'docs' ? (
+            <span className="inline-flex items-center gap-1.5">
+              Dokumen
+              {docsComplete ? null : (
+                <span
+                  aria-label="belum lengkap"
+                  className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400"
+                />
+              )}
+            </span>
+          ) : null}
+        </button>
+      ))}
     </div>
   )
 }

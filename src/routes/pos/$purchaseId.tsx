@@ -112,14 +112,19 @@ function PosDetailPage() {
         </ul>
       </Card>
 
-      <Button className="w-full" disabled={busy || allItemsFull} onClick={() => void startReception()}>
-        {busy ? 'Menyiapkan…' : allItemsFull ? 'Semua item sudah diterima penuh' : 'Mulai Penerimaan'}
-      </Button>
       {allItemsFull ? (
         <Notice tone="warn">Semua item sudah diterima penuh — tidak bisa memulai penerimaan baru.</Notice>
-      ) : null}
+      ) : (
+        <Notice tone="info">Sesi bisa dijeda dan dilanjutkan kapan saja.</Notice>
+      )}
 
-      <Notice tone="info">Sesi bisa dijeda dan dilanjutkan kapan saja.</Notice>
+      {/* The primary action stays reachable on a PO with twenty lines: it sticks to the bottom of
+          the scroll container instead of sitting at the end of the list. */}
+      <div className="sticky bottom-0 -mx-3 border-t border-slate-700 bg-slate-950/95 px-3 py-2 backdrop-blur">
+        <Button className="w-full" disabled={busy || allItemsFull} onClick={() => void startReception()}>
+          {busy ? 'Menyiapkan…' : allItemsFull ? 'Semua item sudah diterima penuh' : 'Mulai Penerimaan'}
+        </Button>
+      </div>
     </div>
   )
 }

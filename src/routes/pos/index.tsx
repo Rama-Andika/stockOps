@@ -104,7 +104,7 @@ function PosListPage() {
           key={row.purchaseId}
           to="/pos/$purchaseId"
           params={{ purchaseId: row.purchaseId }}
-          className="block rounded-xl border border-slate-700 bg-slate-900/60 p-4 transition hover:border-slate-500"
+          className="block rounded-xl border border-slate-700 bg-slate-900/60 p-3 transition hover:border-slate-500"
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">

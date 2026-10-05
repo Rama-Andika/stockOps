@@ -1,5 +1,6 @@
 import type { LocalItem, LocalPurchaseItem, LocalSessionItem } from '../db/local-db'
 import type { LocalRepository } from '../db/local-repo'
+import { MAX_SCAN_QTY } from '~/shared/constants'
 import { resolveConvQty } from '~/shared/uom'
 
 export type ScanStatus = 'OK' | 'ITEM_NOT_FOUND' | 'NOT_IN_PO'
@@ -87,6 +88,13 @@ export async function addScannedItem(
   }
   if (!Number.isFinite(qty) || qty <= 0) {
     return { ok: false, message: 'Qty harus lebih dari 0.', resolution }
+  }
+  if (qty > MAX_SCAN_QTY) {
+    return {
+      ok: false,
+      message: `Qty ${qty} tidak masuk akal (maksimum ${MAX_SCAN_QTY}). Periksa kolom qty.`,
+      resolution,
+    }
   }
 
   const line = await repo.addOrIncrementLine(sessionId, {

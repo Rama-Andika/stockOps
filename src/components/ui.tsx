@@ -35,7 +35,7 @@ export function Card({
   className?: string
 }) {
   return (
-    <section className={`rounded-xl border border-slate-700 bg-slate-900/60 p-4 ${className}`}>
+    <section className={`rounded-xl border border-slate-700 bg-slate-900/60 p-3 ${className}`}>
       {(title || actions) && (
         <header className="mb-3 flex items-center justify-between gap-3">
           {title ? <h2 className="text-lg font-bold text-slate-100">{title}</h2> : <span />}

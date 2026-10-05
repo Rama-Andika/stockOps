@@ -117,7 +117,7 @@ function SettingsPage() {
       <Card title="Preferensi Input & Umpan Balik">
         <div className="flex flex-col gap-4">
           <div>
-            <p className="mb-1 text-sm font-semibold text-slate-300">Metode input qty</p>
+            <p className="mb-1 text-sm font-semibold text-slate-300">Keypad angka di layar scan</p>
             <div className="flex gap-2">
               <Button
                 variant={preferences.qtyInput === 'pad' ? 'primary' : 'secondary'}
@@ -125,7 +125,7 @@ function SettingsPage() {
                 aria-pressed={preferences.qtyInput === 'pad'}
                 onClick={() => updatePreferences({ qtyInput: 'pad' })}
               >
-                Keypad di layar
+                Terbuka otomatis
               </Button>
               <Button
                 variant={preferences.qtyInput === 'keyboard' ? 'primary' : 'secondary'}
@@ -133,9 +133,13 @@ function SettingsPage() {
                 aria-pressed={preferences.qtyInput === 'keyboard'}
                 onClick={() => updatePreferences({ qtyInput: 'keyboard' })}
               >
-                Keyboard fisik
+                Tertutup
               </Button>
             </div>
+            <p className="mt-1 text-xs text-slate-400">
+              Qty selalu bisa diketik langsung di kolom qty atau dipilih lewat tombol ×1 ×2 ×5 ×12.
+              Pilihan ini hanya menentukan apakah keypad layar terbuka sendiri saat sesi dimulai.
+            </p>
           </div>
           <div>
             <p className="mb-1 text-sm font-semibold text-slate-300">Tampilan</p>

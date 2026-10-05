@@ -8,6 +8,9 @@ import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Settings } from "lucide-react";
 import { SyncStatus } from "./sync-status";
 
+// z-index scale used across the app, highest first:
+//   60 toast (ToastHost) · 40 dialogs (LineEditSheet, FinalizeDialog) · 30 keypad sheet (ScanBar).
+// The shell itself needs none: it is a fixed-height flex column where <main> is the only scroller.
 const NAV_LINK_CLASS =
   "touch-target relative flex flex-1 flex-col items-center justify-center rounded-lg px-2 py-1 text-center";
 
@@ -22,7 +25,7 @@ function TopBar() {
   const user = useAppStore((state) => state.user);
 
   return (
-    <header className="sticky top-0 z-10 border-b border-slate-700 bg-slate-950/95 backdrop-blur">
+    <header className="border-b border-slate-700 bg-slate-950/95 backdrop-blur">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="flex items-center  gap-2">
           <span className="text-lg font-black tracking-tight text-cyan-400">
@@ -57,7 +60,7 @@ function BottomNav() {
   const pendingCount = useAppStore((state) => state.pendingCount);
 
   return (
-    <nav className="sticky bottom-0 border-t border-slate-700 bg-slate-950/95 px-2 py-1 backdrop-blur">
+    <nav className="border-t border-slate-700 bg-slate-950/95 px-2 py-1 backdrop-blur">
       <div className="flex items-stretch justify-around">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -70,7 +73,10 @@ function BottomNav() {
               aria-label={item.label}
               className={`${NAV_LINK_CLASS} text-slate-300 hover:text-slate-100`}
               activeProps={{
-                className: `${NAV_LINK_CLASS} bg-slate-800 text-cyan-400 font-semibold`,
+                // `text-cyan-400!`: the router concatenates this string with the base className
+                // above, which carries `text-slate-300`. Tailwind emits `.text-slate-300` after
+                // `.text-cyan-400`, so without the important modifier the active link stays slate.
+                className: `${NAV_LINK_CLASS} bg-slate-800 text-cyan-400! font-semibold`,
                 "aria-current": "page",
               }}
             >
@@ -126,14 +132,33 @@ export function AppShell({ children }: { children: ReactNode }) {
     return <div className="min-h-screen">{children ?? <Outlet />}</div>;
   }
 
+  // The receiving session is a fixed-height cockpit: it manages its own scrolling, fills the
+  // shell without padding or a max width, and hides the global nav so two stacked bars do not
+  // eat 112px of a 640px screen. To undo that decision, drop this flag and always render
+  // <BottomNav /> plus the padded wrapper below.
+  // Exactly one segment after /sessions/ — i.e. the session detail route only. A future nested
+  // route such as /sessions/<id>/review must opt in explicitly rather than inherit the cockpit
+  // layout and then look broken because it does not implement h-full itself.
+  const isCockpit = /^\/sessions\/[^/]+$/.test(location.pathname);
+
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="app-viewport flex flex-col">
       <ToastHost />
       <TopBar />
-      <main className="flex-1 p-3">
-        <div className="mx-auto w-full max-w-3xl">{children ?? <Outlet />}</div>
+      <main
+        className={
+          isCockpit
+            ? "min-h-0 flex-1 overflow-hidden"
+            : "min-h-0 flex-1 overflow-y-auto p-3"
+        }
+      >
+        {isCockpit ? (
+          children ?? <Outlet />
+        ) : (
+          <div className="mx-auto w-full max-w-3xl">{children ?? <Outlet />}</div>
+        )}
       </main>
-      <BottomNav />
+      {isCockpit ? null : <BottomNav />}
     </div>
   );
 }

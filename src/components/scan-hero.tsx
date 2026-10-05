@@ -48,26 +48,31 @@ export function ScanHero({
       <section
         role="status"
         aria-live="polite"
-        className="rounded-xl border border-emerald-500 bg-emerald-950/40 p-4"
+        className="rounded-xl border border-emerald-500 bg-emerald-950/40 p-3"
       >
-        <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-300">
-          <Check className="h-5 w-5" aria-hidden="true" />
-          Ditambahkan
+        {/* The word still leads the screen-reader announcement; on screen the green tick says it. */}
+        <span className="sr-only">Ditambahkan</span>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" aria-hidden="true" />
+          <p className="min-w-0 text-lg font-bold leading-tight text-slate-100">
+            {state.itemName}
+            {state.itemCode ? (
+              <span className="font-normal text-slate-400"> · {state.itemCode}</span>
+            ) : null}
+          </p>
+        </div>
+        <p className="mt-1 text-3xl font-black tabular-nums text-slate-100">
+          +{formatQty(state.addedQty)} <span className="text-base font-bold text-slate-400">{state.purchaseUnit}</span>
         </p>
-        <p className="mt-2 text-xl font-bold text-slate-100">{state.itemName}</p>
-        {state.itemCode ? <p className="text-sm text-slate-400">{state.itemCode}</p> : null}
-        <p className="mt-2 text-4xl font-black tabular-nums text-slate-100">
-          +{formatQty(state.addedQty)} <span className="text-lg font-bold text-slate-400">{state.purchaseUnit}</span>
-        </p>
-        <p className="mt-1 text-sm tabular-nums text-slate-300">
+        <p className="text-sm tabular-nums text-slate-300">
           = {formatQty(state.stockQty)} {state.stockUnit}
         </p>
-        <p className="mt-2 text-sm tabular-nums text-slate-300">
+        <p className="mt-1 text-sm tabular-nums text-slate-300">
           Item ini: {formatQty(state.itemTotal)} dari {formatQty(state.itemOrdered)} {state.purchaseUnit}
         </p>
         <button
           type="button"
-          className="touch-target mt-3 w-full rounded-lg border border-slate-600 font-semibold text-slate-100 transition hover:bg-slate-800"
+          className="touch-target mt-2 w-full rounded-lg border border-slate-600 font-semibold text-slate-100 transition hover:bg-slate-800"
           onClick={onUndo}
         >
           Batalkan scan ini
@@ -124,32 +129,36 @@ export function ScanHero({
   }
 
   return (
-    <section role="alert" className="rounded-xl border border-amber-400 bg-amber-950/40 p-4">
-      <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-amber-300">
-        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-        Lebih dari pesanan
-      </p>
-      <p className="mt-2 text-xl font-bold text-slate-100">{state.itemName}</p>
-      <p className="mt-2 text-2xl font-black tabular-nums text-slate-100">
+    <section role="alert" className="rounded-xl border border-amber-400 bg-amber-950/40 p-3">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+        <p className="min-w-0 text-lg font-bold leading-tight text-slate-100">
+          <span className="block text-sm font-bold uppercase tracking-wide text-amber-300">
+            Lebih dari pesanan
+          </span>
+          {state.itemName}
+        </p>
+      </div>
+      <p className="mt-1 text-2xl font-black tabular-nums text-slate-100">
         {formatQty(state.newTotal)} <span className="text-base font-bold text-slate-400">dari</span>{' '}
         {formatQty(state.ordered)} {state.unit}{' '}
         <span className="text-amber-300">+{formatQty(state.excess)}</span>
       </p>
-      <p className="mt-2 text-sm text-slate-200">
-        Sudah dicatat. Dokumen ini akan menunggu persetujuan admin. Total dihitung dari semua
-        perangkat, bukan hanya perangkat ini.
+      <p className="mt-1 text-sm leading-snug text-slate-200">
+        Sudah dicatat, menunggu persetujuan admin. Total dihitung dari semua perangkat.
       </p>
-      <div className="mt-3 flex flex-col gap-2">
+      <div className="mt-2 flex gap-2">
         <button
           type="button"
-          className="touch-target w-full rounded-lg border border-slate-600 font-semibold text-slate-100 transition hover:bg-slate-800"
+          aria-label="Batalkan scan ini"
+          className="touch-target flex-1 rounded-lg border border-slate-600 font-semibold text-slate-100 transition hover:bg-slate-800"
           onClick={onUndo}
         >
-          Batalkan scan ini
+          Batalkan
         </button>
         <button
           type="button"
-          className="touch-target w-full rounded-lg bg-amber-400 font-semibold text-slate-950 transition hover:bg-amber-300"
+          className="touch-target flex-1 rounded-lg bg-amber-400 font-semibold text-slate-950 transition hover:bg-amber-300"
           onClick={onDismiss}
         >
           Lanjut scan

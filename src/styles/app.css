@@ -39,6 +39,22 @@ body {
   min-height: 56px;
 }
 
+/* Exactly one screen tall. The base is 100% — it resolves against html/body, which are both
+   height:100% above, so it always equals the visible layout viewport. 100vh would be WRONG as a
+   base: on an older WebView with a visible address bar it is TALLER than the visible area, which
+   would push the scan bar and the tab bar below the fold inside an overflow-hidden shell.
+   100dvh is only applied where it is supported, because an unsupported height declaration is
+   dropped by the browser. */
+.app-viewport {
+  height: 100%;
+}
+
+@supports (height: 100dvh) {
+  .app-viewport {
+    height: 100dvh;
+  }
+}
+
 input,
 select,
 textarea,

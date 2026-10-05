@@ -18,7 +18,7 @@ import type { SyncTransport } from '~/client/sync/transport'
 import type { PullResult } from '~/shared/schemas'
 import { addScannedItem, resolveScan } from '~/client/services/scanning'
 import { toLocalDateTime } from '~/shared/receive-date'
-import { PURCHASES_STALE_META_KEY, SESSION_STATUS } from '~/shared/constants'
+import { MAX_SCAN_QTY, PURCHASES_STALE_META_KEY, SESSION_STATUS } from '~/shared/constants'
 import { CREDENTIALS, FIXTURE, seedAll } from '../server/helpers'
 
 /** Transport that calls server services directly (without HTTP). */
@@ -654,3 +654,53 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     })
   })
 })
+
+describe('batas besaran qty scan', () => {
+  it('menolak qty di atas MAX_SCAN_QTY tanpa menulis baris sesi', async () => {
+    await pullAllData(repo, directTransport)
+    const session = await repo.createSession({
+      purchaseId: FIXTURE.purchase.CHECKED,
+      userId: FIXTURE.user.ACTIVE,
+      deviceId: DEVICE,
+      receiveDate: toLocalDateTime(new Date()),
+    })
+
+    const tooMuch = await addScannedItem(
+      repo,
+      session.sessionId,
+      session.purchaseId,
+      '22001771',
+      MAX_SCAN_QTY + 1,
+    )
+    expect(tooMuch.ok).toBe(false)
+    // The session screen picks its toast branch from this status: if it ever stops being 'OK',
+    // the operator sees "Bukan item PO ini" again instead of the real reason.
+    expect(tooMuch.resolution.status).toBe('OK')
+    expect(await repo.sessionItems(session.sessionId)).toHaveLength(0)
+
+    const atLimit = await addScannedItem(
+      repo,
+      session.sessionId,
+      session.purchaseId,
+      '22001771',
+      MAX_SCAN_QTY,
+    )
+    expect(atLimit.ok).toBe(true)
+  })
+
+  it('menolak qty nol', async () => {
+    await pullAllData(repo, directTransport)
+    const session = await repo.createSession({
+      purchaseId: FIXTURE.purchase.CHECKED,
+      userId: FIXTURE.user.ACTIVE,
+      deviceId: DEVICE,
+      receiveDate: toLocalDateTime(new Date()),
+    })
+
+    const zero = await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 0)
+    expect(zero.ok).toBe(false)
+    expect(zero.resolution.status).toBe('OK')
+    expect(await repo.sessionItems(session.sessionId)).toHaveLength(0)
+  })
+})
+

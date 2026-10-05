@@ -116,6 +116,14 @@ function nowIso(): string {
 }
 
 /**
+ * `meta` key holding the session screen's active tab. One source of truth: the screen writes it,
+ * and both delete paths below remove it. A literal copy in either place would eventually drift.
+ */
+export function sessionTabKey(sessionId: string): string {
+  return `sessionTab:${sessionId}`
+}
+
+/**
  * Local data repository (Dexie). One instance per database; `offlineDb`
  * is used by the app, while tests may create separate instances.
  */
@@ -677,20 +685,34 @@ export class LocalRepository {
   async deleteSyncedSessions(): Promise<number> {
     const synced = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCED).toArray()
     const ids = synced.map((session) => session.sessionId)
-    await this.db.transaction('rw', [this.db.sessions, this.db.sessionItems], async () => {
-      for (const id of ids) {
-        await this.db.sessionItems.where('sessionId').equals(id).delete()
-      }
-      await this.db.sessions.bulkDelete(ids)
-    })
+    await this.db.transaction(
+      'rw',
+      [this.db.sessions, this.db.sessionItems, this.db.meta],
+      async () => {
+        for (const id of ids) {
+          await this.db.sessionItems.where('sessionId').equals(id).delete()
+        }
+        await this.db.sessions.bulkDelete(ids)
+        // This is the path most sessions actually take (synced, then cleared from Settings), so
+        // without it the tab keys leak for the overwhelming majority of sessions.
+        await this.db.meta.bulkDelete(ids.map((id) => sessionTabKey(id)))
+      },
+    )
     return ids.length
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    await this.db.transaction('rw', [this.db.sessions, this.db.sessionItems], async () => {
-      await this.db.sessionItems.where('sessionId').equals(sessionId).delete()
-      await this.db.sessions.delete(sessionId)
-    })
+    await this.db.transaction(
+      'rw',
+      [this.db.sessions, this.db.sessionItems, this.db.meta],
+      async () => {
+        await this.db.sessionItems.where('sessionId').equals(sessionId).delete()
+        await this.db.sessions.delete(sessionId)
+        // UI state parked on this session; without this the `meta` table grows by one permanent
+        // row per session ever opened.
+        await this.db.meta.delete(sessionTabKey(sessionId))
+      },
+    )
   }
 
   /* ------------------------- Progress (FR-3.2) ------------------------- */

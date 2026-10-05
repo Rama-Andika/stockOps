@@ -78,6 +78,14 @@ export const MAX_PUSH_SESSIONS = 200
 /** Max lines per receiving session in a push request. */
 export const MAX_SESSION_LINES = 5000
 
+/**
+ * Sanity bound for a single scan's qty, in PO units. Not a business rule — a guard rail: without
+ * it a stuck scanner or a barcode typed into the qty field writes an absurd qty into the session,
+ * which is then pushed and prorated into the document's financial fields. Raise it if a real
+ * receipt ever legitimately needs more in ONE line.
+ */
+export const MAX_SCAN_QTY = 100_000
+
 /** Master data TTL (hours) before considered stale & re-downloaded upon online login (FR-2.1). */
 export const MASTER_DATA_STALE_HOURS = 12
 

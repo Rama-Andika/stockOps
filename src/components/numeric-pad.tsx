@@ -6,7 +6,14 @@ function keyClass(wide: boolean): string {
   }`
 }
 
-/** On-screen numeric keypad for entering PO unit qty. */
+/**
+ * On-screen numeric keypad for entering PO unit qty.
+ *
+ * `showIncrement` defaults to true and is kept that way on purpose: the scan bar passes false
+ * (the qty chips replaced the +1 button there), while tests/component/scan-controls.test.tsx
+ * renders this component without the prop and asserts the "+1 (satuan PO)" button. Removing the
+ * prop would break that test; removing only the default would break the scan bar.
+ */
 export function NumericPad({
   value,
   onChange,

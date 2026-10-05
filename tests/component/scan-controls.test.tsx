@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useRef, useState } from 'react'
 import { ConfirmButton } from '~/components/confirm-button'
 import { NumericPad } from '~/components/numeric-pad'
+import { ScanBar } from '~/components/scan-bar'
 import { ScanHero } from '~/components/scan-hero'
 import { loadPreferences, savePreferences } from '~/client/preferences'
 
@@ -166,3 +168,87 @@ describe('ScanHero', () => {
     expect(onUndo).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ScanBar', () => {
+  // The qty field is a controlled input, so the test needs a holder that owns the value. The
+  // optional spy lets a test assert what the component tried to do, not only what survived.
+  function Harness({ onQtyChange }: { onQtyChange?: (value: string) => void }) {
+    const scanRef = useRef<HTMLInputElement>(null)
+    const [qty, setQty] = useState('1')
+    return (
+      <ScanBar
+        scan=""
+        qty={qty}
+        qtyTouched={false}
+        scanRef={scanRef}
+        padOpen={false}
+        onPadOpenChange={() => undefined}
+        onScanChange={() => undefined}
+        onQtyChange={(value) => {
+          setQty(value)
+          onQtyChange?.(value)
+        }}
+        onAdd={() => undefined}
+      />
+    )
+  }
+
+  it('Enter di kolom qty mengembalikan fokus ke field barcode', () => {
+    render(<Harness />)
+    const qtyInput = screen.getByLabelText('Qty dalam satuan PO')
+    const barcodeInput = screen.getByLabelText('Barcode atau kode barang')
+
+    qtyInput.focus()
+    expect(document.activeElement).toBe(qtyInput)
+
+    fireEvent.keyDown(qtyInput, { key: 'Enter' })
+    expect(document.activeElement).toBe(barcodeInput)
+  })
+
+  it('kolom qty menolak deretan digit sepanjang barcode', () => {
+    const onQtyChange = vi.fn()
+    render(<Harness onQtyChange={onQtyChange} />)
+    const qtyInput = screen.getByLabelText('Qty dalam satuan PO')
+
+    fireEvent.change(qtyInput, { target: { value: '8991102000016' } })
+    expect(onQtyChange).not.toHaveBeenCalled()
+    expect(qtyInput).toHaveValue('1')
+
+    fireEvent.change(qtyInput, { target: { value: '12' } })
+    expect(onQtyChange).toHaveBeenLastCalledWith('12')
+    expect(qtyInput).toHaveValue('12')
+  })
+
+  it('kolom qty menerima desimal dan menormalkan koma menjadi titik', () => {
+    const onQtyChange = vi.fn()
+    render(<Harness onQtyChange={onQtyChange} />)
+    const qtyInput = screen.getByLabelText('Qty dalam satuan PO')
+
+    fireEvent.change(qtyInput, { target: { value: '1.5' } })
+    expect(onQtyChange).toHaveBeenLastCalledWith('1.5')
+
+    fireEvent.change(qtyInput, { target: { value: '2,5' } })
+    expect(onQtyChange).toHaveBeenLastCalledWith('2.5')
+  })
+
+  it('kolom qty menjaga batas tepat 5 digit bulat dan 2 desimal', () => {
+    const onQtyChange = vi.fn()
+    render(<Harness onQtyChange={onQtyChange} />)
+    const qtyInput = screen.getByLabelText('Qty dalam satuan PO')
+
+    fireEvent.change(qtyInput, { target: { value: '99999' } })
+    expect(onQtyChange).toHaveBeenLastCalledWith('99999')
+
+    onQtyChange.mockClear()
+    fireEvent.change(qtyInput, { target: { value: '999999' } })
+    expect(onQtyChange).not.toHaveBeenCalled()
+
+    fireEvent.change(qtyInput, { target: { value: '1.99' } })
+    expect(onQtyChange).toHaveBeenLastCalledWith('1.99')
+
+    onQtyChange.mockClear()
+    fireEvent.change(qtyInput, { target: { value: '1.999' } })
+    expect(onQtyChange).not.toHaveBeenCalled()
+  })
+})
+
