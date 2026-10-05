@@ -29,7 +29,8 @@ Testing notes:
 - **Every test run needs a running MySQL/MariaDB** (from `.env`): Vitest `globalSetup` (`tests/global-setup.mjs` → `scripts/lib/test-db.mjs`) always recreates the `stockops_test` schema by cloning the real DDL via `SHOW CREATE TABLE` (foreign keys stripped). `tests/setup.ts` forces `DB_NAME=stockops_test` so tests never touch `demo`.
 - Tests run serially (`fileParallelism: false`, `pool: 'forks'`); default environment is `node`. Component tests opt into jsdom; client tests use `fake-indexeddb`.
 - Server test fixtures (IDs, rows) are in `tests/server/helpers.ts`.
-- The service worker is only registered in production builds (`npm run build && npm start`), so PWA/offline behavior can't be checked in `npm run dev`.
+- The service worker is registered in every environment (`registerServiceWorker()` in `src/components/app-shell.tsx`), but full offline behavior only works on a build (`npm run build && npm start`); under `npm run dev` the cached shell goes stale. Bump `CACHE_VERSION` in `public/sw.js` when cached assets misbehave. README §6 still says "production only" — that is outdated.
+- `crypto.subtle` and service workers need a secure context: `localhost` works, but a PDT opening `http://<LAN-IP>` cannot log in or work offline.
 
 ## Architecture
 
