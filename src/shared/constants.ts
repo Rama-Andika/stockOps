@@ -66,6 +66,12 @@ export const PROGRESS_LABEL: Record<ProgressStatus, string> = {
 /** Chunk size when pulling master data (NF-4). */
 export const DEFAULT_PULL_CHUNK_SIZE = 500
 
+/**
+ * Local `meta` key: '1' when the PO list could not be refreshed after a sync (e.g. an
+ * IDEMPOTENT_REPLAY) and must be retried; '0' once a refresh/download succeeded.
+ */
+export const PURCHASES_STALE_META_KEY = 'purchasesStale'
+
 /** Max sessions per push request (validated by the server, enforced by the client outbox). */
 export const MAX_PUSH_SESSIONS = 200
 

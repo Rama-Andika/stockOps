@@ -6,6 +6,7 @@ import {
   DEFAULT_PULL_CHUNK_SIZE,
   MAX_PUSH_SESSIONS,
   PERMANENT_REJECT_CODES,
+  PURCHASES_STALE_META_KEY,
   SESSION_STATUS,
 } from '~/shared/constants'
 import type {
@@ -18,9 +19,16 @@ import type {
 /** Maximum timeout for a single sync request before considered failed. */
 const SYNC_TIMEOUT_MS = 30_000
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+/** Maximum wait for ONE pull chunk (a chunk holds at most `limit` rows, 500 by default). */
+const PULL_TIMEOUT_MS = 60_000
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message = 'Sinkronisasi melebihi batas waktu (timeout).',
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Sinkronisasi melebihi batas waktu (timeout).')), ms)
+    const timer = setTimeout(() => reject(new Error(message)), ms)
     promise.then(
       (value) => {
         clearTimeout(timer)
@@ -72,6 +80,7 @@ async function fetchAllChunks(
   kind: PullKind,
   chunkSize: number,
   credentials: CredentialFingerprint[],
+  timeoutMs: number,
   onProgress?: (event: PullProgressEvent) => void,
 ): Promise<{ rows: PullRows; total: number }> {
   const rows: PullRows = []
@@ -79,7 +88,11 @@ async function fetchAllChunks(
   let total = 0
   // Iteration limit as a safeguard against infinite loops.
   for (let guard = 0; guard < 100_000; guard += 1) {
-    const result = await transport.pull({ kind, offset, limit: chunkSize, credentials })
+    const result = await withTimeout(
+      transport.pull({ kind, offset, limit: chunkSize, credentials }),
+      timeoutMs,
+      'Unduh data melebihi batas waktu (timeout). Periksa koneksi lalu coba lagi.',
+    )
     total = result.total
     for (const row of result.rows) rows.push(row)
     onProgress?.({ kind, fetched: rows.length, total })
@@ -98,15 +111,27 @@ async function fetchAllChunks(
 export async function pullAllData(
   repo: LocalRepository,
   transport: SyncTransport = serverTransport,
-  options: { chunkSize?: number; onProgress?: (event: PullProgressEvent) => void } = {},
+  options: {
+    chunkSize?: number
+    timeoutMs?: number
+    onProgress?: (event: PullProgressEvent) => void
+  } = {},
 ): Promise<PullSummary> {
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
+  const timeoutMs = options.timeoutMs ?? PULL_TIMEOUT_MS
   const credentials = await credentialPayload(repo)
 
   const collected = {} as Record<PullKind, PullRows>
   const counts: Record<string, number> = {}
   for (const kind of PULL_KIND_ORDER) {
-    const { rows, total } = await fetchAllChunks(transport, kind, chunkSize, credentials, options.onProgress)
+    const { rows, total } = await fetchAllChunks(
+      transport,
+      kind,
+      chunkSize,
+      credentials,
+      timeoutMs,
+      options.onProgress,
+    )
     collected[kind] = rows
     counts[kind] = rows.length || total
   }
@@ -120,6 +145,7 @@ export async function pullAllData(
     vendorItems: collected.vendorItems as never,
   })
 
+  await repo.setMeta(PURCHASES_STALE_META_KEY, '0')
   await repo.setMeta('lastPullAt', new Date().toISOString())
   return { counts, pulledAt: new Date().toISOString() }
 }
@@ -128,21 +154,35 @@ export async function pullAllData(
 export async function refreshPurchases(
   repo: LocalRepository,
   transport: SyncTransport = serverTransport,
-  options: { chunkSize?: number; onProgress?: (event: PullProgressEvent) => void } = {},
+  options: {
+    chunkSize?: number
+    timeoutMs?: number
+    onProgress?: (event: PullProgressEvent) => void
+  } = {},
 ): Promise<{ purchases: number; purchaseItems: number; removedCount: number; removedNumbers: string[] }> {
   const chunkSize = options.chunkSize ?? DEFAULT_PULL_CHUNK_SIZE
+  const timeoutMs = options.timeoutMs ?? PULL_TIMEOUT_MS
   const credentials = await credentialPayload(repo)
   const before = await repo.listPurchases()
 
-  const purchases = await fetchAllChunks(transport, 'purchases', chunkSize, credentials, options.onProgress)
+  const purchases = await fetchAllChunks(
+    transport,
+    'purchases',
+    chunkSize,
+    credentials,
+    timeoutMs,
+    options.onProgress,
+  )
   const purchaseItems = await fetchAllChunks(
     transport,
     'purchaseItems',
     chunkSize,
     credentials,
+    timeoutMs,
     options.onProgress,
   )
   await repo.replacePurchases(purchases.rows as never, purchaseItems.rows as never)
+  await repo.setMeta(PURCHASES_STALE_META_KEY, '0')
 
   const after = await repo.listPurchases()
   const afterIds = new Set(after.map((purchase) => purchase.purchaseId))

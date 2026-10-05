@@ -3,14 +3,60 @@ import { localRepo } from '../../db/local-repo'
 import { isCredentialExpired, remainingDays } from '../../auth/offline-auth'
 import { serverTransport } from '../../sync/transport'
 import { countPendingSessions, pullAllData, refreshPurchases, syncOutbox } from '../../sync/engine'
+import { PURCHASES_STALE_META_KEY } from '~/shared/constants'
 import { CURRENT_USER_KEY, isBrowser } from './helpers'
 import type { ActionResult, AppState, CurrentUser, SyncState } from './types'
 
 export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, get) => {
-  // Serializes sync() calls (auto-sync, Upload button, finalize, retry): each call waits
-  // for the previous one and then reads the outbox fresh, so the same outbox is never
-  // pushed twice in parallel and a session finalized meanwhile is still sent.
-  let syncChain: Promise<unknown> = Promise.resolve()
+  // ONE queue for everything that pushes to or replaces local data: sync() (auto-sync, Upload
+  // button, finalize, retry), downloadData() and refreshPurchases(). A task starts only after the
+  // previous one finished, so a download can never overwrite the receivedQty that markSynced
+  // just updated (or read the server before a push committed), and the same outbox is never
+  // pushed twice in parallel.
+  let queue: Promise<unknown> = Promise.resolve()
+  const runExclusive = <T>(task: () => Promise<T>): Promise<T> => {
+    const run = queue.then(task)
+    // The queue itself never rejects, so one failing task cannot block the ones behind it;
+    // the caller of that task still receives its rejection through `run`.
+    queue = run.catch(() => undefined)
+    return run
+  }
+
+  // A second call while one is queued/running joins it instead of downloading twice.
+  let downloadInFlight: Promise<ActionResult> | null = null
+  let refreshInFlight: Promise<ActionResult> | null = null
+
+  /** Remembers (or forgets) that the PO list must be refreshed again; never throws. */
+  const setPurchasesStale = async (stale: boolean): Promise<void> => {
+    try {
+      await localRepo.setMeta(PURCHASES_STALE_META_KEY, stale ? '1' : '0')
+    } catch {
+      // Bookkeeping must not turn a sync result into an error.
+    }
+  }
+
+  /**
+   * Refreshes the PO list after a sync; it never throws, so it cannot fail the sync result.
+   * The `purchasesStale` flag is raised BEFORE the download and cleared only when it succeeds, so
+   * a closed tab or a dead battery in the middle of the refresh still leaves a trace and the
+   * next sync retries it.
+   */
+  const refreshPurchasesAfterSync = async (): Promise<boolean> => {
+    await setPurchasesStale(true)
+    try {
+      await refreshPurchases(localRepo, serverTransport)
+      await setPurchasesStale(false)
+      return true
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Gagal memperbarui PO.'
+      try {
+        await localRepo.log('error', `Refresh PO gagal, akan dicoba lagi: ${reason}`)
+      } catch {
+        // Bookkeeping must not turn a sync result into an error.
+      }
+      return false
+    }
+  }
 
   const runSync = async (): Promise<ActionResult> => {
     if (!navigator.onLine) {
@@ -33,11 +79,22 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
           (result.status === 'FAILED' &&
             (result.code === 'PURCHASE_NOT_CHECKED' || result.code === 'PURCHASE_NOT_FOUND')),
       )
-      if (needsPurchaseRefresh) {
-        try {
-          await refreshPurchases(localRepo, serverTransport)
-        } catch {
-          // PO refresh failure should not fail the sync result.
+      // A refresh that failed after an earlier sync (flag set by refreshPurchasesAfterSync) is
+      // retried here, even when nothing was pushed this time.
+      const refreshStillPending = (await localRepo.getMeta(PURCHASES_STALE_META_KEY)) === '1'
+      let purchaseRefreshFailed = false
+      if (needsPurchaseRefresh || refreshStillPending) {
+        // Right after a failed push the server is most likely unreachable, and after a revoked
+        // credential the pull would be rejected: skip the download (it could hold the queue for
+        // up to a minute) and just remember it for the next sync.
+        const currentUser = get().user
+        const currentUserRevoked = Boolean(
+          currentUser && outcome.revokedUserIds.includes(currentUser.userId),
+        )
+        if (outcome.error || currentUserRevoked) {
+          if (needsPurchaseRefresh) await setPurchasesStale(true)
+        } else {
+          purchaseRefreshFailed = !(await refreshPurchasesAfterSync())
         }
       }
       await get().refresh()
@@ -51,10 +108,15 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
         }
       }
       if (outcome.error) return { ok: false, message: outcome.error }
-      if (outcome.attempted === 0) return { ok: true, message: 'Tidak ada data yang perlu dikirim.' }
+      const refreshNote = purchaseRefreshFailed
+        ? ' Daftar PO belum diperbarui dan akan dicoba lagi.'
+        : ''
+      if (outcome.attempted === 0) {
+        return { ok: true, message: `Tidak ada data yang perlu dikirim.${refreshNote}` }
+      }
       return {
         ok: outcome.failed === 0,
-        message: `${outcome.synced} sesi tersinkron, ${outcome.failed} gagal.`,
+        message: `${outcome.synced} sesi tersinkron, ${outcome.failed} gagal.${refreshNote}`,
       }
     } finally {
       set({ syncing: false })
@@ -99,51 +161,64 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
       set({ pendingCount, lastPullAt, credentials, deviceId, user, sessionTtlDaysLeft })
     },
 
-    downloadData: async () => {
-      if (!isBrowser()) return { ok: false, message: 'Tidak tersedia.' }
+    downloadData: () => {
+      if (!isBrowser()) return Promise.resolve({ ok: false, message: 'Tidak tersedia.' })
+      if (downloadInFlight) return downloadInFlight
+      // Shown at once, so the button is disabled even while this waits behind a running sync.
       set({ pullProgress: { running: true, kind: '', fetched: 0, total: 0 } })
-      try {
-        await pullAllData(localRepo, serverTransport, {
-          onProgress: (event) => {
-            set({ pullProgress: { running: true, kind: event.kind, fetched: event.fetched, total: event.total } })
-          },
-        })
-        await get().refresh()
-        return { ok: true, message: 'Data master & PO berhasil diunduh.' }
-      } catch (error) {
-        return {
-          ok: false,
-          message: error instanceof Error ? error.message : 'Unduh data gagal.',
+      const run = runExclusive(async (): Promise<ActionResult> => {
+        try {
+          await pullAllData(localRepo, serverTransport, {
+            onProgress: (event) => {
+              set({ pullProgress: { running: true, kind: event.kind, fetched: event.fetched, total: event.total } })
+            },
+          })
+          await get().refresh()
+          return { ok: true, message: 'Data master & PO berhasil diunduh.' }
+        } catch (error) {
+          return {
+            ok: false,
+            message: error instanceof Error ? error.message : 'Unduh data gagal.',
+          }
+        } finally {
+          // Clear the in-flight marker FIRST: if a store subscriber throws inside set(), a stale
+          // promise must not stay behind and answer every later downloadData() call.
+          downloadInFlight = null
+          set((state) => ({ pullProgress: { ...state.pullProgress, running: false } }))
         }
-      } finally {
-        set((state) => ({ pullProgress: { ...state.pullProgress, running: false } }))
-      }
+      })
+      downloadInFlight = run
+      return run
     },
 
     sync: () => {
       if (!isBrowser()) return Promise.resolve({ ok: false, message: 'Tidak tersedia.' })
-      const run = syncChain.then(runSync, runSync)
-      // Keep the chain alive even when a run fails; the caller still receives the rejection.
-      syncChain = run.catch(() => undefined)
-      return run
+      return runExclusive(runSync)
     },
 
-    refreshPurchases: async () => {
-      if (!isBrowser()) return { ok: false, message: 'Tidak tersedia.' }
-      if (!navigator.onLine) return { ok: false, message: 'Sedang offline.' }
-      try {
-        const result = await refreshPurchases(localRepo, serverTransport)
-        await get().refresh()
-        if (result.removedCount > 0) {
-          return {
-            ok: true,
-            message: `${result.removedCount} PO ditutup (CLOSED) & dihapus dari daftar. ${result.purchases} PO aktif.`,
+    refreshPurchases: () => {
+      if (!isBrowser()) return Promise.resolve({ ok: false, message: 'Tidak tersedia.' })
+      if (!navigator.onLine) return Promise.resolve({ ok: false, message: 'Sedang offline.' })
+      if (refreshInFlight) return refreshInFlight
+      const run = runExclusive(async (): Promise<ActionResult> => {
+        try {
+          const result = await refreshPurchases(localRepo, serverTransport)
+          await get().refresh()
+          if (result.removedCount > 0) {
+            return {
+              ok: true,
+              message: `${result.removedCount} PO ditutup (CLOSED) & dihapus dari daftar. ${result.purchases} PO aktif.`,
+            }
           }
+          return { ok: true, message: `Daftar PO disegarkan. ${result.purchases} PO aktif (CHECKED).` }
+        } catch (error) {
+          return { ok: false, message: error instanceof Error ? error.message : 'Gagal memperbarui PO.' }
+        } finally {
+          refreshInFlight = null
         }
-        return { ok: true, message: `Daftar PO disegarkan. ${result.purchases} PO aktif (CHECKED).` }
-      } catch (error) {
-        return { ok: false, message: error instanceof Error ? error.message : 'Gagal memperbarui PO.' }
-      }
+      })
+      refreshInFlight = run
+      return run
     },
   }
 }

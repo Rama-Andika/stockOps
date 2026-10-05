@@ -15,9 +15,10 @@ import {
   syncOutbox,
 } from '~/client/sync/engine'
 import type { SyncTransport } from '~/client/sync/transport'
+import type { PullResult } from '~/shared/schemas'
 import { addScannedItem, resolveScan } from '~/client/services/scanning'
 import { toLocalDateTime } from '~/shared/receive-date'
-import { SESSION_STATUS } from '~/shared/constants'
+import { PURCHASES_STALE_META_KEY, SESSION_STATUS } from '~/shared/constants'
 import { CREDENTIALS, FIXTURE, seedAll } from '../server/helpers'
 
 /** Transport that calls server services directly (without HTTP). */
@@ -299,6 +300,58 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(saved?.status).toBe(SESSION_STATUS.FAILED)
       expect(saved?.failureCode).toBe('UNAUTHORIZED')
       expect(await repo.outboxSessions()).toHaveLength(1)
+    })
+  })
+
+  describe('batas waktu unduhan (pull)', () => {
+    // Never answers: simulates a half-dead connection.
+    const hangingTransport: SyncTransport = {
+      ...directTransport,
+      pull: () => new Promise<PullResult>(() => {}),
+    }
+
+    it('pullAllData berhenti dengan error timeout dan data lama tetap utuh', async () => {
+      await pullAllData(repo, directTransport)
+      const before = await repo.masterCounts()
+      await expect(pullAllData(repo, hangingTransport, { timeoutMs: 50 })).rejects.toThrow('batas waktu')
+      expect(await repo.masterCounts()).toEqual(before)
+    })
+
+    it('refreshPurchases berhenti dengan error timeout dan daftar PO lama tetap utuh', async () => {
+      await pullAllData(repo, directTransport)
+      await expect(refreshPurchases(repo, hangingTransport, { timeoutMs: 50 })).rejects.toThrow(
+        'batas waktu',
+      )
+      expect(await repo.db.purchases.count()).toBe(2)
+      expect(await repo.db.purchaseItems.count()).toBe(4)
+    })
+  })
+
+  describe('penanda "PO perlu diperbarui"', () => {
+    it('refreshPurchases yang berhasil membersihkan penanda', async () => {
+      await pullAllData(repo, directTransport)
+      await repo.setMeta(PURCHASES_STALE_META_KEY, '1')
+      await refreshPurchases(repo, directTransport)
+      expect(await repo.getMeta(PURCHASES_STALE_META_KEY)).toBe('0')
+    })
+
+    it('pullAllData yang berhasil membersihkan penanda', async () => {
+      await repo.setMeta(PURCHASES_STALE_META_KEY, '1')
+      await pullAllData(repo, directTransport)
+      expect(await repo.getMeta(PURCHASES_STALE_META_KEY)).toBe('0')
+    })
+
+    it('refreshPurchases yang gagal membiarkan penanda tetap menyala', async () => {
+      await pullAllData(repo, directTransport)
+      await repo.setMeta(PURCHASES_STALE_META_KEY, '1')
+      const failing: SyncTransport = {
+        ...directTransport,
+        pull: async () => {
+          throw new Error('Koneksi terputus')
+        },
+      }
+      await expect(refreshPurchases(repo, failing)).rejects.toThrow('Koneksi terputus')
+      expect(await repo.getMeta(PURCHASES_STALE_META_KEY)).toBe('1')
     })
   })
 
