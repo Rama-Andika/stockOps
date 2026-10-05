@@ -70,7 +70,7 @@ export function LoginForm() {
       </div>
 
       {insecureContext ? (
-        <div role="alert" className="rounded-lg bg-amber-500/20 px-4 py-3 text-base text-amber-300">
+        <div role="alert" className="rounded-lg bg-amber-400 px-4 py-3 text-base font-semibold text-slate-950">
           Koneksi tidak aman (http://). Login dan mode offline membutuhkan alamat https://. Minta admin
           alamat aplikasi yang benar.
         </div>

@@ -3,9 +3,9 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
-  primary: 'bg-cyan-500 text-slate-900 hover:bg-cyan-400 disabled:bg-cyan-900',
-  secondary: 'bg-slate-700 text-slate-100 hover:bg-slate-600 disabled:bg-slate-800',
-  danger: 'bg-red-600 text-white hover:bg-red-500 disabled:bg-red-900',
+  primary: 'bg-cyan-500 text-slate-900 hover:bg-cyan-400',
+  secondary: 'bg-slate-700 text-slate-100 hover:bg-slate-600',
+  danger: 'bg-red-600 text-white hover:bg-red-500',
   ghost: 'bg-transparent text-slate-200 hover:bg-slate-800',
 }
 
@@ -17,7 +17,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`touch-target rounded-lg px-5 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${BUTTON_STYLES[variant]} ${className}`}
+      className={`touch-target rounded-lg px-5 py-3 font-semibold transition ${BUTTON_STYLES[variant]} disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200 ${className}`}
       {...props}
     />
   )
@@ -53,7 +53,7 @@ const TONE_STYLES: Record<Tone, string> = {
   neutral: 'bg-slate-700 text-slate-100',
   info: 'bg-sky-800 text-sky-100',
   success: 'bg-emerald-800 text-emerald-100',
-  warn: 'bg-amber-500/20 text-amber-300',
+  warn: 'bg-amber-400 text-slate-950',
   danger: 'bg-red-800 text-red-100',
 }
 
@@ -92,7 +92,7 @@ export function Field({
 }
 
 export const inputClass =
-  'touch-target w-full rounded-lg border border-slate-600 bg-slate-950 px-4 py-3 text-slate-100 placeholder:text-slate-500'
+  'touch-target w-full rounded-lg border border-slate-600 bg-slate-950 px-4 py-3 text-slate-100 placeholder:text-slate-400'
 
 export function Progress({ value, max }: { value: number; max: number }) {
   const safeMax = max > 0 ? max : 1

@@ -90,7 +90,7 @@ export function ConfirmButton({
     <button
       type="button"
       {...props}
-      className={`relative touch-target touch-none select-none overflow-hidden rounded-lg px-5 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${base} ${className}`}
+      className={`relative touch-target touch-none select-none overflow-hidden rounded-lg px-5 py-3 font-semibold transition ${base} disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200 ${className}`}
       onPointerDown={(event) => {
         if (event.button !== 0) return
         start('pointer')

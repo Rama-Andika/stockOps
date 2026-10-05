@@ -2,7 +2,9 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useLive } from '~/client/hooks/use-live'
-import { Badge, Card, EmptyState, Progress, inputClass } from '~/components/ui'
+import { useAppStore } from '~/client/state/store/app-store'
+import { toast } from '~/client/toast'
+import { Badge, Button, Card, EmptyState, Progress, inputClass } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
 import { formatDate, formatQty } from '~/shared/format'
 
@@ -20,6 +22,14 @@ function toneFor(progress: ProgressStatus): 'neutral' | 'info' | 'success' | 'da
 function PosListPage() {
   const [term, setTerm] = useState('')
   const summaries = useLive(() => localRepo.listPurchaseSummaries(), [], [])
+  const online = useAppStore((state) => state.online)
+  const pullProgress = useAppStore((state) => state.pullProgress)
+  const downloadData = useAppStore((state) => state.downloadData)
+
+  const handleDownload = async () => {
+    const result = await downloadData()
+    toast(result.ok ? 'success' : 'danger', result.message)
+  }
 
   const filtered = useMemo(() => {
     const needle = term.trim().toLowerCase()
@@ -51,16 +61,31 @@ function PosListPage() {
 
       {summaries.length === 0 ? (
         <Card>
-          <EmptyState>
-            Belum ada data PO di perangkat ini. Buka <strong>Pengaturan → Unduh Data</strong> saat online.
-          </EmptyState>
+          <EmptyState>Belum ada data PO di perangkat ini.</EmptyState>
+          <Button
+            className="w-full"
+            disabled={!online || pullProgress.running}
+            onClick={() => void handleDownload()}
+          >
+            {pullProgress.running ? 'Mengunduh…' : 'Unduh data sekarang'}
+          </Button>
+          {online ? null : (
+            <p className="mt-2 text-center text-sm text-slate-400">
+              Sambungkan perangkat ke jaringan dulu untuk mengunduh data.
+            </p>
+          )}
         </Card>
       ) : null}
 
       {filtered.map((row) => (
-        <Card key={row.purchaseId}>
+        <Link
+          key={row.purchaseId}
+          to="/pos/$purchaseId"
+          params={{ purchaseId: row.purchaseId }}
+          className="block rounded-xl border border-slate-700 bg-slate-900/60 p-4 transition hover:border-slate-500"
+        >
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0">
               <p className="text-lg font-bold text-slate-100">{row.number ?? row.purchaseId}</p>
               <p className="text-slate-300">{row.vendorName}</p>
               <p className="text-sm text-slate-400">{formatDate(row.purchDate)}</p>
@@ -74,15 +99,7 @@ function PosListPage() {
               Diterima {formatQty(row.totalReceivedTotal)} dari {formatQty(row.orderedTotal)}
             </p>
           </div>
-
-          <Link
-            to="/pos/$purchaseId"
-            params={{ purchaseId: row.purchaseId }}
-            className="touch-target mt-3 flex w-full items-center justify-center rounded-lg bg-cyan-500 px-5 py-3 font-semibold text-slate-900 transition hover:bg-cyan-400"
-          >
-            Buka Detail PO
-          </Link>
-        </Card>
+        </Link>
       ))}
     </div>
   )

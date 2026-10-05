@@ -1,9 +1,9 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
+import { AppBar } from '~/components/app-bar'
 import { Badge, Button, Card, EmptyState, Loading, Notice, Progress } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
 import { formatDate, formatQty } from '~/shared/format'
@@ -66,15 +66,13 @@ function PosDetailPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Link
-        to="/pos"
-        aria-label="Kembali ke daftar PO"
-        className="touch-target flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 hover:text-slate-100"
-      >
-        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-      </Link>
-      <Card title={detail.purchase.number ?? purchaseId}>
-        <p className="text-slate-300">{detail.purchase.vendorName}</p>
+      <AppBar
+        title={detail.purchase.number ?? purchaseId}
+        backTo="/pos"
+        backLabel="Kembali ke daftar PO"
+        actions={<Badge tone={toneFor(detail.progress.progress)}>{PROGRESS_LABEL[detail.progress.progress]}</Badge>}
+      />
+      <Card title={detail.purchase.vendorName}>
         <p className="text-sm text-slate-400">Tanggal PO: {formatDate(detail.purchase.purchDate)}</p>
         <div className="mt-3 flex items-center gap-3">
           <Badge tone={toneFor(detail.progress.progress)}>{PROGRESS_LABEL[detail.progress.progress]}</Badge>
@@ -85,7 +83,9 @@ function PosDetailPage() {
         <div className="mt-2">
           <Progress value={detail.progress.totalReceivedTotal} max={detail.progress.orderedTotal} />
         </div>
-        <p className="mt-2 text-xs text-slate-500">Angka sisa bersifat perkiraan lokal.</p>
+        <p className="mt-2 text-xs text-slate-400">
+          Angka ini dihitung di perangkat. Jumlah resmi mengikuti server setelah dokumen terkirim.
+        </p>
       </Card>
 
       <Card title="Item PO">

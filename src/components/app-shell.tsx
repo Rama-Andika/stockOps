@@ -49,34 +49,24 @@ function TopBar() {
           </span>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
-        {pendingCount > 0 ? (
+      {pendingCount > 0 || syncing ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
           <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300">
             <Inbox className="h-4 w-4" aria-hidden="true" />
-            {pendingCount} dokumen menunggu kirim
+            {pendingCount} dokumen belum terkirim
           </span>
-        ) : (
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-300">
-            <Inbox className="h-4 w-4" aria-hidden="true" />
-            Tidak ada dokumen menunggu
-          </span>
-        )}
-        <button
-          type="button"
-          aria-label={syncing ? "Sedang mengupload…" : "Upload"}
-          title="Upload dokumen menunggu ke server"
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-            pendingCount > 0
-              ? "bg-cyan-500 text-slate-900 hover:bg-cyan-400"
-              : "bg-slate-700 text-slate-100 hover:bg-slate-600"
-          } disabled:cursor-not-allowed disabled:opacity-60`}
-          disabled={!online || syncing}
-          onClick={() => void sync()}
-        >
-          <Upload className="h-4 w-4" aria-hidden="true" />
-          <span>{syncing ? "Mengupload…" : "Upload"}</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            aria-label={syncing ? "Sedang mengirim…" : "Kirim dokumen yang belum terkirim"}
+            className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200"
+            disabled={!online || syncing}
+            onClick={() => void sync()}
+          >
+            <Upload className="h-4 w-4" aria-hidden="true" />
+            <span>{syncing ? "Mengirim…" : "Kirim"}</span>
+          </button>
+        </div>
+      ) : null}
     </header>
   );
 }

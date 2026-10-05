@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
@@ -8,7 +8,8 @@ import type { LocalSessionItem } from '~/client/db/local-db'
 import { loadPreferences, type Preferences } from '~/client/preferences'
 import { playFeedback } from '~/client/feedback'
 import { toast } from '~/client/toast'
-import { ArrowLeft, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
+import { AppBar } from '~/components/app-bar'
 import { ConfirmButton } from '~/components/confirm-button'
 import { NumericPad } from '~/components/numeric-pad'
 import { ScanFeedback, type ScanFeedbackData } from '~/components/scan-feedback'
@@ -233,21 +234,17 @@ function SessionDetailPage() {
   return (
     <div className="flex flex-col gap-3">
       <ScanFeedback feedback={scanFeedback} onDismiss={dismissScanFeedback} />
-      <Link
-        to="/sessions"
-        aria-label="Kembali ke daftar sesi"
-        className="touch-target flex w-fit items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 hover:text-slate-100"
-      >
-        <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-      </Link>
-      <Card
-        title={session.number ?? 'Sesi Baru'}
+      <AppBar
+        title="Terima barang"
+        backTo="/sessions"
+        backLabel="Kembali ke daftar sesi"
         actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
-      >
+      />
+      <Card title={session.number ?? 'Sesi baru'}>
         <p className="text-slate-300">
           {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
         </p>
-        <p className="text-xs text-slate-500">ID sesi: {session.sessionId}</p>
+        <p className="text-xs text-slate-400">ID sesi: {session.sessionId}</p>
         {session.receiveDate ? (
           <p className="text-sm text-slate-400">Tanggal penerimaan: {session.receiveDate}</p>
         ) : null}
@@ -342,10 +339,13 @@ function SessionDetailPage() {
           <ConfirmButton
             tone="danger"
             className="w-full"
-            label="Tahan 1,5 dtk: Batalkan Sesi"
-            confirmLabel="Tahan… sesi akan dibatalkan"
+            label="Batalkan sesi ini"
+            confirmLabel="Tahan terus… sesi akan dibatalkan"
             onConfirm={() => void handleCancel()}
           />
+          <p className="text-center text-sm text-slate-400">
+            Tombol merah perlu ditahan 1,5 detik supaya tidak tersenggol.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -370,8 +370,8 @@ function SessionDetailPage() {
               <ConfirmButton
                 tone="danger"
                 className="w-full"
-                label="Tahan 1,5 dtk: Hapus Sesi"
-                confirmLabel="Tahan… sesi akan dihapus"
+                label="Hapus sesi dari perangkat"
+                confirmLabel="Tahan terus… sesi akan dihapus"
                 onConfirm={() => void handleCancel()}
               />
             </>
@@ -414,6 +414,9 @@ function SessionDetailPage() {
   )
 }
 
+/** Qty shortcuts for the common cases; anything else goes through the keypad. */
+const QTY_CHIPS = [1, 2, 5, 12] as const
+
 function ScanCard({
   scan,
   qty,
@@ -433,8 +436,11 @@ function ScanCard({
   onQtyChange: (value: string) => void
   onAdd: () => void
 }) {
+  // The 'pad' preference now means "keypad already open", not "keypad always visible".
+  const [padOpen, setPadOpen] = useState(qtyInput === 'pad')
+
   return (
-    <Card title="Scan Barang">
+    <Card title="Scan barang">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
         <Field label="Barcode / Kode Barang" hint="Scan lalu Enter otomatis.">
           <input
@@ -460,13 +466,43 @@ function ScanCard({
           />
         </Field>
       </div>
-      {qtyInput === 'pad' ? (
+      <div className="mt-3 flex items-center gap-2">
+        <span className="shrink-0 text-sm font-semibold text-slate-300">Qty</span>
+        <div className="flex flex-1 gap-2">
+          {QTY_CHIPS.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              aria-pressed={qty === String(chip)}
+              aria-label={`Qty ${chip} satuan PO`}
+              className={`touch-target flex-1 rounded-lg px-2 font-semibold transition ${
+                qty === String(chip)
+                  ? 'bg-cyan-500 text-slate-900'
+                  : 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+              }`}
+              onClick={() => onQtyChange(String(chip))}
+            >
+              ×{chip}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          aria-expanded={padOpen}
+          aria-label={padOpen ? 'Tutup keypad angka' : 'Buka keypad angka'}
+          className="touch-target w-14 shrink-0 rounded-lg bg-slate-700 font-semibold text-slate-100 transition hover:bg-slate-600"
+          onClick={() => setPadOpen((open) => !open)}
+        >
+          123
+        </button>
+      </div>
+      {padOpen ? (
         <div className="mt-3">
           <NumericPad value={qtyTouched ? qty : ''} onChange={onQtyChange} />
         </div>
       ) : null}
       <Button className="mt-3 w-full" disabled={!scan.trim()} onClick={onAdd}>
-        Tambah ke Sesi
+        Tambah ke sesi
       </Button>
     </Card>
   )
@@ -647,8 +683,8 @@ function LineEditSheet({
           <ConfirmButton
             tone="danger"
             className="w-full"
-            label="Tahan 1,5 dtk: Hapus Item"
-            confirmLabel="Tahan… item akan dihapus"
+            label="Hapus item ini"
+            confirmLabel="Tahan terus… item akan dihapus"
             onConfirm={() => {
               onRemove()
               onClose()

@@ -98,13 +98,13 @@ function SettingsPage() {
           <ConfirmButton
             tone="danger"
             className="w-full"
-            label="Tahan 1,5 dtk: Bersihkan Sesi Tersinkron"
-            confirmLabel="Tahan… data akan dibersihkan"
+            label="Bersihkan dokumen yang sudah masuk sistem"
+            confirmLabel="Tahan terus… data akan dibersihkan"
             onConfirm={() => void handleCleanup()}
           />
         </div>
         <p
-          className="mt-2 text-xs text-slate-500"
+          className="mt-2 text-xs text-slate-400"
           title={lastPullAt ? `Waktu tepat: ${formatDateTime(lastPullAt)}` : undefined}
         >
           {lastPullAt ? `Terakhir diunduh: ${formatRelativeDateTime(lastPullAt, now)}` : 'Belum pernah diunduh'}
@@ -189,7 +189,7 @@ function SettingsPage() {
               <dt>Pemakaian penyimpanan</dt>
               <dd>{formatBytes(usage?.usage)}</dd>
             </dl>
-            <p className="mt-1 break-all text-xs text-slate-500">Device ID: {deviceId ?? '-'}</p>
+            <p className="mt-1 break-all text-xs text-slate-400">Device ID: {deviceId ?? '-'}</p>
           </div>
 
           <div>
@@ -215,7 +215,7 @@ function SettingsPage() {
                 })}
               </ul>
             )}
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-400">
               Password tidak disimpan sebagai teks biasa — hanya hash bersalt. Perubahan kredensial di pusat akan dicabut
               pada sinkronisasi berikutnya.
             </p>

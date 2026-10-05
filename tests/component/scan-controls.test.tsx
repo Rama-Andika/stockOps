@@ -104,4 +104,21 @@ describe('ScanFeedback', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
+
+  it('pesan error menunggu operator dan hanya tertutup lewat tombol', () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    render(
+      <ScanFeedback
+        feedback={{ tone: 'danger', text: 'Barcode tidak dikenali', key: 2 }}
+        onDismiss={onDismiss}
+        durationMs={1000}
+      />,
+    )
+    act(() => vi.advanceTimersByTime(5000))
+    expect(onDismiss).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Tutup pesan hasil scan' }))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
 })

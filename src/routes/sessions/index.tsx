@@ -41,38 +41,34 @@ function SessionsPage() {
         </Card>
       ) : null}
 
-      {sessions.map((session) => {
-        return (
-          <Card key={session.sessionId}>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-lg font-bold text-slate-100">
-                  {session.number ?? 'ID sementara'}
-                </p>
-                <p className="text-slate-300">
-                  {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
-                </p>
-                <p className="text-sm text-slate-400">
-                  {session.syncedAt
-                    ? `Tersinkron ${formatDateTime(session.syncedAt)}`
-                    : `Dibuat ${formatDateTime(session.createdAt)}`}
-                </p>
-                {session.lastError ? (
-                  <p className="text-sm text-red-300">Error: {session.lastError}</p>
-                ) : null}
-              </div>
-              <Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>
+      {sessions.map((session) => (
+        <Link
+          key={session.sessionId}
+          to="/sessions/$sessionId"
+          params={{ sessionId: session.sessionId }}
+          className="block rounded-xl border border-slate-700 bg-slate-900/60 p-4 transition hover:border-slate-500"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-lg font-bold text-slate-100">
+                {session.number ?? 'Belum punya nomor'}
+              </p>
+              <p className="text-slate-300">
+                {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
+              </p>
+              <p className="text-sm text-slate-400">
+                {session.syncedAt
+                  ? `Masuk sistem ${formatDateTime(session.syncedAt)}`
+                  : `Dibuat ${formatDateTime(session.createdAt)}`}
+              </p>
+              {session.lastError ? (
+                <p className="text-sm text-red-300">{session.lastError}</p>
+              ) : null}
             </div>
-            <Link
-              to="/sessions/$sessionId"
-              params={{ sessionId: session.sessionId }}
-              className="touch-target mt-3 flex w-full items-center justify-center rounded-lg bg-slate-700 px-5 py-3 font-semibold text-slate-100 transition hover:bg-slate-600"
-            >
-              Buka Sesi
-            </Link>
-          </Card>
-        )
-      })}
+            <Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>
+          </div>
+        </Link>
+      ))}
     </div>
   )
 }

@@ -33,6 +33,8 @@ export function ScanFeedback({
 }) {
   useEffect(() => {
     if (!feedback) return
+    // Errors wait for the operator: only a successful scan disappears on its own.
+    if (feedback.tone !== 'success') return
     const timer = window.setTimeout(onDismiss, durationMs)
     return () => window.clearTimeout(timer)
   }, [feedback, durationMs, onDismiss])
@@ -50,6 +52,16 @@ export function ScanFeedback({
     >
       <Icon className="h-5 w-5" aria-hidden="true" />
       <span>{feedback.text}</span>
+      {feedback.tone === 'success' ? null : (
+        <button
+          type="button"
+          aria-label="Tutup pesan hasil scan"
+          className="pointer-events-auto ml-2 rounded-lg px-3 py-1 text-base underline"
+          onClick={onDismiss}
+        >
+          Tutup
+        </button>
+      )}
     </div>
   )
 }
