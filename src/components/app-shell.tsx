@@ -7,11 +7,11 @@ import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Inbox, Settings, Upload } from "lucide-react";
 
 const NAV_LINK_CLASS =
-  "touch-target relative flex flex-1 items-center justify-center rounded-lg px-3 py-2 text-center font-semibold";
+  "touch-target relative flex flex-1 flex-col items-center justify-center rounded-lg px-2 py-1 text-center";
 
 const NAV_ITEMS = [
-  { to: "/pos", label: "PO", icon: ClipboardList },
-  { to: "/sessions", label: "Sesi", icon: Barcode },
+  { to: "/pos", label: "Purchase Order", icon: ClipboardList },
+  { to: "/sessions", label: "Penerimaan", icon: Barcode },
   { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
@@ -94,21 +94,26 @@ function BottomNav() {
               key={item.to}
               to={item.to}
               aria-label={item.label}
-              className={`${NAV_LINK_CLASS} text-slate-300`}
+              className={`${NAV_LINK_CLASS} text-slate-300 hover:text-slate-100`}
               activeProps={{
-                className: `${NAV_LINK_CLASS} bg-slate-800 text-cyan-400`,
+                className: `${NAV_LINK_CLASS} bg-slate-800 text-cyan-400 font-semibold`,
                 "aria-current": "page",
               }}
             >
-              <Icon className="h-5 w-5" aria-hidden="true" />
-              {badge ? (
-                <span
-                  aria-label={`${badge} sesi menunggu sinkronisasi`}
-                  className="absolute right-2 top-1 rounded-full bg-amber-400 px-1.5 text-xs font-bold text-slate-950"
-                >
-                  {badge}
-                </span>
-              ) : null}
+              <div className="relative">
+                <Icon className="h-5 w-5" aria-hidden="true" />
+                {badge ? (
+                  <span
+                    aria-label={`${badge} sesi menunggu sinkronisasi`}
+                    className="absolute -right-2.5 -top-1.5 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold leading-tight text-slate-950"
+                  >
+                    {badge}
+                  </span>
+                ) : null}
+              </div>
+              <span className="mt-1 text-xs font-medium tracking-tight truncate max-w-full">
+                {item.label}
+              </span>
             </Link>
           );
         })}
