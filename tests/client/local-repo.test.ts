@@ -253,6 +253,24 @@ describe('LocalRepository (Dexie)', () => {
       expect(saved?.lastError).toBeNull()
     })
 
+    it('resetStaleSyncingSessions hanya memulihkan sesi SYNCING dan tidak menyentuh yang lain', async () => {
+      const stuck = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const done = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const waiting = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.setSessionStatus(stuck.sessionId, SESSION_STATUS.SYNCING)
+      await repo.markSynced(done.sessionId, { receiveId: '1', number: 'IN1', overReceive: false, excessTotal: 0 })
+      await repo.setSessionStatus(waiting.sessionId, SESSION_STATUS.PENDING)
+
+      expect(await repo.resetStaleSyncingSessions()).toBe(1)
+
+      const saved = await repo.getSession(stuck.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.FAILED)
+      expect(saved?.lastError).toBe('Sinkronisasi terputus. Coba lagi.')
+      expect((await repo.getSession(done.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
+      expect((await repo.getSession(waiting.sessionId))?.status).toBe(SESSION_STATUS.PENDING)
+      expect(await repo.resetStaleSyncingSessions()).toBe(0)
+    })
+
     it('markFailed menyimpan kode kegagalan dan tetap di antrian', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.markFailed(session.sessionId, 'Koneksi putus', 'SERVER_ERROR')

@@ -198,7 +198,7 @@ tests/                    unit, server, client, component
 
 ## 5. Pengujian
 
-`npm test` menjalankan 242 test pada 24 berkas:
+`npm test` menjalankan 246 test pada 24 berkas:
 
 | Lapisan | Berkas | Fokus |
 | --- | --- | --- |

@@ -410,6 +410,68 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect((await repo.getSession(second.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
     })
 
+    it('sesi yang menggantung di SYNCING dikirim ulang pada sync berikutnya', async () => {
+      const session = await finalizedSession('INV-L5')
+      // Simulates an app that died right after marking the session as sending.
+      await repo.markSyncing(session.sessionId)
+      expect(await repo.outboxSessions()).toHaveLength(0)
+
+      const outcome = await syncOutbox(repo, directTransport)
+
+      expect(outcome).toMatchObject({ attempted: 1, synced: 1, failed: 0 })
+      expect((await repo.getSession(session.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
+    })
+
+    it('hasil ganda atau untuk sesi tak dikenal diabaikan dan tidak menggelembungkan hitungan', async () => {
+      const session = await finalizedSession('INV-L4')
+      const noisy: SyncTransport = {
+        ...directTransport,
+        push: async (input) => {
+          const response = await directTransport.push(input)
+          const first = response.results[0]!
+          return {
+            ...response,
+            results: [
+              ...response.results,
+              { ...first, sessionId: 'unknown-session-0001' }, // not part of the payload
+              { ...first }, // a second answer for the same session
+            ],
+          }
+        },
+      }
+
+      const outcome = await syncOutbox(repo, noisy)
+
+      expect(outcome).toMatchObject({ attempted: 1, synced: 1, failed: 0 })
+      expect(outcome.results).toHaveLength(1)
+      expect((await repo.getSession(session.sessionId))?.status).toBe(SESSION_STATUS.SYNCED)
+    })
+
+    it('jawaban kedua yang bertentangan untuk sesi yang sama diabaikan', async () => {
+      const session = await finalizedSession('INV-L6')
+      const contradicting: SyncTransport = {
+        ...directTransport,
+        push: async (input) => {
+          const response = await directTransport.push(input)
+          const first = response.results[0]!
+          return {
+            ...response,
+            results: [
+              first,
+              { ...first, status: 'FAILED' as const, code: 'VALIDATION' as const, message: 'ganda' },
+            ],
+          }
+        },
+      }
+
+      const outcome = await syncOutbox(repo, contradicting)
+
+      expect(outcome).toMatchObject({ synced: 1, failed: 0 })
+      const saved = await repo.getSession(session.sessionId)
+      expect(saved?.status).toBe(SESSION_STATUS.SYNCED)
+      expect(saved?.lastError).toBeNull()
+    })
+
     it('sesi yang tidak dijawab server tidak menggantung di SYNCING', async () => {
       const session = await finalizedSession('INV-L3')
       const silent: SyncTransport = {

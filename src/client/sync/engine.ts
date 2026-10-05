@@ -262,6 +262,15 @@ export async function syncOutbox(
   transport: SyncTransport = serverTransport,
   options: { deviceId?: string } = {},
 ): Promise<SyncOutcome> {
+  // A session left in SYNCING (e.g. the app died mid-push) is in neither the outbox nor the pending
+  // count, so it would wait for the next app start. Sync runs never overlap (one queue per store),
+  // hence anything still SYNCING at this point is stale: put it back in the queue first.
+  try {
+    await repo.resetStaleSyncingSessions()
+  } catch {
+    // Best effort: the sync itself goes on.
+  }
+
   // FIFO batch within the server limit; the remaining sessions go with the next sync.
   const pending = (await repo.outboxSessions()).slice(0, MAX_PUSH_SESSIONS)
   const emptyOutcome: SyncOutcome = {
@@ -334,9 +343,22 @@ export async function syncOutbox(
   // server already stored, so every result is handled on its own.
   let synced = 0
   let failed = 0
+  const payloadIds = new Set(payloads.map((payload) => payload.sessionId))
   const answered = new Set<string>()
+  const handledResults: SyncSessionResult[] = []
   for (const result of response.results) {
+    // Only the first answer for a session that was really sent counts. An unknown id or a second
+    // answer (a faulty server or an incompatible version) must not inflate synced/failed.
+    if (!payloadIds.has(result.sessionId) || answered.has(result.sessionId)) {
+      await safeLog(
+        repo,
+        'error',
+        `Hasil sinkronisasi diabaikan (sesi tidak dikenal atau ganda): ${result.sessionId}`,
+      )
+      continue
+    }
     answered.add(result.sessionId)
+    handledResults.push(result)
     try {
       if (result.status === 'SYNCED') {
         await repo.markSynced(result.sessionId, {
@@ -400,7 +422,7 @@ export async function syncOutbox(
     synced,
     failed,
     revokedUserIds: response.revoked.map((entry) => entry.userId),
-    results: response.results,
+    results: handledResults,
   }
 }
 

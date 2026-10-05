@@ -564,18 +564,22 @@ export class LocalRepository {
 
   /** Reset sessions stuck in SYNCING state (e.g. app closed mid-sync). */
   async resetStaleSyncingSessions(): Promise<number> {
-    const syncing = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCING).toArray()
-    if (syncing.length === 0) return 0
-    await this.db.sessions.bulkPut(
-      syncing.map((session) => ({
-        ...session,
-        status: SESSION_STATUS.FAILED,
-        lastError: 'Sinkronisasi terputus. Coba lagi.',
-        failureCode: null,
-        updatedAt: nowIso(),
-      })),
-    )
-    return syncing.length
+    // One transaction: the sessions are read and rewritten atomically, so a session that
+    // markSynced finishes in between can never be flipped back to FAILED by a stale snapshot.
+    return this.db.transaction('rw', this.db.sessions, async () => {
+      const syncing = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCING).toArray()
+      if (syncing.length === 0) return 0
+      await this.db.sessions.bulkPut(
+        syncing.map((session) => ({
+          ...session,
+          status: SESSION_STATUS.FAILED,
+          lastError: 'Sinkronisasi terputus. Coba lagi.',
+          failureCode: null,
+          updatedAt: nowIso(),
+        })),
+      )
+      return syncing.length
+    })
   }
 
   /**
