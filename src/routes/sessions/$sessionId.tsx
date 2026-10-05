@@ -607,7 +607,7 @@ function LineEditSheet({
         <div className="mt-3 flex items-center gap-3">
           <Button
             variant="secondary"
-            className="!px-5 !py-3 text-xl"
+            className="px-5! py-3! text-xl"
             aria-label="Kurangi qty satu satuan PO"
             onClick={() => step(-1)}
           >
@@ -632,7 +632,7 @@ function LineEditSheet({
           />
           <Button
             variant="secondary"
-            className="!px-5 !py-3 text-xl"
+            className="px-5! py-3! text-xl"
             aria-label="Tambah qty satu satuan PO"
             onClick={() => step(1)}
           >

@@ -8,7 +8,7 @@ import { Badge, Button, Card, EmptyState } from '~/components/ui'
 import { toast } from '~/client/toast'
 import { loadPreferences, savePreferences, type Preferences } from '~/client/preferences'
 import { isCredentialExpired, remainingDays } from '~/client/auth/offline-auth'
-import { formatDateTime } from '~/shared/format'
+import { formatDateTime, formatRelativeDateTime } from '~/shared/format'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -103,7 +103,12 @@ function SettingsPage() {
             onConfirm={() => void handleCleanup()}
           />
         </div>
-        <p className="mt-2 text-xs text-slate-500">Unduh terakhir: {formatDateTime(lastPullAt)}</p>
+        <p
+          className="mt-2 text-xs text-slate-500"
+          title={lastPullAt ? `Waktu tepat: ${formatDateTime(lastPullAt)}` : undefined}
+        >
+          {lastPullAt ? `Terakhir diunduh: ${formatRelativeDateTime(lastPullAt, now)}` : 'Belum pernah diunduh'}
+        </p>
       </Card>
 
       <Card title="Preferensi Input & Umpan Balik">

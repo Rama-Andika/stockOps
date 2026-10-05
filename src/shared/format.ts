@@ -12,6 +12,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat('id-ID', {
   timeStyle: 'short',
 })
 const dateFormatter = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' })
+const timeFormatter = new Intl.DateTimeFormat('id-ID', { timeStyle: 'short' })
 
 export function formatQty(value: string | number): string {
   const n = typeof value === 'number' ? value : Number.parseFloat(value)
@@ -37,6 +38,46 @@ export function formatDate(value: string | Date | null | undefined): string {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
   return dateFormatter.format(date)
+}
+
+export function formatRelativeDateTime(
+  value: string | Date | null | undefined,
+  baseDate: Date = new Date(),
+): string {
+  if (!value) return 'Belum pernah diunduh'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Belum pernah diunduh'
+
+  const diffMs = baseDate.getTime() - date.getTime()
+  if (diffMs < 60_000) return 'Baru saja'
+
+  const diffMinutes = Math.floor(diffMs / 60_000)
+  if (diffMinutes < 60) return `${diffMinutes} menit yang lalu`
+
+  const timeStr = timeFormatter.format(date)
+
+  const isToday =
+    date.getFullYear() === baseDate.getFullYear() &&
+    date.getMonth() === baseDate.getMonth() &&
+    date.getDate() === baseDate.getDate()
+
+  if (isToday) {
+    const diffHours = Math.floor(diffMinutes / 60)
+    return `Hari ini, pukul ${timeStr} (${diffHours} jam yang lalu)`
+  }
+
+  const yesterday = new Date(baseDate)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate()
+
+  if (isYesterday) {
+    return `Kemarin, pukul ${timeStr}`
+  }
+
+  return `${dateFormatter.format(date)}, pukul ${timeStr}`
 }
 
 export function daysBetween(from: Date, to: Date): number {
