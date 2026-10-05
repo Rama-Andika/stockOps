@@ -12,7 +12,7 @@ import { Upload } from 'lucide-react'
 import { AppBar } from '~/components/app-bar'
 import { ConfirmButton } from '~/components/confirm-button'
 import { NumericPad } from '~/components/numeric-pad'
-import { ScanFeedback, type ScanFeedbackData } from '~/components/scan-feedback'
+import { ScanHero, type ScanHeroState } from '~/components/scan-hero'
 import { Badge, Button, Card, EmptyState, Field, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
@@ -38,6 +38,8 @@ function toneFor(status: SessionStatus): 'neutral' | 'info' | 'success' | 'warn'
       return 'neutral'
   }
 }
+
+type SessionTab = 'scan' | 'items' | 'docs'
 
 function SessionDetailPage() {
   const { sessionId } = Route.useParams()
@@ -82,12 +84,20 @@ function SessionDetailPage() {
   const [scan, setScan] = useState('')
   const [qty, setQty] = useState('1')
   const [qtyTouched, setQtyTouched] = useState(false)
-  const [scanFeedback, setScanFeedback] = useState<ScanFeedbackData | null>(null)
+  const [heroState, setHeroState] = useState<ScanHeroState>({ kind: 'IDLE' })
+  // What the last successful scan added, so undo can subtract exactly that much.
+  const [lastScan, setLastScan] = useState<{ lineId: string; addedQty: number } | null>(null)
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
   const [preferences, setPreferences] = useState<Preferences>(() => loadPreferences())
   const [invoice, setInvoice] = useState('')
   const [doNumber, setDoNumber] = useState('')
   const [confirmingFinalize, setConfirmingFinalize] = useState(false)
+  const tabMetaKey = `sessionTab:${sessionId}`
+  const savedTab = useLive(() => localRepo.getMeta(tabMetaKey), [tabMetaKey], null)
+  const tab: SessionTab = savedTab === 'items' || savedTab === 'docs' ? savedTab : 'scan'
+  const setTab = (next: SessionTab) => {
+    void localRepo.setMeta(tabMetaKey, next)
+  }
   const [invoiceError, setInvoiceError] = useState(false)
   const [doNumberError, setDoNumberError] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
@@ -110,7 +120,7 @@ function SessionDetailPage() {
     return () => window.cancelAnimationFrame(frame)
   }, [session?.status, editingLineId, confirmingFinalize])
 
-  const dismissScanFeedback = useCallback(() => setScanFeedback(null), [])
+  const dismissHero = useCallback(() => setHeroState({ kind: 'IDLE' }), [])
 
   const totalOver = useMemo(() => {
     const qtyByPurchaseItem = new Map<string, number>()
@@ -142,28 +152,90 @@ function SessionDetailPage() {
 
   const processScan = async (code: string, qtyText: string) => {
     try {
+      const addedQty = Number(qtyText)
       const result = await addScannedItem(
         localRepo,
         session.sessionId,
         session.purchaseId,
         code,
-        Number(qtyText),
+        addedQty,
       )
-      if (result.ok) {
-        const text = `Ditambahkan: ${result.message} × ${formatQty(qtyText)}`
-        setScanFeedback({ tone: 'success', text, key: Date.now() })
-        playFeedback('success')
+      if (result.ok && result.line && result.resolution.purchaseItem && result.resolution.item) {
+        const purchaseItem = result.resolution.purchaseItem
+        const line = result.line
+        const ordered = Number(purchaseItem.qty ?? 0)
+        const serverReceived = Number(purchaseItem.receivedQty ?? 0)
+        const itemTotal = serverReceived + line.qty
+        const excess = itemTotal - ordered
+        const purchaseUnit = unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId
+        setLastScan({ lineId: line.lineId, addedQty })
+        if (excess > 0) {
+          setHeroState({
+            kind: 'OVER',
+            itemName: result.resolution.item.name,
+            ordered,
+            newTotal: itemTotal,
+            excess,
+            unit: purchaseUnit,
+          })
+          playFeedback('warn')
+        } else {
+          setHeroState({
+            kind: 'OK',
+            itemName: result.resolution.item.name,
+            itemCode: result.resolution.item.code,
+            addedQty,
+            purchaseUnit,
+            stockQty: addedQty * line.convQty,
+            stockUnit: unitMap.get(line.uomId) ?? line.uomId,
+            itemOrdered: ordered,
+            itemTotal,
+          })
+          playFeedback('success')
+        }
         setQty('1')
         setQtyTouched(false)
+      } else if (result.resolution.status === 'ITEM_NOT_FOUND') {
+        setLastScan(null)
+        setHeroState({ kind: 'NOT_FOUND', scannedCode: code })
+        playFeedback('danger')
       } else {
-        const tone = result.resolution.status === 'ITEM_NOT_FOUND' ? 'danger' : 'warn'
-        setScanFeedback({ tone, text: result.message, key: Date.now() })
-        playFeedback(tone)
+        setLastScan(null)
+        setHeroState({
+          kind: 'NOT_IN_PO',
+          itemName: result.resolution.item?.name ?? code,
+        })
+        playFeedback('warn')
       }
     } catch (error) {
-      const text = error instanceof Error ? error.message : 'Gagal menyimpan hasil scan.'
-      setScanFeedback({ tone: 'danger', text, key: Date.now() })
+      setLastScan(null)
+      setHeroState({ kind: 'NOT_FOUND', scannedCode: code })
+      toast('danger', error instanceof Error ? error.message : 'Gagal menyimpan hasil scan.')
       playFeedback('danger')
+    } finally {
+      scanRef.current?.focus()
+    }
+  }
+
+  /**
+   * Undo subtracts exactly the qty the last scan added. `addOrIncrementLine` merges repeated
+   * scans of one item into a single line, so removing the whole line would delete more than
+   * the last scan; the line is only removed when nothing would be left.
+   */
+  const handleUndo = async () => {
+    const target = lastScan
+    if (!target) return
+    setLastScan(null)
+    setHeroState({ kind: 'IDLE' })
+    try {
+      const line = await localRepo.db.sessionItems.get(target.lineId)
+      if (!line) return
+      const next = line.qty - target.addedQty
+      if (next > 0) await localRepo.setLineQty(target.lineId, next)
+      else await localRepo.removeLine(target.lineId)
+      toast('info', 'Scan terakhir dibatalkan.')
+    } catch {
+      toast('danger', 'Gagal membatalkan scan terakhir.')
     } finally {
       scanRef.current?.focus()
     }
@@ -194,6 +266,7 @@ function SessionDetailPage() {
     }
     if (lines.length === 0) {
       toast('danger', 'Belum ada item yang discan.')
+      setTab('scan')
       return
     }
     setConfirmingFinalize(true)
@@ -233,7 +306,6 @@ function SessionDetailPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <ScanFeedback feedback={scanFeedback} onDismiss={dismissScanFeedback} />
       <AppBar
         title="Terima barang"
         backTo="/sessions"
@@ -256,6 +328,19 @@ function SessionDetailPage() {
       </Card>
 
       {editable ? (
+        <SessionTabs
+          value={tab}
+          onChange={setTab}
+          itemCount={lines.length}
+          docsComplete={Boolean(invoice.trim() && doNumber.trim())}
+        />
+      ) : null}
+
+      {editable && tab === 'scan' ? (
+        <ScanHero state={heroState} onUndo={() => void handleUndo()} onDismiss={dismissHero} />
+      ) : null}
+
+      {editable && tab === 'scan' ? (
         <ScanCard
           scan={scan}
           qty={qty}
@@ -271,70 +356,80 @@ function SessionDetailPage() {
         />
       ) : null}
 
-      <Card title={`Item dalam Sesi (${lines.length})`}>
-        {editable ? (
-          <p className="mb-1 text-sm text-slate-400">Ketuk item untuk mengubah qty atau menghapus.</p>
-        ) : null}
-        <ul className="flex flex-col divide-y divide-slate-800">
-          {lines.map((line) => {
-            const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-            const item = items[line.itemMasterId]
-            const isOver = totalOver.some((row) => row.lineId === line.lineId)
-            return (
-              <li key={line.lineId}>
-                <button
-                  type="button"
-                  className="touch-target w-full py-3 text-left"
-                  disabled={!editable}
-                  onClick={() => setEditingLineId(line.lineId)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
-                      <p className="text-sm text-slate-400">
-                        {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
-                        {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
-                        {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
-                      </p>
-                      <p className="text-sm tabular-nums text-slate-400">
-                        = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
-                      </p>
-                      {purchaseItem ? (
-                        <p className="text-sm tabular-nums text-slate-300">
-                          Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+      {editable && tab === 'scan' && lines.length > 0 ? (
+        <Button variant="secondary" className="w-full" onClick={() => setTab('docs')}>
+          Selesai scan — lanjut ke dokumen ({lines.length} item)
+        </Button>
+      ) : null}
+
+      {!editable || tab === 'items' ? (
+        <Card title={`Item dalam sesi (${lines.length})`}>
+          {editable ? (
+            <p className="mb-1 text-sm text-slate-400">Ketuk item untuk mengubah qty atau menghapus.</p>
+          ) : null}
+          <ul className="flex flex-col divide-y divide-slate-800">
+            {lines.map((line) => {
+              const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
+              const item = items[line.itemMasterId]
+              const isOver = totalOver.some((row) => row.lineId === line.lineId)
+              return (
+                <li key={line.lineId}>
+                  <button
+                    type="button"
+                    className="touch-target w-full py-3 text-left"
+                    disabled={!editable}
+                    onClick={() => setEditingLineId(line.lineId)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
+                        <p className="text-sm text-slate-400">
+                          {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
+                          {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
+                          {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
                         </p>
-                      ) : null}
+                        <p className="text-sm tabular-nums text-slate-400">
+                          = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
+                        </p>
+                        {purchaseItem ? (
+                          <p className="text-sm tabular-nums text-slate-300">
+                            Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+                          </p>
+                        ) : null}
+                      </div>
+                      {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
                     </div>
-                    {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
-                  </div>
-                </button>
-              </li>
-            )
-          })}
-          {lines.length === 0 ? <EmptyState>Belum ada item. Scan barcode untuk menambah.</EmptyState> : null}
-        </ul>
-      </Card>
+                  </button>
+                </li>
+              )
+            })}
+            {lines.length === 0 ? <EmptyState>Belum ada item. Scan barcode untuk menambah.</EmptyState> : null}
+          </ul>
+        </Card>
+      ) : null}
 
-      <VendorDocCard
-        invoice={invoice}
-        doNumber={doNumber}
-        editable={editable}
-        invoiceError={invoiceError}
-        doNumberError={doNumberError}
-        onInvoiceChange={(value) => {
-          setInvoice(value)
-          setInvoiceError(false)
-        }}
-        onDoNumberChange={(value) => {
-          setDoNumber(value)
-          setDoNumberError(false)
-        }}
-      />
+      {!editable || tab === 'docs' ? (
+        <VendorDocCard
+          invoice={invoice}
+          doNumber={doNumber}
+          editable={editable}
+          invoiceError={invoiceError}
+          doNumberError={doNumberError}
+          onInvoiceChange={(value) => {
+            setInvoice(value)
+            setInvoiceError(false)
+          }}
+          onDoNumberChange={(value) => {
+            setDoNumber(value)
+            setDoNumberError(false)
+          }}
+        />
+      ) : null}
 
-      {editable ? (
+      {editable && tab === 'docs' ? (
         <div className="flex flex-col gap-2">
           <Button className="w-full" onClick={requestFinalize}>
-            Selesai / Finalisasi
+            Selesaikan &amp; kirim
           </Button>
           <ConfirmButton
             tone="danger"
@@ -780,3 +875,61 @@ function FinalizeDialog({
     </div>
   )
 }
+
+function SessionTabs({
+  value,
+  onChange,
+  itemCount,
+  docsComplete,
+}: {
+  value: SessionTab
+  onChange: (next: SessionTab) => void
+  itemCount: number
+  docsComplete: boolean
+}) {
+  const tabClass = (active: boolean): string =>
+    `touch-target flex-1 rounded-lg px-2 text-sm font-semibold transition ${
+      active ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+    }`
+
+  return (
+    <div role="tablist" aria-label="Bagian sesi penerimaan" className="flex gap-2">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === 'scan'}
+        className={tabClass(value === 'scan')}
+        onClick={() => onChange('scan')}
+      >
+        Scan
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === 'items'}
+        className={tabClass(value === 'items')}
+        onClick={() => onChange('items')}
+      >
+        Item ({itemCount})
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === 'docs'}
+        className={tabClass(value === 'docs')}
+        onClick={() => onChange('docs')}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          Dokumen
+          {docsComplete ? null : (
+            <span
+              aria-label="belum lengkap"
+              className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400"
+            />
+          )}
+        </span>
+      </button>
+    </div>
+  )
+}
+

@@ -402,6 +402,9 @@ describe('LocalRepository (Dexie)', () => {
       const summaries = await repo.listPurchaseSummaries()
       const summary = summaries.find((row) => row.purchaseId === 'P1')
       expect(summary?.totalReceivedTotal).toBe(4)
+      expect(summary?.serverReceivedTotal).toBe(4)
+      expect(summary?.localPendingTotal).toBe(0)
+      expect(summary?.serverReceivedTotal ?? 0).toBeLessThanOrEqual(summary?.totalReceivedTotal ?? 0)
     })
   })
 

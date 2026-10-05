@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { ChevronRight, Play } from 'lucide-react'
 import { localRepo } from '~/client/db/local-repo'
 import { useLive } from '~/client/hooks/use-live'
 import { useAppStore } from '~/client/state/store/app-store'
 import { toast } from '~/client/toast'
-import { Badge, Button, Card, EmptyState, Progress, inputClass } from '~/components/ui'
+import { SegmentedProgress } from '~/components/segmented-progress'
+import { Badge, Button, Card, EmptyState, inputClass } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
-import { formatDate, formatQty } from '~/shared/format'
+import { formatDate } from '~/shared/format'
 
 export const Route = createFileRoute('/pos/')({
   component: PosListPage,
@@ -25,6 +27,8 @@ function PosListPage() {
   const online = useAppStore((state) => state.online)
   const pullProgress = useAppStore((state) => state.pullProgress)
   const downloadData = useAppStore((state) => state.downloadData)
+  const running = useLive(() => localRepo.runningSessions(), [], [])
+  const activeSession = running[0]
 
   const handleDownload = async () => {
     const result = await downloadData()
@@ -49,6 +53,24 @@ function PosListPage() {
 
   return (
     <div className="flex flex-col gap-3">
+      {activeSession ? (
+        <Link
+          to="/sessions/$sessionId"
+          params={{ sessionId: activeSession.sessionId }}
+          className="touch-target flex items-center gap-3 rounded-xl border border-cyan-500 bg-cyan-950/40 p-3"
+        >
+          <Play className="h-6 w-6 shrink-0 text-cyan-300" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold text-slate-100">Lanjutkan sesi berjalan</span>
+            <span className="block truncate text-sm text-slate-300">
+              {activeSession.purchaseNumber ?? activeSession.purchaseId} ·{' '}
+              {activeSession.vendorName ?? '-'}
+            </span>
+          </span>
+          <ChevronRight className="h-6 w-6 shrink-0 text-cyan-300" aria-hidden="true" />
+        </Link>
+      ) : null}
+
       <Card title="Daftar PO (CHECKED)">
         <input
           className={inputClass}
@@ -94,10 +116,11 @@ function PosListPage() {
           </div>
 
           <div className="mt-3">
-            <Progress value={row.totalReceivedTotal} max={row.orderedTotal} />
-            <p className="mt-1 text-sm tabular-nums text-slate-400">
-              Diterima {formatQty(row.totalReceivedTotal)} dari {formatQty(row.orderedTotal)}
-            </p>
+            <SegmentedProgress
+              ordered={row.orderedTotal}
+              serverReceived={row.serverReceivedTotal}
+              localPending={row.localPendingTotal}
+            />
           </div>
         </Link>
       ))}

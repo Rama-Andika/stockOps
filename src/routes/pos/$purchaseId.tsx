@@ -4,9 +4,10 @@ import { localRepo } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { AppBar } from '~/components/app-bar'
-import { Badge, Button, Card, EmptyState, Loading, Notice, Progress } from '~/components/ui'
+import { SegmentedProgress } from '~/components/segmented-progress'
+import { Badge, Button, Card, EmptyState, Loading, Notice } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
-import { formatDate, formatQty } from '~/shared/format'
+import { formatDate } from '~/shared/format'
 
 export const Route = createFileRoute('/pos/$purchaseId')({
   component: PosDetailPage,
@@ -74,14 +75,12 @@ function PosDetailPage() {
       />
       <Card title={detail.purchase.vendorName}>
         <p className="text-sm text-slate-400">Tanggal PO: {formatDate(detail.purchase.purchDate)}</p>
-        <div className="mt-3 flex items-center gap-3">
-          <Badge tone={toneFor(detail.progress.progress)}>{PROGRESS_LABEL[detail.progress.progress]}</Badge>
-          <span className="text-sm tabular-nums text-slate-300">
-            {formatQty(detail.progress.totalReceivedTotal)} / {formatQty(detail.progress.orderedTotal)}
-          </span>
-        </div>
-        <div className="mt-2">
-          <Progress value={detail.progress.totalReceivedTotal} max={detail.progress.orderedTotal} />
+        <div className="mt-3">
+          <SegmentedProgress
+            ordered={detail.progress.orderedTotal}
+            serverReceived={detail.progress.serverReceivedTotal}
+            localPending={detail.progress.localPendingTotal}
+          />
         </div>
         <p className="mt-2 text-xs text-slate-400">
           Angka ini dihitung di perangkat. Jumlah resmi mengikuti server setelah dokumen terkirim.
@@ -101,10 +100,12 @@ function PosDetailPage() {
                 </div>
                 <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
               </div>
-              <p className="text-sm tabular-nums text-slate-300">
-                Dipesan {formatQty(row.orderedQty)} • Diterima {formatQty(row.totalReceivedQty)}
-                {row.localPendingQty > 0 ? ` (termasuk ${formatQty(row.localPendingQty)} belum terkirim)` : ''}
-              </p>
+              <SegmentedProgress
+                ordered={row.orderedQty}
+                serverReceived={row.serverReceivedQty}
+                localPending={row.localPendingQty}
+                unit={unitMap.get(row.uomId) ?? ''}
+              />
             </li>
           ))}
           {detail.items.length === 0 ? <EmptyState>Tidak ada item pada PO ini.</EmptyState> : null}

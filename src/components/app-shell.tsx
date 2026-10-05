@@ -4,7 +4,8 @@ import { useAppStore } from "~/client/state/store/app-store";
 import { registerServiceWorker } from "~/client/pwa";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
-import { Barcode, ClipboardList, Inbox, Settings, Upload } from "lucide-react";
+import { Barcode, ClipboardList, Settings } from "lucide-react";
+import { SyncStatus } from "./sync-status";
 
 const NAV_LINK_CLASS =
   "touch-target relative flex flex-1 flex-col items-center justify-center rounded-lg px-2 py-1 text-center";
@@ -17,9 +18,6 @@ const NAV_ITEMS = [
 
 function TopBar() {
   const online = useAppStore((state) => state.online);
-  const pendingCount = useAppStore((state) => state.pendingCount);
-  const syncing = useAppStore((state) => state.syncing);
-  const sync = useAppStore((state) => state.sync);
   const user = useAppStore((state) => state.user);
 
   return (
@@ -49,24 +47,7 @@ function TopBar() {
           </span>
         ) : null}
       </div>
-      {pendingCount > 0 || syncing ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300">
-            <Inbox className="h-4 w-4" aria-hidden="true" />
-            {pendingCount} dokumen belum terkirim
-          </span>
-          <button
-            type="button"
-            aria-label={syncing ? "Sedang mengirim…" : "Kirim dokumen yang belum terkirim"}
-            className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200"
-            disabled={!online || syncing}
-            onClick={() => void sync()}
-          >
-            <Upload className="h-4 w-4" aria-hidden="true" />
-            <span>{syncing ? "Mengirim…" : "Kirim"}</span>
-          </button>
-        </div>
-      ) : null}
+      <SyncStatus />
     </header>
   );
 }

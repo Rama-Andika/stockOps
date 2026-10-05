@@ -298,6 +298,8 @@ export class LocalRepository {
     Array<
       LocalPurchase & {
         orderedTotal: number
+        serverReceivedTotal: number
+        localPendingTotal: number
         totalReceivedTotal: number
         progress: ProgressStatus
       }
@@ -340,12 +342,14 @@ export class LocalRepository {
 
     return purchases.map((purchase) => {
       const orderedTotal = ordered.get(purchase.purchaseId) ?? 0
-      const totalReceivedTotal = dec2(
-        (serverReceived.get(purchase.purchaseId) ?? 0) + (localPending.get(purchase.purchaseId) ?? 0),
-      )
+      const serverReceivedTotal = serverReceived.get(purchase.purchaseId) ?? 0
+      const localPendingTotal = localPending.get(purchase.purchaseId) ?? 0
+      const totalReceivedTotal = dec2(serverReceivedTotal + localPendingTotal)
       return {
         ...purchase,
         orderedTotal,
+        serverReceivedTotal,
+        localPendingTotal,
         totalReceivedTotal,
         progress: progressOf(orderedTotal, totalReceivedTotal),
       }

@@ -29,11 +29,11 @@ export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS]
 
 export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
   RUNNING: 'Berjalan',
-  PENDING: 'Menunggu Sinkronisasi',
-  SYNCING: 'Sedang Dikirim',
-  SYNCED: 'Tersinkron',
-  FAILED: 'Gagal',
-  REJECTED: 'Ditolak',
+  PENDING: 'Belum terkirim',
+  SYNCING: 'Sedang dikirim',
+  SYNCED: 'Sudah masuk sistem',
+  FAILED: 'Gagal kirim',
+  REJECTED: 'Ditolak server',
 }
 
 /**
@@ -60,7 +60,7 @@ export const PROGRESS_LABEL: Record<ProgressStatus, string> = {
   NONE: 'Belum diterima',
   PARTIAL: 'Sebagian',
   FULL: 'Lengkap',
-  OVER: 'Lebih',
+  OVER: 'Lebih dari pesanan',
 }
 
 /** Chunk size when pulling master data (NF-4). */

@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmButton } from '~/components/confirm-button'
 import { NumericPad } from '~/components/numeric-pad'
-import { ScanFeedback } from '~/components/scan-feedback'
+import { ScanHero } from '~/components/scan-hero'
 import { loadPreferences, savePreferences } from '~/client/preferences'
 
 describe('NumericPad', () => {
@@ -88,37 +88,58 @@ describe('preferensi perangkat', () => {
   })
 })
 
-describe('ScanFeedback', () => {
-  it('mengumumkan feedback scan dan menutupnya otomatis', () => {
-    vi.useFakeTimers()
-    const onDismiss = vi.fn()
+describe('ScanHero', () => {
+  it('menampilkan hasil scan sukses beserta konversi satuan', () => {
     render(
-      <ScanFeedback
-        feedback={{ tone: 'success', text: 'Barang ditambahkan', key: 1 }}
-        onDismiss={onDismiss}
-        durationMs={1000}
+      <ScanHero
+        state={{
+          kind: 'OK',
+          itemName: 'BERAS PREMIUM 5KG',
+          itemCode: 'BRS-PRM-05',
+          addedQty: 2,
+          purchaseUnit: 'KRT',
+          stockQty: 24,
+          stockUnit: 'PCS',
+          itemOrdered: 10,
+          itemTotal: 8,
+        }}
+        onUndo={vi.fn()}
+        onDismiss={vi.fn()}
       />,
     )
-    expect(screen.getByRole('status')).toHaveTextContent('Barang ditambahkan')
-    act(() => vi.advanceTimersByTime(1000))
-    expect(onDismiss).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
+    expect(screen.getByRole('status')).toHaveTextContent('BERAS PREMIUM 5KG')
+    expect(screen.getByRole('status')).toHaveTextContent('24 PCS')
   })
 
-  it('pesan error menunggu operator dan hanya tertutup lewat tombol', () => {
-    vi.useFakeTimers()
-    const onDismiss = vi.fn()
+  it('barcode tidak dikenal memakai role alert dan tidak menawarkan undo', () => {
     render(
-      <ScanFeedback
-        feedback={{ tone: 'danger', text: 'Barcode tidak dikenali', key: 2 }}
-        onDismiss={onDismiss}
-        durationMs={1000}
+      <ScanHero
+        state={{ kind: 'NOT_FOUND', scannedCode: '8991002103458' }}
+        onUndo={vi.fn()}
+        onDismiss={vi.fn()}
       />,
     )
-    act(() => vi.advanceTimersByTime(5000))
-    expect(onDismiss).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Tutup pesan hasil scan' }))
-    expect(onDismiss).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
+    expect(screen.getByRole('alert')).toHaveTextContent('8991002103458')
+    expect(screen.queryByRole('button', { name: 'Batalkan scan ini' })).toBeNull()
+  })
+
+  it('kelebihan terima memanggil onUndo saat dibatalkan', () => {
+    const onUndo = vi.fn()
+    render(
+      <ScanHero
+        state={{
+          kind: 'OVER',
+          itemName: 'MINYAK GORENG 2L',
+          ordered: 12,
+          newTotal: 14,
+          excess: 2,
+          unit: 'KRT',
+        }}
+        onUndo={onUndo}
+        onDismiss={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Batalkan scan ini' }))
+    expect(onUndo).toHaveBeenCalledTimes(1)
   })
 })
