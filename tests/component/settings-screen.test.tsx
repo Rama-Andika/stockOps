@@ -70,13 +70,12 @@ describe('SettingsPage UI & UX', () => {
     expect(screen.getAllByText('Budi Santoso')[0]).toBeInTheDocument()
     expect(screen.getByText('ID: op_budi')).toBeInTheDocument()
     expect(screen.getByText('Sesi: 5 hari')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Keluar dari Akun (Logout)' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument()
   })
 
-  it('menampilkan status online dan tombol aksi sinkronisasi', () => {
+  it('mengaktifkan tombol aksi sinkronisasi saat online', () => {
     renderSettings({ online: true })
 
-    expect(screen.getByText('Online')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Refresh PO/i })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Unduh Ulang Data/i })).toBeEnabled()
   })
@@ -84,7 +83,6 @@ describe('SettingsPage UI & UX', () => {
   it('menonaktifkan tombol sinkronisasi saat offline', () => {
     renderSettings({ online: false })
 
-    expect(screen.getByText('Offline')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Refresh PO/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /Unduh Ulang Data/i })).toBeDisabled()
   })
@@ -126,10 +124,10 @@ describe('SettingsPage UI & UX', () => {
     expect(soundSwitch).toHaveAttribute('aria-checked', 'false')
   })
 
-  it('menampilkan kredensial offline ter-cache di bagian diagnostik', () => {
+  it('menampilkan rincian master database lokal di bagian diagnostik', () => {
     renderSettings()
 
-    expect(screen.getByText('@op_budi')).toBeInTheDocument()
-    expect(screen.getByText(/5 hari lagi/i)).toBeInTheDocument()
+    expect(screen.getByText('Rincian Master Database Lokal')).toBeInTheDocument()
+    expect(screen.getByText('Konversi Satuan')).toBeInTheDocument()
   })
 })

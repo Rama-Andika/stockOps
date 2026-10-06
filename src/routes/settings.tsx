@@ -4,7 +4,7 @@ import { localRepo } from "~/client/db/local-repo";
 import { useAppStore } from "~/client/state/store/app-store";
 import { useLive } from "~/client/hooks/use-live";
 import { ConfirmButton } from "~/components/confirm-button";
-import { Badge, Button, Card, EmptyState } from "~/components/ui";
+import { Badge, Button, Card } from "~/components/ui";
 import { toast } from "~/client/toast";
 import {
   loadPreferences,
@@ -13,7 +13,6 @@ import {
 } from "~/client/preferences";
 import { applyContrastPreference } from "~/client/theme";
 import { playFeedback } from "~/client/feedback";
-import { isCredentialExpired, remainingDays } from "~/client/auth/offline-auth";
 import { formatDateTime, formatRelativeDateTime } from "~/shared/format";
 import {
   Check,
@@ -138,7 +137,6 @@ function SettingsPage() {
   const refreshPurchases = useAppStore((state) => state.refreshPurchases);
   const logout = useAppStore((state) => state.logout);
   const user = useAppStore((state) => state.user);
-  const credentials = useAppStore((state) => state.credentials);
   const sessionTtlDaysLeft = useAppStore((state) => state.sessionTtlDaysLeft);
   const refresh = useAppStore((state) => state.refresh);
   const deviceId = useAppStore((state) => state.deviceId);
@@ -228,21 +226,6 @@ function SettingsPage() {
             />
             <span>Sinkronisasi Data</span>
           </div>
-        }
-        actions={
-          <span
-            className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              online
-                ? "bg-ok-fill text-on-ok-fill"
-                : "bg-danger-fill text-on-danger-fill"
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`inline-block h-2 w-2 rounded-full ${online ? "bg-ok-dot" : "bg-danger-dot"}`}
-            />
-            {online ? "Online" : "Offline"}
-          </span>
         }
       >
         <div className="flex flex-col gap-3">
@@ -489,57 +472,13 @@ function SettingsPage() {
               </div>
             </div>
           </div>
-
-          {/* Kredensial Offline */}
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-fg-muted">
-                Kredensial Offline Ter-cache ({credentials.length})
-              </p>
-            </div>
-            {credentials.length === 0 ? (
-              <EmptyState>Belum ada kredensial tersimpan di perangkat ini.</EmptyState>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {credentials.map((credential) => {
-                  const expired = isCredentialExpired(credential, now);
-                  const days = remainingDays(credential, now);
-                  return (
-                    <li
-                      key={credential.key}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface/40 p-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-semibold text-fg truncate text-sm">
-                          {credential.fullName}
-                        </p>
-                        <p className="text-xs text-fg-subtle truncate">
-                          @{credential.loginId}
-                        </p>
-                      </div>
-                      <Badge
-                        tone={
-                          expired ? "danger" : days <= 2 ? "warn" : "success"
-                        }
-                      >
-                        {expired ? "Kedaluwarsa" : `${days} hari lagi`}
-                      </Badge>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <p className="mt-2 text-xs text-fg-subtle leading-relaxed">
-              Kredensial diamankan dengan WebCrypto salt hashing. Password teks asli tidak pernah disimpan di perangkat.
-            </p>
-          </div>
         </div>
       </details>
 
       {/* 1. Akun & Sesi Operator */}
       <Card>
         <div className="flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-3 rounded-xl  bg-surface/40 ">
+          <div className="flex items-center justify-between gap-3 rounded-xl  bg-surface/40 ">
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-wash text-lg font-bold text-brand-bright">
                 {user?.fullName?.charAt(0)?.toUpperCase() ?? "U"}
@@ -588,7 +527,7 @@ function SettingsPage() {
             <ConfirmButton
               tone="danger"
               className="w-full touch-target rounded-lg font-semibold"
-              label="Keluar dari Akun (Logout)"
+              label="Logout"
               confirmLabel="Tahan terus untuk keluar…"
               onConfirm={() => void logout()}
             />
