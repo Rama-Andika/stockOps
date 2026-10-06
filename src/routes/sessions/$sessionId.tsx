@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { localRepo, sessionTabKey } from '~/client/db/local-repo'
 import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
+import { useSessionData } from '~/client/hooks/use-session-data'
 import { addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
 import { playFeedback } from '~/client/feedback'
@@ -13,10 +14,10 @@ import { ConfirmButton } from '~/components/confirm-button'
 import { ScanBar } from '~/components/scan-bar'
 import { ScanHero, type ScanHeroState } from '~/components/scan-hero'
 import { SessionContextStrip } from '~/components/session-context-strip'
-import { Badge, Button, Card, EmptyState, Field, Loading, Notice, inputClass } from '~/components/ui'
+import { VendorDocCard } from '~/components/vendor-doc-card'
+import { Badge, Button, Card, EmptyState, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
-import { toLocalDateTime } from '~/shared/receive-date'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
   component: SessionDetailPage,
@@ -39,7 +40,7 @@ function toneFor(status: SessionStatus): 'neutral' | 'info' | 'success' | 'warn'
   }
 }
 
-type SessionTab = 'scan' | 'items' | 'docs'
+type SessionTab = 'scan' | 'items'
 
 function SessionDetailPage() {
   const { sessionId } = Route.useParams()
@@ -48,43 +49,10 @@ function SessionDetailPage() {
   const online = useAppStore((state) => state.online)
   const navigate = useNavigate()
 
-  const session = useLive(() => localRepo.getSession(sessionId), [sessionId], undefined)
-  const lines = useLive(() => localRepo.sessionItems(sessionId), [sessionId], [])
-  const purchaseItems = useLive(
-    async () => {
-      return session ? localRepo.getPurchaseItems(session.purchaseId) : []
-    },
-    [session?.purchaseId],
-    [],
-  )
-  const itemIds = useMemo(
-    () => [...new Set(lines.map((line) => line.itemMasterId))].sort(),
-    [lines],
-  )
-  const itemIdsKey = useMemo(() => JSON.stringify(itemIds), [itemIds])
-  const items = useLive(
-    async () => {
-      if (itemIds.length === 0) return {}
-      const entries = await Promise.all(
-        itemIds.map(async (id) => [id, await localRepo.getItemMaster(id)] as const),
-      )
-      return Object.fromEntries(entries) as Record<string, { name: string; code: string | null } | undefined>
-    },
-    [itemIdsKey],
-    {},
-  )
-  const units = useLive(() => localRepo.db.units.toArray(), [], [])
-  const purchaseProgress = useLive(
-    async () => (session ? localRepo.getPurchaseProgress(session.purchaseId) : null),
-    [session?.purchaseId],
-    null,
-  )
-
-  const purchaseItemMap = useMemo(
-    () => new Map(purchaseItems.map((row) => [row.purchaseItemId, row])),
-    [purchaseItems],
-  )
-  const unitMap = useMemo(() => new Map(units.map((row) => [row.uomId, row.unit])), [units])
+  // Shared with the review screen — see src/client/hooks/use-session-data.ts. Called before any
+  // early return, like every other hook in this component.
+  const { session, lines, items, purchaseItemMap, unitMap, purchaseProgress, overLineIds } =
+    useSessionData(sessionId)
 
   const [scan, setScan] = useState('')
   const [qty, setQty] = useState('1')
@@ -98,41 +66,32 @@ function SessionDetailPage() {
   // reopen the keypad each time the operator comes back to the scan tab. It always starts closed —
   // the "123" button is the only way in, and the qty field itself is always typable.
   const [padOpen, setPadOpen] = useState(false)
-  const [invoice, setInvoice] = useState('')
-  const [doNumber, setDoNumber] = useState('')
-  const [confirmingFinalize, setConfirmingFinalize] = useState(false)
   const tabMetaKey = sessionTabKey(sessionId)
   const savedTab = useLive(() => localRepo.getMeta(tabMetaKey), [tabMetaKey], null)
-  const tab: SessionTab = savedTab === 'items' || savedTab === 'docs' ? savedTab : 'scan'
+  // Anything other than 'items' falls back to 'scan', which also migrates a device that still has
+  // 'docs' saved from before the review screen existed: the value stays in Dexie until the
+  // session is deleted, so it must not be able to select a tab that is gone.
+  const tab: SessionTab = savedTab === 'items' ? 'items' : 'scan'
   const setTab = (next: SessionTab) => {
     localRepo.setMeta(tabMetaKey, next).catch(() => {
       toast('danger', 'Gagal berpindah bagian. Coba lagi.')
     })
   }
-  const [invoiceError, setInvoiceError] = useState(false)
-  const [doNumberError, setDoNumberError] = useState(false)
   const scanRef = useRef<HTMLInputElement>(null)
   // Scans are saved strictly one after another (FIFO), even when the scanner is faster than IndexedDB.
   const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
 
-  useEffect(() => {
-    if (session) {
-      setInvoice(session.invoiceNumber)
-      setDoNumber(session.doNumber)
-    }
-  }, [session?.invoiceNumber, session?.doNumber])
-
-  // Keep the scanner's keystrokes landing in the barcode field. While a dialog is open focus
-  // belongs to it; when it closes (e.g. finalize cancelled) the field gets focus back, otherwise
-  // the scanner's Enter would press the previously focused button and reopen the dialog.
+  // Keep the scanner's keystrokes landing in the barcode field. While the qty editor is open
+  // focus belongs to it; when it closes the field gets focus back, otherwise the scanner's Enter
+  // would press the previously focused button and reopen the sheet.
   // `tab` is in the deps because the barcode field only exists on the scan tab: coming back from
-  // the item or document tab remounts it, and without this the focus would stay on the tab button.
+  // the item tab remounts it, and without this the focus would stay on the tab button.
   useEffect(() => {
-    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId || confirmingFinalize) return
+    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
     if (tab !== 'scan') return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [session?.status, tab, editingLineId, confirmingFinalize])
+  }, [session?.status, tab, editingLineId])
 
   // Scanner wedge. The effect above only runs when one of its deps changes, so a tap on dead space
   // (the context strip, the empty area of the scan result, the app bar title) drops focus to <body>
@@ -141,7 +100,7 @@ function SessionDetailPage() {
   // triggering character included — into the barcode field. From the second character onwards the
   // field has focus and receives them normally, and the scanner's closing Enter lands there too.
   useEffect(() => {
-    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId || confirmingFinalize) return
+    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
     if (tab !== 'scan') return
     const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -169,29 +128,9 @@ function SessionDetailPage() {
     }
     window.addEventListener('keydown', onWindowKeyDown)
     return () => window.removeEventListener('keydown', onWindowKeyDown)
-  }, [session?.status, tab, editingLineId, confirmingFinalize])
+  }, [session?.status, tab, editingLineId])
 
   const dismissHero = useCallback(() => setHeroState({ kind: 'IDLE' }), [])
-
-  const overLineIds = useMemo(() => {
-    const qtyByPurchaseItem = new Map<string, number>()
-    for (const line of lines) {
-      qtyByPurchaseItem.set(
-        line.purchaseItemId,
-        (qtyByPurchaseItem.get(line.purchaseItemId) ?? 0) + line.qty,
-      )
-    }
-    // A Set, not an array: the item list looks this up once per rendered line.
-    const overLineIds = new Set<string>()
-    for (const line of lines) {
-      const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-      if (!purchaseItem) continue
-      const received = Number(purchaseItem.receivedQty ?? 0)
-      const localQty = qtyByPurchaseItem.get(line.purchaseItemId) ?? 0
-      if (received + localQty > Number(purchaseItem.qty ?? 0)) overLineIds.add(line.lineId)
-    }
-    return overLineIds
-  }, [lines, purchaseItemMap])
 
   if (!session) return <Loading label="Memuat sesi…" />
 
@@ -348,42 +287,10 @@ function SessionDetailPage() {
       .catch(() => undefined)
   }
 
-  const requestFinalize = () => {
-    const invoiceMissing = !invoice.trim()
-    const doMissing = !doNumber.trim()
-    if (invoiceMissing || doMissing) {
-      setInvoiceError(invoiceMissing)
-      setDoNumberError(doMissing)
-      toast('danger', 'Nomor invoice dan nomor DO wajib diisi.')
-      return
-    }
-    if (lines.length === 0) {
-      toast('danger', 'Belum ada item yang discan.')
-      setTab('scan')
-      return
-    }
-    setConfirmingFinalize(true)
-  }
-
-  const doFinalize = async () => {
-    setConfirmingFinalize(false)
-    await localRepo.updateSessionDraft(session.sessionId, {
-      invoiceNumber: invoice.trim(),
-      doNumber: doNumber.trim(),
-    })
-    await localRepo.finalizeSession(session.sessionId, {
-      invoiceNumber: invoice.trim(),
-      doNumber: doNumber.trim(),
-      receiveDate: session.receiveDate || toLocalDateTime(new Date()),
-    })
-    const result = await sync()
-    if (result.ok) {
-      toast('success', 'Sesi selesai & tersinkron.')
-    } else if (!online) {
-      toast('info', 'Sesi disimpan. Menunggu sinkronisasi (offline).')
-    } else {
-      toast('danger', result.message)
-    }
+  // Step 2 of receiving lives on its own route. The draft is saved there, on the way out, so
+  // nothing needs to be written here first.
+  const openReview = () => {
+    void navigate({ to: '/sessions/review/$sessionId', params: { sessionId } })
   }
 
   const handleRetrySync = async () => {
@@ -481,22 +388,30 @@ function SessionDetailPage() {
           </Card>
         ) : null}
 
-        {!editable || tab === 'docs' ? (
-          <div className={!editable || tab === 'items' ? 'mt-2' : ''}>
+        {/* Hold-to-cancel sits on the item tab, not in the review screen's footer: nothing
+            destructive should share a row with the send button. */}
+        {editable && tab === 'items' ? (
+          <div className="mt-2 flex flex-col gap-2">
+            <ConfirmButton
+              tone="danger"
+              className="w-full"
+              label="Batalkan sesi ini"
+              confirmLabel="Tahan terus… sesi akan dibatalkan"
+              onConfirm={() => void handleCancel()}
+            />
+            <p className="text-center text-sm text-fg-subtle">
+              Tombol merah perlu ditahan 1,5 detik supaya tidak tersenggol.
+            </p>
+          </div>
+        ) : null}
+
+        {/* Read-only only: on a RUNNING session these numbers are edited on the review screen. */}
+        {!editable ? (
+          <div className="mt-2">
             <VendorDocCard
-              invoice={invoice}
-              doNumber={doNumber}
-              editable={editable}
-              invoiceError={invoiceError}
-              doNumberError={doNumberError}
-              onInvoiceChange={(value) => {
-                setInvoice(value)
-                setInvoiceError(false)
-              }}
-              onDoNumberChange={(value) => {
-                setDoNumber(value)
-                setDoNumberError(false)
-              }}
+              invoice={session.invoiceNumber}
+              doNumber={session.doNumber}
+              editable={false}
             />
             {session.receiveDate ? (
               <p className="mt-2 text-sm text-fg-subtle">
@@ -507,60 +422,40 @@ function SessionDetailPage() {
           </div>
         ) : null}
 
-        {!editable || tab === 'docs' ? (
-          <div className="mt-2">
-            {editable ? (
-              <div className="flex flex-col gap-2">
-                <Button className="w-full" onClick={requestFinalize}>
-                  Selesaikan &amp; kirim
+        {!editable ? (
+          <div className="mt-2 flex flex-col gap-2">
+            {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
+              <>
+                {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
+                <Button
+                  className="flex w-full items-center justify-center gap-1"
+                  aria-label="Upload"
+                  disabled={syncing}
+                  onClick={() => void handleRetrySync()}
+                >
+                  <Upload className="h-5 w-5" aria-hidden="true" />  Upload
                 </Button>
+              </>
+            ) : null}
+            {session.status === SESSION_STATUS.REJECTED ? (
+              <>
+                <Notice tone="danger">
+                  Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
+                </Notice>
                 <ConfirmButton
                   tone="danger"
                   className="w-full"
-                  label="Batalkan sesi ini"
-                  confirmLabel="Tahan terus… sesi akan dibatalkan"
+                  label="Hapus sesi dari perangkat"
+                  confirmLabel="Tahan terus… sesi akan dihapus"
                   onConfirm={() => void handleCancel()}
                 />
-                <p className="text-center text-sm text-fg-subtle">
-                  Tombol merah perlu ditahan 1,5 detik supaya tidak tersenggol.
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
-                  <>
-                    {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
-                    <Button
-                      className="flex w-full items-center justify-center gap-1"
-                      aria-label="Upload"
-                      disabled={syncing}
-                      onClick={() => void handleRetrySync()}
-                    >
-                      <Upload className="h-5 w-5" aria-hidden="true" />  Upload
-                    </Button>
-                  </>
-                ) : null}
-                {session.status === SESSION_STATUS.REJECTED ? (
-                  <>
-                    <Notice tone="danger">
-                      Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
-                    </Notice>
-                    <ConfirmButton
-                      tone="danger"
-                      className="w-full"
-                      label="Hapus sesi dari perangkat"
-                      confirmLabel="Tahan terus… sesi akan dihapus"
-                      onConfirm={() => void handleCancel()}
-                    />
-                  </>
-                ) : null}
-                {session.status === SESSION_STATUS.SYNCED ? (
-                  <Notice tone="success">
-                    Tersinkron sebagai {session.number}. Dokumen bersifat baca-saja di perangkat.
-                  </Notice>
-                ) : null}
-              </div>
-            )}
+              </>
+            ) : null}
+            {session.status === SESSION_STATUS.SYNCED ? (
+              <Notice tone="success">
+                Tersinkron sebagai {session.number}. Dokumen bersifat baca-saja di perangkat.
+              </Notice>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -596,7 +491,8 @@ function SessionDetailPage() {
             value={tab}
             onChange={setTab}
             itemCount={lines.length}
-            docsComplete={Boolean(invoice.trim() && doNumber.trim())}
+            onReview={openReview}
+            docsComplete={Boolean(session.invoiceNumber.trim() && session.doNumber.trim())}
           />
         </div>
       ) : null}
@@ -618,62 +514,10 @@ function SessionDetailPage() {
           onClose={() => setEditingLineId(null)}
         />
       ) : null}
-      {confirmingFinalize ? (
-        <FinalizeDialog
-          purchaseLabel={session.purchaseNumber ?? session.purchaseId}
-          invoice={invoice.trim()}
-          doNumber={doNumber.trim()}
-          itemCount={lines.length}
-          onConfirm={() => void doFinalize()}
-          onCancel={() => setConfirmingFinalize(false)}
-        />
-      ) : null}
     </div>
   )
 }
 
-function VendorDocCard({
-  invoice,
-  doNumber,
-  editable,
-  invoiceError,
-  doNumberError,
-  onInvoiceChange,
-  onDoNumberChange,
-}: {
-  invoice: string
-  doNumber: string
-  editable: boolean
-  invoiceError: boolean
-  doNumberError: boolean
-  onInvoiceChange: (value: string) => void
-  onDoNumberChange: (value: string) => void
-}) {
-  return (
-    <Card title="Dokumen Vendor">
-      <div className="flex flex-col gap-3">
-        <Field label="Nomor Invoice (wajib)">
-          <input
-            className={`${inputClass} w-full ${invoiceError ? 'border-danger-line' : 'border-line-strong'}`}
-            value={invoice}
-            disabled={!editable}
-            onChange={(event) => onInvoiceChange(event.target.value)}
-          />
-          {invoiceError ? <span className="mt-1 block text-xs text-danger-text">Nomor invoice wajib diisi.</span> : null}
-        </Field>
-        <Field label="Nomor Surat Jalan / DO (wajib)">
-          <input
-            className={`${inputClass} w-full ${doNumberError ? 'border-danger-line' : 'border-line-strong'}`}
-            value={doNumber}
-            disabled={!editable}
-            onChange={(event) => onDoNumberChange(event.target.value)}
-          />
-          {doNumberError ? <span className="mt-1 block text-xs text-danger-text">Nomor surat jalan (DO) wajib diisi.</span> : null}
-        </Field>
-      </div>
-    </Card>
-  )
-}
 
 function LineEditSheet({
   line,
@@ -823,99 +667,21 @@ function LineEditSheet({
   )
 }
 
-function FinalizeDialog({
-  purchaseLabel,
-  invoice,
-  doNumber,
-  itemCount,
-  onConfirm,
-  onCancel,
-}: {
-  purchaseLabel: string
-  invoice: string
-  doNumber: string
-  itemCount: number
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-
-  // NF-8: move focus into the dialog (onto "Batal", the safe choice) and give it back on close.
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus()
-    return () => previouslyFocused?.focus()
-  }, [])
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      onCancel()
-      return
-    }
-    if (event.key !== 'Tab') return
-    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])')
-    if (!focusables || focusables.length === 0) return
-    const list = Array.from(focusables)
-    const first = list[0]
-    const last = list[list.length - 1]
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault()
-      last?.focus()
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault()
-      first?.focus()
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-3">
-      <button
-        type="button"
-        aria-label="Batal finalisasi"
-        className="absolute inset-0 bg-scrim/60"
-        onClick={onCancel}
-      />
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Konfirmasi selesaikan sesi"
-        className="relative w-full max-w-sm rounded-2xl border border-line bg-sheet p-4"
-        onKeyDown={handleKeyDown}
-      >
-        <p className="text-lg font-bold text-fg">Selesaikan sesi?</p>
-        <div className="mt-3 flex flex-col gap-1 text-sm text-fg-muted">
-          <p>PO: {purchaseLabel}</p>
-          <p>Invoice: {invoice}</p>
-          <p>DO: {doNumber}</p>
-          <p>Item: {itemCount}</p>
-        </div>
-        <p className="mt-2 text-xs text-fg-subtle">Setelah diselesaikan, sesi tidak bisa diubah lagi.</p>
-        <div className="mt-4 flex flex-col gap-2">
-          <Button className="w-full" onClick={onConfirm}>
-            Ya, Selesaikan
-          </Button>
-          <Button variant="ghost" className="w-full" data-autofocus onClick={onCancel}>
-            Batal
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const SESSION_TAB_IDS: readonly SessionTab[] = ['scan', 'items', 'docs']
+const SESSION_TAB_IDS: readonly SessionTab[] = ['scan', 'items']
 
 function SessionTabs({
   value,
   onChange,
   itemCount,
+  onReview,
   docsComplete,
 }: {
   value: SessionTab
   onChange: (next: SessionTab) => void
   itemCount: number
+  /** Leaves the cockpit for step 2. Not a tab — see the note on the button below. */
+  onReview: () => void
+  /** Drives the "something is still missing" dot, which now sits on the Review button. */
   docsComplete: boolean
 }) {
   // Bottom tab bar: a top border marks the active tab instead of a pill, so the bar reads as
@@ -948,39 +714,54 @@ function SessionTabs({
   }
 
   return (
-    <div
-      role="tablist"
-      aria-label="Bagian sesi penerimaan"
-      className="flex"
-      onKeyDown={handleKeyDown}
-    >
-      {SESSION_TAB_IDS.map((id) => (
-        <button
-          key={id}
-          type="button"
-          role="tab"
-          id={`session-tab-${id}`}
-          aria-selected={value === id}
-          aria-controls="session-tab-panel"
-          tabIndex={value === id ? 0 : -1}
-          className={tabClass(value === id)}
-          onClick={() => onChange(id)}
-        >
-          {id === 'scan' ? 'Scan' : null}
-          {id === 'items' ? `Item (${itemCount})` : null}
-          {id === 'docs' ? (
-            <span className="inline-flex items-center gap-1.5">
-              Dokumen
-              {docsComplete ? null : (
-                <span
-                  aria-label="belum lengkap"
-                  className="inline-block h-2.5 w-2.5 rounded-full bg-warn"
-                />
-              )}
-            </span>
-          ) : null}
-        </button>
-      ))}
+    <div className="flex">
+      {/* `flex-[2]`, not `flex-1`: this row has only TWO flex items — the tablist and the Review
+          button — so `flex-1` on both would give the tablist half the bar and split that half
+          between two tabs, i.e. 80/80/160 px at 320 px instead of three equal parts. Weighting
+          the tablist by two makes each of the three controls 1/3 wide. */}
+      <div
+        role="tablist"
+        aria-label="Bagian sesi penerimaan"
+        className="flex flex-[2]"
+        onKeyDown={handleKeyDown}
+      >
+        {SESSION_TAB_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`session-tab-${id}`}
+            aria-selected={value === id}
+            aria-controls="session-tab-panel"
+            tabIndex={value === id ? 0 : -1}
+            className={tabClass(value === id)}
+            onClick={() => onChange(id)}
+          >
+            {id === 'scan' ? 'Scan' : null}
+            {id === 'items' ? `Item (${itemCount})` : null}
+          </button>
+        ))}
+      </div>
+      {/* A navigation button, NOT a third tab: it leaves this route for the review screen, so it
+          must sit outside the tablist — inside it, a screen reader would announce it as a tab
+          that never becomes selected, and the arrow-key roving index would try to focus it.
+          `flex-1` against the tablist's `flex-[2]` is what makes it exactly one third; the bar's
+          height is unchanged because it carries `.touch-target` like the tabs do. */}
+      <button
+        type="button"
+        className="touch-target flex-1 border-t-2 border-transparent px-2 text-sm font-semibold text-fg-muted transition hover:bg-raised"
+        onClick={onReview}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          Review
+          {docsComplete ? null : (
+            <span
+              aria-label="dokumen belum lengkap"
+              className="inline-block h-2.5 w-2.5 rounded-full bg-warn"
+            />
+          )}
+        </span>
+      </button>
     </div>
   )
 }

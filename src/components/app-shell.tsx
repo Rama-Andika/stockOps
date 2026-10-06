@@ -9,7 +9,7 @@ import { Barcode, ClipboardList, Settings } from "lucide-react";
 import { SyncStatus } from "./sync-status";
 
 // z-index scale used across the app, highest first:
-//   60 toast (ToastHost) · 40 dialogs (LineEditSheet, FinalizeDialog) · 30 keypad sheet (ScanBar).
+//   60 toast (ToastHost) · 40 dialogs (LineEditSheet) · 30 keypad sheet (ScanBar).
 // The shell itself needs none: it is a fixed-height flex column where <main> is the only scroller.
 const NAV_LINK_CLASS =
   "touch-target relative flex flex-1 flex-col items-center justify-center rounded-lg px-2 py-1 text-center";
@@ -138,10 +138,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   // shell without padding or a max width, and hides the global nav so two stacked bars do not
   // eat 112px of a 640px screen. To undo that decision, drop this flag and always render
   // <BottomNav /> plus the padded wrapper below.
-  // Exactly one segment after /sessions/ — i.e. the session detail route only. A future nested
-  // route such as /sessions/<id>/review must opt in explicitly rather than inherit the cockpit
-  // layout and then look broken because it does not implement h-full itself.
+  // Exactly one segment after /sessions/ — i.e. the session detail route only.
   const isCockpit = /^\/sessions\/[^/]+$/.test(location.pathname);
+  // The review step opts in explicitly, as the note above requires: it implements its own h-full
+  // column with an internal scroller, so it needs the same chrome-free, fixed-height main as the
+  // cockpit. Without this it would get the padded, globally-navigated layout and show BottomNav
+  // stacked under its own pinned send footer — two bars eating 112px of a 640px screen.
+  const isReview = /^\/sessions\/review\/[^/]+$/.test(location.pathname);
+  const isSessionFlow = isCockpit || isReview;
 
   return (
     <div className="app-viewport flex flex-col">
@@ -149,18 +153,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       <TopBar />
       <main
         className={
-          isCockpit
+          isSessionFlow
             ? "min-h-0 flex-1 overflow-hidden"
             : "min-h-0 flex-1 overflow-y-auto p-3"
         }
       >
-        {isCockpit ? (
+        {isSessionFlow ? (
           children ?? <Outlet />
         ) : (
           <div className="mx-auto w-full max-w-3xl">{children ?? <Outlet />}</div>
         )}
       </main>
-      {isCockpit ? null : <BottomNav />}
+      {isSessionFlow ? null : <BottomNav />}
     </div>
   );
 }

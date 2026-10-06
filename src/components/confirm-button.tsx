@@ -6,7 +6,7 @@ interface ConfirmButtonProps
   confirmLabel: string
   durationMs?: number
   onConfirm: () => void
-  tone?: 'default' | 'danger'
+  tone?: 'default' | 'primary' | 'danger'
 }
 
 /** Action is only triggered after button is held for the full confirmation duration. */
@@ -81,10 +81,14 @@ export function ConfirmButton({
     }, 30)
   }
 
+  // One colour class per property per tone: the ternary chain never emits two `bg-*`, which is
+  // what Tailwind would resolve by stylesheet order rather than by the order written here.
   const base =
     tone === 'danger'
       ? 'bg-danger text-white hover:bg-danger-bright'
-      : 'bg-control text-fg hover:bg-control-off'
+      : tone === 'primary'
+        ? 'bg-brand text-on-brand hover:bg-brand-bright'
+        : 'bg-control text-fg hover:bg-control-off'
 
   return (
     <button
