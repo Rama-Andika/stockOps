@@ -89,13 +89,20 @@ function PosListPage() {
             aria-hidden="true"
           />
           <span className="min-w-0 flex-1">
-            <span className="block font-bold text-fg">
-              Lanjutkan sesi berjalan
-            </span>
+            <span className="block font-bold text-fg">Lanjutkan sesi berjalan</span>
             <span className="block truncate text-sm text-fg-muted">
-              {activeSession.purchaseNumber ?? activeSession.purchaseId} ·{" "}
-              {activeSession.vendorName ?? "-"}
+              {activeSession.purchaseNumber ?? activeSession.purchaseId} ·{' '}
+              {activeSession.vendorName ?? '-'}
             </span>
+            {/* `runningSessions()` orders newest first (local-repo.ts), so this banner points at
+                the session most recently started. Saying so matters once there is more than one:
+                without it the banner looks like THE running session rather than one of several,
+                and the others are only reachable from the Penerimaan list. */}
+            {running.length > 1 ? (
+              <span className="block text-sm font-semibold text-warn-text">
+                +{running.length - 1} sesi lain juga berjalan — lihat di Penerimaan.
+              </span>
+            ) : null}
           </span>
           <ChevronRight
             className="h-6 w-6 shrink-0 text-brand-soft"
@@ -147,7 +154,7 @@ function PosListPage() {
           </Button>
           {online ? null : (
             <p className="mt-2 text-center text-sm text-fg-subtle">
-              Sambungkan perangkat ke jaringan dulu untuk mengunduh data.
+              Sambungkan perangkat ke jaringan untuk mengunduh data.
             </p>
           )}
         </Card>
@@ -156,7 +163,7 @@ function PosListPage() {
       {summaries.length > 0 && filtered.length === 0 ? (
         <Card>
           <EmptyState>
-            Tidak ada PO yang cocok dengan pencarian atau saringan ini.
+            Tidak ada PO yang cocok dengan pencarian ini.
           </EmptyState>
         </Card>
       ) : null}

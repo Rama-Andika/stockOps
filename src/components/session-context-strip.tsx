@@ -1,6 +1,5 @@
 import { memo } from 'react'
 import { SegmentedProgress } from './segmented-progress'
-import { formatQty } from '~/shared/format'
 
 /**
  * Memoised: every keystroke the scanner types re-renders the session screen, and all of this
@@ -13,8 +12,6 @@ export const SessionContextStrip = memo(function SessionContextStrip({
   ordered,
   serverReceived,
   localPending,
-  overReceive,
-  excessTotal,
 }: {
   purchaseLabel: string
   vendorName: string
@@ -22,8 +19,6 @@ export const SessionContextStrip = memo(function SessionContextStrip({
   ordered: number
   serverReceived: number
   localPending: number
-  overReceive: boolean
-  excessTotal: number
 }) {
   return (
     <div className="border-b border-line pb-2">
@@ -41,11 +36,6 @@ export const SessionContextStrip = memo(function SessionContextStrip({
           localPending={localPending}
         />
       </div>
-      {overReceive ? (
-        <p className="mt-1 text-sm font-semibold text-warn-text">
-          Kelebihan terima {formatQty(excessTotal)} — menunggu persetujuan admin.
-        </p>
-      ) : null}
     </div>
   )
 })

@@ -1,7 +1,11 @@
 import { useMemo } from 'react'
 import { localRepo } from '~/client/db/local-repo'
 import { useLive } from './use-live'
-import { formatQty } from '~/shared/format'
+import {
+  excessByPurchaseItem as excessByItem,
+  overReceivedLineIds,
+  summarizeQtyByUnit,
+} from '~/shared/session-view'
 
 /**
  * Everything the two session screens read out of Dexie: the receiving cockpit
@@ -51,66 +55,31 @@ export function useSessionData(sessionId: string) {
   )
   const unitMap = useMemo(() => new Map(units.map((row) => [row.uomId, row.unit])), [units])
 
-  const overLineIds = useMemo(() => {
-    const qtyByPurchaseItem = new Map<string, number>()
-    for (const line of lines) {
-      qtyByPurchaseItem.set(
-        line.purchaseItemId,
-        (qtyByPurchaseItem.get(line.purchaseItemId) ?? 0) + line.qty,
-      )
-    }
-    // A Set, not an array: the item list looks this up once per rendered line.
-    const overLineIds = new Set<string>()
-    for (const line of lines) {
-      const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-      if (!purchaseItem) continue
-      const received = Number(purchaseItem.receivedQty ?? 0)
-      const localQty = qtyByPurchaseItem.get(line.purchaseItemId) ?? 0
-      if (received + localQty > Number(purchaseItem.qty ?? 0)) overLineIds.add(line.lineId)
-    }
-    return overLineIds
-  }, [lines, purchaseItemMap])
+  // Both derivations live in src/shared/session-view.ts so they can be unit-tested without a
+  // React renderer. The memo wrappers stay: `lines` and `purchaseItemMap` change once per scan,
+  // and the cockpit re-renders on every character the scanner types.
+  const overLineIds = useMemo(
+    () => overReceivedLineIds(lines, purchaseItemMap),
+    [lines, purchaseItemMap],
+  )
 
-  /**
-   * Excess per PO ITEM, in that item's purchase unit: what the server already has, plus what this
-   * device holds pending, minus what was ordered. Keyed by purchaseItemId and not by lineId
-   * because the order is placed per PO item — two lines for one item share a single excess, so
-   * keying by line would report it twice.
-   *
-   * This is the number `session.excessTotal` does NOT have before a session is sent: that field
-   * is written only by `markSynced` (local-repo.ts), i.e. after the server answers.
-   */
-  const excessByPurchaseItem = useMemo(() => {
-    const qtyByPurchaseItem = new Map<string, number>()
-    for (const line of lines) {
-      qtyByPurchaseItem.set(
-        line.purchaseItemId,
-        (qtyByPurchaseItem.get(line.purchaseItemId) ?? 0) + line.qty,
-      )
-    }
-    const excess = new Map<string, number>()
-    for (const [purchaseItemId, localQty] of qtyByPurchaseItem) {
-      const purchaseItem = purchaseItemMap.get(purchaseItemId)
-      if (!purchaseItem) continue
-      const over = Number(purchaseItem.receivedQty ?? 0) + localQty - Number(purchaseItem.qty ?? 0)
-      if (over > 0) excess.set(purchaseItemId, over)
-    }
-    return excess
-  }, [lines, purchaseItemMap])
+  const excessByPurchaseItem = useMemo(
+    () => excessByItem(lines, purchaseItemMap),
+    [lines, purchaseItemMap],
+  )
 
-  /**
-   * What was counted, totalled PER PURCHASE UNIT and joined — "40 KRT · 6 DUS". Units are never
-   * added together: a single number across mixed UOMs would be meaningless, which is also why
-   * the progress meter is the only place a cross-unit figure appears (there it is a ratio).
-   */
-  const qtySummary = useMemo(() => {
-    const byUnit = new Map<string, number>()
-    for (const line of lines) {
-      const unit = unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId
-      byUnit.set(unit, (byUnit.get(unit) ?? 0) + line.qty)
-    }
-    return [...byUnit.entries()].map(([unit, qty]) => `${formatQty(qty)} ${unit}`).join(' · ')
-  }, [lines, unitMap])
+  // The unit is resolved here, not inside the pure function: `unitMap` is Dexie data and
+  // src/shared/ must not know about it.
+  const qtySummary = useMemo(
+    () =>
+      summarizeQtyByUnit(
+        lines.map((line) => ({
+          qty: line.qty,
+          unit: unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId,
+        })),
+      ),
+    [lines, unitMap],
+  )
 
   return {
     session,
