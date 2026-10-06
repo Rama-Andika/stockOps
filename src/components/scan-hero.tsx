@@ -18,7 +18,14 @@ export type ScanHeroState =
       itemServerReceived: number
     }
   | { kind: 'NOT_FOUND'; scannedCode: string }
-  | { kind: 'NOT_IN_PO'; itemName: string }
+  | {
+      kind: 'NOT_IN_PO'
+      itemName: string
+      /** The newest other PO on this device that does contain the item, or null if there is none. */
+      otherPurchase: { purchaseId: string; number: string | null; vendorName: string } | null
+      /** How many FURTHER POs contain it beyond `otherPurchase`. Zero when there are no others. */
+      otherCount: number
+    }
   | { kind: 'OVER'; itemName: string; ordered: number; newTotal: number; excess: number; unit: string }
 
 /**
@@ -29,10 +36,13 @@ export function ScanHero({
   state,
   onUndo,
   onDismiss,
+  onOpenPurchase,
 }: {
   state: ScanHeroState
   onUndo: () => void
   onDismiss: () => void
+  /** Open another PO. A callback, not a <Link>, on purpose — see the note in F5c-3b. */
+  onOpenPurchase: (purchaseId: string) => void
 }) {
   if (state.kind === 'IDLE') {
     return (
@@ -117,24 +127,57 @@ export function ScanHero({
   }
 
   if (state.kind === 'NOT_IN_PO') {
+    const otherPurchase = state.otherPurchase
     return (
       <section role="alert" className="rounded-xl border border-info bg-info-wash/40 p-4">
         <p className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-info-text">
           <Info className="h-5 w-5" aria-hidden="true" />
           Bukan item PO ini
         </p>
-        <p className="mt-2 text-xl font-bold text-fg">{state.itemName}</p>
-        <p className="mt-2 text-sm text-fg-soft">
-          Barangnya dikenal, tapi tidak terdaftar di PO yang sedang dibuka. Tidak ada yang
-          ditambahkan. Periksa surat jalan vendor, atau buka PO yang benar dari daftar PO.
-        </p>
-        <button
-          type="button"
-          className="touch-target mt-3 w-full rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off"
-          onClick={onDismiss}
-        >
-          Mengerti, lanjut scan
-        </button>
+        {/* `line-clamp-2` is a height guarantee, not styling: the scan loop has to fit 320×640
+            without scrolling, and an ERP item name of 40+ characters — ordinary, not an edge
+            case — wraps to three lines at text-xl and pushes this card past the scroll area. */}
+        <p className="mt-2 line-clamp-2 text-xl font-bold text-fg">{state.itemName}</p>
+        {/* Deliberately short: this card is the tallest of the four after NOT_FOUND, and the PO
+            identity below has to fit in the same paragraph rather than add a row. */}
+        {otherPurchase ? (
+          <p className="mt-2 text-sm text-fg-soft">
+            Tidak ditambahkan. Barang ini ada di{' '}
+            <span className="font-bold text-fg">{otherPurchase.number ?? otherPurchase.purchaseId}</span>{' '}
+            · {otherPurchase.vendorName}
+            {state.otherCount > 0 ? ` (+${state.otherCount} PO lain)` : ''}.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-fg-soft">
+            Tidak ditambahkan. Barang ini tidak ada di PO mana pun yang tersimpan di perangkat.
+          </p>
+        )}
+        {otherPurchase ? (
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className="touch-target flex-1 rounded-lg bg-brand px-2 font-semibold text-on-brand transition hover:bg-brand-bright"
+              onClick={() => onOpenPurchase(otherPurchase.purchaseId)}
+            >
+              Buka PO itu
+            </button>
+            <button
+              type="button"
+              className="touch-target flex-1 rounded-lg bg-control px-2 font-semibold text-fg transition hover:bg-control-off"
+              onClick={onDismiss}
+            >
+              Lanjut scan
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="touch-target mt-3 w-full rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off"
+            onClick={onDismiss}
+          >
+            Mengerti, lanjut scan
+          </button>
+        )}
       </section>
     )
   }

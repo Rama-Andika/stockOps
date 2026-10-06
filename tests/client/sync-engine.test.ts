@@ -704,3 +704,82 @@ describe('batas besaran qty scan', () => {
   })
 })
 
+describe('mencari PO lain yang memuat barang', () => {
+  it('menemukan PO CHECKED lain dan mengecualikan PO yang sedang dibuka', async () => {
+    await pullAllData(repo, directTransport)
+
+    const others = await repo.findPurchasesWithItem(FIXTURE.item.I1, FIXTURE.purchase.CHECKED)
+
+    // I1 ada di CHECKED, DRAFT, dan CHECKED_OTHER_LOC. CHECKED dikecualikan, dan DRAFT tidak
+    // pernah ditarik ke perangkat, jadi hanya satu yang tersisa.
+    expect(others.rows).toHaveLength(1)
+    expect(others.total).toBe(1)
+    expect(others.rows[0]?.purchaseId).toBe(FIXTURE.purchase.CHECKED_OTHER_LOC)
+    expect(others.rows[0]?.number).toBe('PO10250003')
+    expect(others.rows[0]?.vendorName).toBe('BALI LESTARI KOSMETIK')
+  })
+
+  it('mengurutkan PO terbaru lebih dulu, membatasi daftarnya, tapi menghitung semuanya', async () => {
+    await pullAllData(repo, directTransport)
+
+    // Tujuh PO tambahan yang memuat I1, tanggalnya 2025-11-01 … 2025-11-07 — semuanya lebih baru
+    // dari CHECKED_OTHER_LOC (2025-10-25), jadi urutan yang diharapkan tidak ambigu.
+    const extra = Array.from({ length: 7 }, (_, index) => {
+      const day = String(index + 1).padStart(2, '0')
+      return {
+        purchaseId: `90000000000000${day}`,
+        number: `PO9900${day}`,
+        purchDate: `2025-11-${day} 08:00:00`,
+      }
+    })
+    await repo.db.purchases.bulkPut(
+      extra.map((row) => ({
+        purchaseId: row.purchaseId,
+        number: row.number,
+        status: 'CHECKED',
+        vendorId: FIXTURE.vendor.V1,
+        vendorName: 'BALI LESTARI KOSMETIK',
+        locationId: FIXTURE.location.L1,
+        userId: FIXTURE.user.ACTIVE,
+        companyId: '0',
+        purchDate: row.purchDate,
+        totalAmount: '100000',
+        updatedAt: row.purchDate,
+      })),
+    )
+    await repo.db.purchaseItems.bulkPut(
+      extra.map((row) => ({
+        purchaseItemId: `${row.purchaseId}1`,
+        purchaseId: row.purchaseId,
+        itemMasterId: FIXTURE.item.I1,
+        qty: '10',
+        uomId: FIXTURE.uom.KARTON,
+        receivedQty: '0',
+        updatedAt: row.purchDate,
+      })),
+    )
+
+    const others = await repo.findPurchasesWithItem(FIXTURE.item.I1, FIXTURE.purchase.CHECKED)
+
+    // Default limit = 5, terbaru dulu: 07 … 03. CHECKED_OTHER_LOC yang paling tua jatuh keluar.
+    expect(others.rows.map((row) => row.number)).toEqual([
+      'PO990007',
+      'PO990006',
+      'PO990005',
+      'PO990004',
+      'PO990003',
+    ])
+    // Dihitung sebelum dipotong: kartunya harus menulis "(+7 PO lain)", bukan "(+4 PO lain)".
+    expect(others.total).toBe(8)
+  })
+
+  it('mengembalikan daftar kosong untuk barang yang hanya ada di satu PO', async () => {
+    await pullAllData(repo, directTransport)
+
+    // I2 hanya ada di purchase.CHECKED, jadi tidak ada PO lain.
+    const others = await repo.findPurchasesWithItem(FIXTURE.item.I2, FIXTURE.purchase.CHECKED)
+
+    expect(others).toEqual({ rows: [], total: 0 })
+  })
+})
+

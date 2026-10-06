@@ -256,11 +256,24 @@ function SessionDetailPage() {
         playFeedback('danger')
       } else if (result.resolution.status === 'NOT_IN_PO') {
         lastScanRef.current = null
+        // Sounded BEFORE the lookup below, like the three other branches do. In a noisy dock the
+        // beep is what the operator goes by, and until the lookup resolves the card still shows
+        // the PREVIOUS scan — so waiting would leave a stale success on screen, unannounced.
+        playFeedback('warn')
+        // Only reachable when the item resolved, so this lookup runs at most once per rejected
+        // scan — and it uses the itemMasterId index, so it does not scan the table.
+        const scannedItem = result.resolution.item
+        const others = scannedItem
+          ? await localRepo.findPurchasesWithItem(scannedItem.itemMasterId, session.purchaseId)
+          : null
+        const [firstOther] = others?.rows ?? []
         setHeroState({
           kind: 'NOT_IN_PO',
-          itemName: result.resolution.item?.name ?? code,
+          itemName: scannedItem?.name ?? code,
+          otherPurchase: firstOther ?? null,
+          // `total`, not `rows.length`: the list is capped at five POs, the count is not.
+          otherCount: Math.max(0, (others?.total ?? 0) - 1),
         })
-        playFeedback('warn')
       } else {
         // Resolution succeeded but the line was rejected (today: qty <= 0). Show the real reason
         // instead of mislabelling it as "not part of this PO".
@@ -300,6 +313,25 @@ function SessionDetailPage() {
     } finally {
       scanRef.current?.focus()
     }
+  }
+
+  /**
+   * "Buka PO itu" on the NOT_IN_PO card. When this device already has a RUNNING session for that
+   * PO, go straight to the session instead of to the PO detail screen: that screen carries no
+   * "Lanjutkan sesi berjalan" banner — that one lives on the PO LIST (routes/pos/index.tsx) — and
+   * its "Mulai Penerimaan" button calls `createSession` unconditionally, which has no dedupe. So
+   * landing there would let the operator start a SECOND session for a PO already being received
+   * and record the same delivery twice. Either way the session being left stays RUNNING in Dexie
+   * and is reachable from the session list.
+   */
+  const openPurchase = async (purchaseId: string) => {
+    const running = await localRepo.runningSessions()
+    const existing = running.find((row) => row.purchaseId === purchaseId)
+    if (existing) {
+      void navigate({ to: '/sessions/$sessionId', params: { sessionId: existing.sessionId } })
+      return
+    }
+    void navigate({ to: '/pos/$purchaseId', params: { purchaseId } })
   }
 
   const handleAdd = () => {
@@ -395,7 +427,12 @@ function SessionDetailPage() {
         aria-labelledby={editable ? `session-tab-${tab}` : undefined}
       >
         {editable && tab === 'scan' ? (
-          <ScanHero state={heroState} onUndo={() => void handleUndo()} onDismiss={dismissHero} />
+          <ScanHero
+            state={heroState}
+            onUndo={() => void handleUndo()}
+            onDismiss={dismissHero}
+            onOpenPurchase={(purchaseId) => void openPurchase(purchaseId)}
+          />
         ) : null}
 
         {!editable || tab === 'items' ? (

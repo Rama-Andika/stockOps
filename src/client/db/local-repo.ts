@@ -381,6 +381,52 @@ export class LocalRepository {
     return this.db.purchaseItems.where('purchaseId').equals(purchaseId).toArray()
   }
 
+  /**
+   * Other POs on this device that contain the given item, newest first. Used when a scan resolves
+   * to a known item that is not on the PO being received: the operator can be told where it DOES
+   * belong instead of only where it does not.
+   *
+   * `rows` holds at most `limit` POs, newest first; `total` counts ALL of them. They are separate
+   * because the scan card names one PO and reports the rest as a count — deriving that count from
+   * `rows.length` capped it at `limit - 1`, so an item on nine other POs was shown as "+4".
+   *
+   * No status filter is needed — the local `purchases` table only ever holds CHECKED POs (BR-1:
+   * the pull fetches only those, and refreshPurchases removes the ones that closed). A purchase
+   * item whose PO is not in the table at all is dropped by the `Boolean` filter below; since
+   * `replacePurchases` rewrites both tables in one transaction that cannot happen today, so the
+   * filter is defensive — but it is also what keeps `total` counting only POs that really exist.
+   */
+  async findPurchasesWithItem(
+    itemMasterId: string,
+    excludePurchaseId: string,
+    limit = 5,
+  ): Promise<{
+    rows: Array<{ purchaseId: string; number: string | null; vendorName: string }>
+    total: number
+  }> {
+    const itemRows = await this.db.purchaseItems.where('itemMasterId').equals(itemMasterId).toArray()
+    const ids = [...new Set(itemRows.map((row) => row.purchaseId))].filter(
+      (id) => id !== excludePurchaseId,
+    )
+    if (ids.length === 0) return { rows: [], total: 0 }
+
+    const purchases = await this.db.purchases.bulkGet(ids)
+    const found = purchases
+      .filter((purchase): purchase is LocalPurchase => Boolean(purchase))
+      // `purchDate` is stored as 'YYYY-MM-DD HH:mm:ss', so plain string order is date order.
+      .sort((a, b) => (b.purchDate ?? '').localeCompare(a.purchDate ?? ''))
+
+    return {
+      rows: found.slice(0, limit).map((purchase) => ({
+        purchaseId: purchase.purchaseId,
+        number: purchase.number,
+        vendorName: purchase.vendorName,
+      })),
+      // Taken before the slice on purpose: `limit` caps what is listed, not what is reported.
+      total: found.length,
+    }
+  }
+
   /** FR-4.3: Match barcode/barcode_2/barcode_3; B-4: fallback to item code. */
   async getItemByBarcodeOrCode(scanned: string): Promise<LocalItem | undefined> {
     const needle = scanned.trim()

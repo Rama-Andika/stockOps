@@ -135,6 +135,7 @@ describe('ScanHero', () => {
         }}
         onUndo={vi.fn()}
         onDismiss={vi.fn()}
+        onOpenPurchase={vi.fn()}
       />,
     )
     expect(screen.getByRole('status')).toHaveTextContent('BERAS PREMIUM 5KG')
@@ -147,10 +148,60 @@ describe('ScanHero', () => {
         state={{ kind: 'NOT_FOUND', scannedCode: '8991002103458' }}
         onUndo={vi.fn()}
         onDismiss={vi.fn()}
+        onOpenPurchase={vi.fn()}
       />,
     )
     expect(screen.getByRole('alert')).toHaveTextContent('8991002103458')
     expect(screen.queryByRole('button', { name: 'Batalkan scan ini' })).toBeNull()
+  })
+
+  it('bukan item PO ini menyebut PO lain dan membukanya', () => {
+    const onOpenPurchase = vi.fn()
+    render(
+      <ScanHero
+        state={{
+          kind: 'NOT_IN_PO',
+          itemName: 'KECAP MANIS 600ML',
+          otherPurchase: {
+            purchaseId: '720593553977261000',
+            number: 'PO10250003',
+            vendorName: 'CV Berkah Jaya',
+          },
+          otherCount: 2,
+        }}
+        onUndo={vi.fn()}
+        onDismiss={vi.fn()}
+        onOpenPurchase={onOpenPurchase}
+      />,
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent('PO10250003')
+    // Nama vendor ikut diassert: tanpa ini `· {vendorName}` bisa dibuang dari kartunya tanpa
+    // satu test pun gagal, padahal identitas vendor bagian dari gunanya kartu ini.
+    expect(screen.getByRole('alert')).toHaveTextContent('CV Berkah Jaya')
+    expect(screen.getByRole('alert')).toHaveTextContent('+2 PO lain')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Buka PO itu' }))
+    expect(onOpenPurchase).toHaveBeenCalledWith('720593553977261000')
+  })
+
+  it('bukan item PO ini tanpa PO lain hanya menawarkan lanjut scan', () => {
+    render(
+      <ScanHero
+        state={{
+          kind: 'NOT_IN_PO',
+          itemName: 'KECAP MANIS 600ML',
+          otherPurchase: null,
+          otherCount: 0,
+        }}
+        onUndo={vi.fn()}
+        onDismiss={vi.fn()}
+        onOpenPurchase={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Buka PO itu' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Mengerti, lanjut scan' })).toBeInTheDocument()
   })
 
   it('kelebihan terima memanggil onUndo saat dibatalkan', () => {
@@ -167,6 +218,7 @@ describe('ScanHero', () => {
         }}
         onUndo={onUndo}
         onDismiss={vi.fn()}
+        onOpenPurchase={vi.fn()}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Batalkan scan ini' }))
