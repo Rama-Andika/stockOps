@@ -100,6 +100,36 @@ describe('excessByPurchaseItem', () => {
     expect(result.size).toBe(0)
   })
 
+  // Kedua test di bawah memaku perilaku yang sampai sekarang hanya dijaga komentar di `toQty`:
+  // qty yang tidak bisa diparse membuat perbandingannya NaN, dan NaN > 0 selalu false, jadi
+  // itemnya TIDAK ditandai. Menambahkan "penjagaan" seperti `Number(v) || 0` akan mengubahnya
+  // menjadi pesanan 0 — sehingga setiap scan item itu jadi kelebihan terima — tanpa satu pun
+  // test lain gagal.
+  it('qty pesanan yang tidak bisa diparse TIDAK ditandai kelebihan', () => {
+    const result = excessByPurchaseItem(
+      [{ lineId: 'L1', purchaseItemId: 'PI1', qty: 99 }],
+      ordered([['PI1', 'abc', '0']]),
+    )
+    expect(result.size).toBe(0)
+  })
+
+  it('receivedQty yang tidak bisa diparse TIDAK ditandai kelebihan', () => {
+    const result = excessByPurchaseItem(
+      [{ lineId: 'L1', purchaseItemId: 'PI1', qty: 99 }],
+      ordered([['PI1', '10', 'abc']]),
+    )
+    expect(result.size).toBe(0)
+  })
+
+  it('qty pesanan string kosong tetap dibaca sebagai 0, seperti versi lama', () => {
+    // `Number('' ?? 0)` adalah 0, bukan NaN — jadi di sini kelebihannya memang nyata.
+    const result = excessByPurchaseItem(
+      [{ lineId: 'L1', purchaseItemId: 'PI1', qty: 5 }],
+      ordered([['PI1', '', '0']]),
+    )
+    expect(result.get('PI1')).toBe(5)
+  })
+
   it('baris yang itemnya tidak ada di PO diabaikan, bukan dianggap kelebihan', () => {
     const result = excessByPurchaseItem(
       [{ lineId: 'L1', purchaseItemId: 'HILANG', qty: 99 }],

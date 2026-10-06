@@ -74,12 +74,15 @@ function SessionsPage() {
 
       <SendStatusStrip
         pendingCount={pendingCount}
+        runningCount={runningCount}
         syncing={syncing}
         online={online}
         lastSyncedAt={lastSyncedAt}
         onSend={() => void handleSend()}
       />
 
+      {/* Still `> 1`: the strip now speaks for running sessions in general, and this line adds
+          the one thing it does not say — that the PO list can only offer one of them. */}
       {runningCount > 1 ? (
         <p className="text-sm font-semibold text-warn-text">
           {runningCount} sesi masih berjalan. Selesaikan satu per satu.
@@ -89,7 +92,7 @@ function SessionsPage() {
       {sessions.length === 0 ? (
         <Card>
           <EmptyState>
-            Belum ada dokumen penerimaan, silahkan buat dokumen baru dari daftar PO.
+            Belum ada dokumen penerimaan. Silakan buat dokumen baru dari daftar PO.
           </EmptyState>
         </Card>
       ) : (

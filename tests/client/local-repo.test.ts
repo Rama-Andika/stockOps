@@ -455,4 +455,71 @@ describe('LocalRepository (Dexie)', () => {
       expect(first).toMatch(/^[0-9a-f-]{36}$/)
     })
   })
+
+  describe('daftar status kirim', () => {
+    it('runningSessions mengembalikan yang terbaru lebih dulu', async () => {
+      // Urutannya load-bearing: daftar PO memakai `running[0]` sebagai sesi yang ditawarkan untuk
+      // dilanjutkan. Sebelum diurutkan, `where('status').equals(...)` mengembalikan baris dalam
+      // urutan primary key — yaitu UUID sessionId, praktis acak.
+      const first = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const second = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const third = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+
+      const running = await repo.runningSessions()
+
+      expect(running.map((session) => session.sequence)).toEqual([3, 2, 1])
+      expect(running[0]?.sessionId).toBe(third.sessionId)
+      expect(running[2]?.sessionId).toBe(first.sessionId)
+      expect(second.sequence).toBe(2)
+    })
+
+    it('runningSessions mengabaikan sesi yang sudah difinalisasi', async () => {
+      const running = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const finalized = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      await repo.finalizeSession(finalized.sessionId, {
+        invoiceNumber: 'INV-1',
+        doNumber: 'DO-1',
+        receiveDate: '2026-10-06 10:00:00',
+      })
+
+      const result = await repo.runningSessions()
+
+      expect(result).toHaveLength(1)
+      expect(result[0]?.sessionId).toBe(running.sessionId)
+    })
+
+    it('countItemsBySession menghitung per sesi dan MENGHILANGKAN sesi tanpa baris', async () => {
+      // Sesi tanpa baris sengaja absen dari peta: layar status membacanya dengan `?? 0`.
+      const withLines = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      const empty = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      for (const purchaseItemId of ['PI1', 'PI2']) {
+        await repo.addOrIncrementLine(withLines.sessionId, {
+          purchaseItemId,
+          itemMasterId: 'I1',
+          barcode: '22001771',
+          qty: 1,
+          uomPurchaseId: 'U-KRT',
+          uomId: 'U-PCS',
+          convQty: 12,
+          convFound: true,
+        })
+      }
+      // Scan kedua atas PI1 menyatu ke baris yang sama, jadi hitungannya tetap 2, bukan 3.
+      await repo.addOrIncrementLine(withLines.sessionId, {
+        purchaseItemId: 'PI1',
+        itemMasterId: 'I1',
+        barcode: '22001771',
+        qty: 1,
+        uomPurchaseId: 'U-KRT',
+        uomId: 'U-PCS',
+        convQty: 12,
+        convFound: true,
+      })
+
+      const counts = await repo.countItemsBySession()
+
+      expect(counts.get(withLines.sessionId)).toBe(2)
+      expect(counts.has(empty.sessionId)).toBe(false)
+    })
+  })
 })

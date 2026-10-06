@@ -76,9 +76,14 @@ export function summarizeQtyByUnit(
 
 /**
  * Excess per PO ITEM, in that item's purchase unit: what the server already holds, plus what this
- * device holds pending, minus what was ordered. Keyed by purchaseItemId and not by lineId because
- * the order is placed per PO item — two lines for one item share a single excess, so keying by
- * line would report it twice.
+ * device holds pending, minus what was ordered. Keyed by purchaseItemId because that is the level
+ * the order is placed at.
+ *
+ * It also sums several lines for one item before comparing. Locally that is defensive rather than
+ * necessary — `addOrIncrementLine` looks up `[sessionId+purchaseItemId]` and merges into the
+ * existing row, so one item is always exactly one line per session. It is kept because the server
+ * side (`evaluateSession`) must handle a payload that does contain duplicates, and because a
+ * per-line comparison would be wrong the moment that local guarantee changed.
  *
  * Items within their ordered quantity are absent from the map, so `map.size` is the number of
  * over-received items and `map.get(id) ?? 0` is correct for the rest.

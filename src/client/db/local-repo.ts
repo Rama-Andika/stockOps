@@ -522,8 +522,13 @@ export class LocalRepository {
    */
   async countItemsBySession(): Promise<Map<string, number>> {
     const counts = new Map<string, number>()
-    await this.db.sessionItems.each((line) => {
-      counts.set(line.sessionId, (counts.get(line.sessionId) ?? 0) + 1)
+    // `eachKey` over the sessionId index, not `each` over the table: the only field needed is the
+    // key itself, and `each` deserializes every full record to read it. On a device holding a few
+    // hundred unpurged documents that is tens of thousands of objects materialised on the main
+    // thread, on the one screen whose job is to answer "did my work land" quickly.
+    await this.db.sessionItems.orderBy('sessionId').eachKey((key) => {
+      const sessionId = String(key)
+      counts.set(sessionId, (counts.get(sessionId) ?? 0) + 1)
     })
     return counts
   }

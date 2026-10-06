@@ -6,6 +6,7 @@ import { SendStatusStrip } from '~/components/send-status-strip'
 describe('SendStatusStrip', () => {
   const base = {
     pendingCount: 0,
+    runningCount: 0,
     syncing: false,
     online: true,
     lastSyncedAt: null,
@@ -13,10 +14,57 @@ describe('SendStatusStrip', () => {
   }
 
   it('semua terkirim: menyebut waktu terakhir dan tidak menawarkan tombol', () => {
-    render(<SendStatusStrip {...base} lastSyncedAt="2026-10-06T07:00:00.000Z" />)
+    // 30 menit lalu, dihitung relatif terhadap sekarang supaya assertion di bawah memaku baris
+    // waktunya. Tanpa itu, menghapus seluruh sub-baris formatRelativeDateTime tetap lolos.
+    const halfHourAgo = new Date(Date.now() - 30 * 60_000).toISOString()
+    render(<SendStatusStrip {...base} lastSyncedAt={halfHourAgo} />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Semua dokumen sudah masuk sistem')
+    const strip = screen.getByRole('status')
+    expect(strip).toHaveTextContent('Semua dokumen sudah masuk sistem')
+    expect(strip).toHaveTextContent('30 menit yang lalu')
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('nol tertahan tapi ada sesi berjalan: TIDAK mengklaim semuanya sudah masuk', () => {
+    // Keadaan yang bisa dicapai dan paling mahal: pendingCount hanya menghitung PENDING + FAILED,
+    // jadi sesi RUNNING berisi scan yang belum difinalisasi tidak terlihat olehnya. Strip hijau
+    // di keadaan ini adalah pernyataan yang salah, dan tidak ada permukaan lain yang
+    // membantahnya — SyncStatus sunyi dan lencana nav kosong pada penghitung yang sama.
+    render(
+      <SendStatusStrip
+        {...base}
+        runningCount={1}
+        lastSyncedAt="2026-10-06T07:00:00.000Z"
+      />,
+    )
+
+    const strip = screen.getByRole('status')
+    expect(strip).toHaveTextContent('1 sesi masih berjalan')
+    expect(strip).toHaveTextContent('Belum diselesaikan, jadi belum dikirim.')
+    expect(strip).not.toHaveTextContent('sudah masuk sistem')
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('nol tertahan dan offline: tetap wujud "belum ada dokumen", bukan "0 dokumen belum terkirim"', () => {
+    // Memaku posisi cabang !online DI BAWAH cabang pendingCount === 0. Dibalik, strip ini
+    // berbunyi "0 dokumen belum terkirim".
+    render(<SendStatusStrip {...base} online={false} />)
+
+    const strip = screen.getByRole('status')
+    expect(strip).toHaveTextContent('Belum ada dokumen untuk dikirim')
+    expect(strip).not.toHaveTextContent('belum terkirim')
+  })
+
+  it('sedang mengirim dengan outbox sudah kosong tetap berbunyi "Sedang mengirim…"', () => {
+    // Jendela ini nyata: runSync memanggil refresh() — yang menurunkan pendingCount ke 0 —
+    // SEBELUM finally-nya menyetel syncing: false. Kalau cabang pendingCount === 0 dipindah ke
+    // atas cabang syncing, strip berkedip hijau "Semua dokumen sudah masuk sistem" di tengah
+    // pengiriman.
+    render(<SendStatusStrip {...base} syncing lastSyncedAt="2026-10-06T07:00:00.000Z" />)
+
+    const strip = screen.getByRole('status')
+    expect(strip).toHaveTextContent('Sedang mengirim…')
+    expect(strip).not.toHaveTextContent('sudah masuk sistem')
   })
 
   it('belum pernah mengirim apa pun: kalimatnya berbeda, bukan "sudah masuk sistem"', () => {
