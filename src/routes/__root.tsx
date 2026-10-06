@@ -9,7 +9,10 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
-      { name: 'theme-color', content: '#0f172a' },
+      // Must match --color-ground in src/styles/app.css and theme_color in
+      // public/manifest.webmanifest: a meta tag cannot read var(), so this value is duplicated in
+      // three places and all three change together.
+      { name: 'theme-color', content: '#0b1220' },
       { name: 'description', content: 'Pencatatan penerimaan barang berbasis PO untuk PDT (offline-first)' },
       { title: 'StockOps — Penerimaan Barang' },
     ],

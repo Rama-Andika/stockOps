@@ -131,6 +131,7 @@ describe('ScanHero', () => {
           stockUnit: 'PCS',
           itemOrdered: 10,
           itemTotal: 8,
+          itemServerReceived: 6,
         }}
         onUndo={vi.fn()}
         onDismiss={vi.fn()}

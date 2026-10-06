@@ -4,7 +4,7 @@
   "description": "Pencatatan penerimaan barang berbasis Purchase Order (offline-first) untuk perangkat PDT",
   "lang": "id",
   "dir": "ltr",
-  "theme_color": "#0f172a",
+  "theme_color": "#0b1220",
   "background_color": "#0b1220",
   "display": "standalone",
   "orientation": "portrait",

@@ -10,11 +10,14 @@ export function SegmentedProgress({
   serverReceived,
   localPending,
   unit,
+  compact = false,
 }: {
   ordered: number
   serverReceived: number
   localPending: number
   unit?: string
+  /** Bar only, thinner, no number line — for places that already state the numbers in words. */
+  compact?: boolean
 }) {
   const total = serverReceived + localPending
   // A PO line with qty 0 would divide by zero; treat the bar as full-scale instead.
@@ -30,24 +33,28 @@ export function SegmentedProgress({
 
   return (
     <div>
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-raised">
+      <div
+        className={`flex w-full overflow-hidden rounded-full bg-raised ${compact ? 'h-2' : 'h-3'}`}
+      >
         <div className="h-full bg-ok" style={{ width: pct(serverPart) }} />
         <div
-          className="h-full bg-ok/40 bg-[repeating-linear-gradient(135deg,#10b981_0_4px,transparent_4px_8px)]"
+          className="h-full bg-ok/40 bg-[repeating-linear-gradient(135deg,var(--color-ok)_0_4px,transparent_4px_8px)]"
           style={{ width: pct(pendingPart) }}
         />
         <div className="h-full bg-warn" style={{ width: pct(over) }} />
       </div>
-      <p className="mt-1 text-sm tabular-nums text-fg-muted">
-        {formatQty(total)} <span className="text-fg-subtle">dari</span> {formatQty(ordered)}
-        {unitSuffix}
-        {localPending > 0 ? (
-          <span className="text-fg-subtle"> · {formatQty(localPending)} belum terkirim</span>
-        ) : null}
-        {over > 0 ? (
-          <span className="font-semibold text-warn-text"> · +{formatQty(over)} lebih</span>
-        ) : null}
-      </p>
+      {compact ? null : (
+        <p className="mt-1 text-sm tabular-nums text-fg-muted">
+          {formatQty(total)} <span className="text-fg-subtle">dari</span> {formatQty(ordered)}
+          {unitSuffix}
+          {localPending > 0 ? (
+            <span className="text-fg-subtle"> · {formatQty(localPending)} belum terkirim</span>
+          ) : null}
+          {over > 0 ? (
+            <span className="font-semibold text-warn-text"> · +{formatQty(over)} lebih</span>
+          ) : null}
+        </p>
+      )}
     </div>
   )
 }

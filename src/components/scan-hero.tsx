@@ -1,4 +1,5 @@
 import { AlertTriangle, Check, Info, ScanLine, X } from 'lucide-react'
+import { SegmentedProgress } from './segmented-progress'
 import { formatQty } from '~/shared/format'
 
 export type ScanHeroState =
@@ -13,6 +14,8 @@ export type ScanHeroState =
       stockUnit: string
       itemOrdered: number
       itemTotal: number
+      /** Part of itemTotal the server already confirmed; the rest is still only on this device. */
+      itemServerReceived: number
     }
   | { kind: 'NOT_FOUND'; scannedCode: string }
   | { kind: 'NOT_IN_PO'; itemName: string }
@@ -70,6 +73,14 @@ export function ScanHero({
         <p className="mt-1 text-sm tabular-nums text-fg-muted">
           Item ini: {formatQty(state.itemTotal)} dari {formatQty(state.itemOrdered)} {state.purchaseUnit}
         </p>
+        <div className="mt-1">
+          <SegmentedProgress
+            compact
+            ordered={state.itemOrdered}
+            serverReceived={state.itemServerReceived}
+            localPending={state.itemTotal - state.itemServerReceived}
+          />
+        </div>
         <button
           type="button"
           className="touch-target mt-2 w-full rounded-lg border border-line-strong font-semibold text-fg transition hover:bg-raised"

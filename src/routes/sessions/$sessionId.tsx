@@ -244,6 +244,7 @@ function SessionDetailPage() {
             stockUnit: unitMap.get(line.uomId) ?? line.uomId,
             itemOrdered: ordered,
             itemTotal,
+            itemServerReceived: serverReceived,
           })
           playFeedback('success')
         }
