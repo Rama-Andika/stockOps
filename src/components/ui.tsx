@@ -3,10 +3,10 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 const BUTTON_STYLES: Record<ButtonVariant, string> = {
-  primary: 'bg-cyan-500 text-slate-900 hover:bg-cyan-400',
-  secondary: 'bg-slate-700 text-slate-100 hover:bg-slate-600',
-  danger: 'bg-red-600 text-white hover:bg-red-500',
-  ghost: 'bg-transparent text-slate-200 hover:bg-slate-800',
+  primary: 'bg-brand text-on-brand hover:bg-brand-bright',
+  secondary: 'bg-control text-fg hover:bg-control-off',
+  danger: 'bg-danger text-white hover:bg-danger-bright',
+  ghost: 'bg-transparent text-fg-soft hover:bg-raised',
 }
 
 export function Button({
@@ -17,7 +17,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`touch-target rounded-lg px-5 py-3 font-semibold transition ${BUTTON_STYLES[variant]} disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200 ${className}`}
+      className={`touch-target rounded-lg px-5 py-3 font-semibold transition ${BUTTON_STYLES[variant]} disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft ${className}`}
       {...props}
     />
   )
@@ -35,10 +35,10 @@ export function Card({
   className?: string
 }) {
   return (
-    <section className={`rounded-xl border border-slate-700 bg-slate-900/60 p-3 ${className}`}>
+    <section className={`rounded-xl border border-line bg-surface/60 p-3 ${className}`}>
       {(title || actions) && (
         <header className="mb-3 flex items-center justify-between gap-3">
-          {title ? <h2 className="text-lg font-bold text-slate-100">{title}</h2> : <span />}
+          {title ? <h2 className="text-lg font-bold text-fg">{title}</h2> : <span />}
           {actions}
         </header>
       )}
@@ -50,11 +50,11 @@ export function Card({
 type Tone = 'neutral' | 'info' | 'success' | 'warn' | 'danger'
 
 const TONE_STYLES: Record<Tone, string> = {
-  neutral: 'bg-slate-700 text-slate-100',
-  info: 'bg-sky-800 text-sky-100',
-  success: 'bg-emerald-800 text-emerald-100',
-  warn: 'bg-amber-400 text-slate-950',
-  danger: 'bg-red-800 text-red-100',
+  neutral: 'bg-control text-fg',
+  info: 'bg-info-fill text-on-info-fill',
+  success: 'bg-ok-fill text-on-ok-fill',
+  warn: 'bg-warn text-on-warn',
+  danger: 'bg-danger-fill text-on-danger-fill',
 }
 
 export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
@@ -84,34 +84,27 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-slate-300">{label}</span>
+      <span className="mb-1 block text-sm font-semibold text-fg-muted">{label}</span>
       {children}
-      {hint ? <span className="mt-1 block text-xs text-slate-400">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-xs text-fg-subtle">{hint}</span> : null}
     </label>
   )
 }
 
+/**
+ * Shape only — deliberately no width and no border colour. Both used to live here and both
+ * collided with what callers added on top (`w-full` beat `w-16`; `border-line-strong` beat the
+ * red invalid border), and Tailwind resolves such ties by stylesheet order, not by className
+ * order. Every caller states its own width and border colour.
+ */
 export const inputClass =
-  'touch-target w-full rounded-lg border border-slate-600 bg-slate-950 px-4 py-3 text-slate-100 placeholder:text-slate-400'
+  'touch-target rounded-lg border bg-field px-4 py-3 text-fg placeholder:text-fg-subtle'
 
-export function Progress({ value, max }: { value: number; max: number }) {
-  const safeMax = max > 0 ? max : 1
-  const percent = Math.min(100, Math.round((value / safeMax) * 100))
-  const over = value > max
-  return (
-    <div className="h-3 w-full overflow-hidden rounded-full bg-slate-800">
-      <div
-        className={`h-full ${over ? 'bg-red-500' : 'bg-cyan-400'}`}
-        style={{ width: `${over ? 100 : percent}%` }}
-      />
-    </div>
-  )
-}
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="py-8 text-center text-slate-400">{children}</p>
+  return <p className="py-8 text-center text-fg-subtle">{children}</p>
 }
 
 export function Loading({ label = 'Memuat…' }: { label?: string }) {
-  return <p className="py-8 text-center text-slate-300">{label}</p>
+  return <p className="py-8 text-center text-fg-muted">{label}</p>
 }

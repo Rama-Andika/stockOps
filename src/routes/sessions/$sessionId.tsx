@@ -5,7 +5,6 @@ import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
-import { loadPreferences } from '~/client/preferences'
 import { playFeedback } from '~/client/feedback'
 import { toast } from '~/client/toast'
 import { Upload } from 'lucide-react'
@@ -96,8 +95,9 @@ function SessionDetailPage() {
   const lastScanRef = useRef<{ lineId: string; addedQty: number } | null>(null)
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
   // Lives here, not in ScanBar: ScanBar unmounts on every tab switch, so keeping it there would
-  // reopen the keypad each time the operator comes back to the scan tab.
-  const [padOpen, setPadOpen] = useState(() => loadPreferences().qtyInput === 'pad')
+  // reopen the keypad each time the operator comes back to the scan tab. It always starts closed —
+  // the "123" button is the only way in, and the qty field itself is always typable.
+  const [padOpen, setPadOpen] = useState(false)
   const [invoice, setInvoice] = useState('')
   const [doNumber, setDoNumber] = useState('')
   const [confirmingFinalize, setConfirmingFinalize] = useState(false)
@@ -400,9 +400,9 @@ function SessionDetailPage() {
         {!editable || tab === 'items' ? (
           <Card title={`Item dalam sesi (${lines.length})`}>
             {editable ? (
-              <p className="mb-1 text-sm text-slate-400">Ketuk item untuk mengubah qty atau menghapus.</p>
+              <p className="mb-1 text-sm text-fg-subtle">Ketuk item untuk mengubah qty atau menghapus.</p>
             ) : null}
-            <ul className="flex flex-col divide-y divide-slate-800">
+            <ul className="flex flex-col divide-y divide-line-soft">
               {lines.map((line) => {
                 const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
                 const item = items[line.itemMasterId]
@@ -417,17 +417,17 @@ function SessionDetailPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-100">{item?.name ?? line.itemMasterId}</p>
-                          <p className="text-sm text-slate-400">
+                          <p className="font-semibold text-fg">{item?.name ?? line.itemMasterId}</p>
+                          <p className="text-sm text-fg-subtle">
                             {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
                             {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
                             {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
                           </p>
-                          <p className="text-sm tabular-nums text-slate-400">
+                          <p className="text-sm tabular-nums text-fg-subtle">
                             = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
                           </p>
                           {purchaseItem ? (
-                            <p className="text-sm tabular-nums text-slate-300">
+                            <p className="text-sm tabular-nums text-fg-muted">
                               Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
                             </p>
                           ) : null}
@@ -461,11 +461,11 @@ function SessionDetailPage() {
               }}
             />
             {session.receiveDate ? (
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-fg-subtle">
                 Tanggal penerimaan: {session.receiveDate}
               </p>
             ) : null}
-            <p className="mt-1 text-xs text-slate-400">ID sesi: {session.sessionId}</p>
+            <p className="mt-1 text-xs text-fg-subtle">ID sesi: {session.sessionId}</p>
           </div>
         ) : null}
 
@@ -483,7 +483,7 @@ function SessionDetailPage() {
                   confirmLabel="Tahan terus… sesi akan dibatalkan"
                   onConfirm={() => void handleCancel()}
                 />
-                <p className="text-center text-sm text-slate-400">
+                <p className="text-center text-sm text-fg-subtle">
                   Tombol merah perlu ditahan 1,5 detik supaya tidak tersenggol.
                 </p>
               </div>
@@ -529,7 +529,7 @@ function SessionDetailPage() {
 
       {/* Fixed bottom: scan bar + tab bar. Never scrolls. */}
       {editable ? (
-        <div className="shrink-0 border-t border-slate-700 bg-slate-950/95 pb-[env(safe-area-inset-bottom)]">
+        <div className="shrink-0 border-t border-line bg-chrome/95 pb-[env(safe-area-inset-bottom)]">
           {tab === 'scan' ? (
             <div className="px-3 py-2">
               <ScanBar
@@ -610,21 +610,21 @@ function VendorDocCard({
       <div className="flex flex-col gap-3">
         <Field label="Nomor Invoice (wajib)">
           <input
-            className={`${inputClass} ${invoiceError ? 'border-red-500!' : ''}`}
+            className={`${inputClass} w-full ${invoiceError ? 'border-danger-line' : 'border-line-strong'}`}
             value={invoice}
             disabled={!editable}
             onChange={(event) => onInvoiceChange(event.target.value)}
           />
-          {invoiceError ? <span className="mt-1 block text-xs text-red-400">Nomor invoice wajib diisi.</span> : null}
+          {invoiceError ? <span className="mt-1 block text-xs text-danger-text">Nomor invoice wajib diisi.</span> : null}
         </Field>
         <Field label="Nomor Surat Jalan / DO (wajib)">
           <input
-            className={`${inputClass} ${doNumberError ? 'border-red-500!' : ''}`}
+            className={`${inputClass} w-full ${doNumberError ? 'border-danger-line' : 'border-line-strong'}`}
             value={doNumber}
             disabled={!editable}
             onChange={(event) => onDoNumberChange(event.target.value)}
           />
-          {doNumberError ? <span className="mt-1 block text-xs text-red-400">Nomor surat jalan (DO) wajib diisi.</span> : null}
+          {doNumberError ? <span className="mt-1 block text-xs text-danger-text">Nomor surat jalan (DO) wajib diisi.</span> : null}
         </Field>
       </div>
     </Card>
@@ -705,7 +705,7 @@ function LineEditSheet({
       <button
         type="button"
         aria-label="Tutup editor qty"
-        className="absolute inset-0 bg-slate-950/60"
+        className="absolute inset-0 bg-scrim/60"
         onClick={close}
       />
       <div
@@ -713,11 +713,11 @@ function LineEditSheet({
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${itemName}`}
-        className="relative rounded-t-2xl border-t border-slate-700 bg-slate-900 p-4 pb-[env(safe-area-inset-bottom)]"
+        className="relative rounded-t-2xl border-t border-line bg-sheet p-4 pb-[env(safe-area-inset-bottom)]"
         onKeyDown={handleKeyDown}
       >
-        <p className="text-lg font-bold text-slate-100">{itemName}</p>
-        <p className="text-sm text-slate-400">
+        <p className="text-lg font-bold text-fg">{itemName}</p>
+        <p className="text-sm text-fg-subtle">
           {orderedText} • 1 {purchaseUnit} = {formatQty(line.convQty)} {stockUnit}
         </p>
         <div className="mt-3 flex items-center gap-3">
@@ -731,7 +731,7 @@ function LineEditSheet({
           </Button>
           <input
             ref={qtyInputRef}
-            className={`${inputClass} text-center text-xl font-bold tabular-nums`}
+            className={`${inputClass} w-full border-line-strong text-center text-xl font-bold tabular-nums`}
             inputMode="decimal"
             aria-label={`Qty ${itemName}`}
             value={draftQty}
@@ -755,7 +755,7 @@ function LineEditSheet({
             +1
           </Button>
         </div>
-        <p className="mt-2 text-sm tabular-nums text-slate-300">
+        <p className="mt-2 text-sm tabular-nums text-fg-muted">
           {formatQty(Number(draftQty) > 0 ? Number(draftQty) : line.qty)} {purchaseUnit} ={' '}
           {formatQty((Number(draftQty) > 0 ? Number(draftQty) : line.qty) * line.convQty)} {stockUnit}
         </p>
@@ -829,7 +829,7 @@ function FinalizeDialog({
       <button
         type="button"
         aria-label="Batal finalisasi"
-        className="absolute inset-0 bg-slate-950/60"
+        className="absolute inset-0 bg-scrim/60"
         onClick={onCancel}
       />
       <div
@@ -837,17 +837,17 @@ function FinalizeDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Konfirmasi selesaikan sesi"
-        className="relative w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4"
+        className="relative w-full max-w-sm rounded-2xl border border-line bg-sheet p-4"
         onKeyDown={handleKeyDown}
       >
-        <p className="text-lg font-bold text-slate-100">Selesaikan sesi?</p>
-        <div className="mt-3 flex flex-col gap-1 text-sm text-slate-300">
+        <p className="text-lg font-bold text-fg">Selesaikan sesi?</p>
+        <div className="mt-3 flex flex-col gap-1 text-sm text-fg-muted">
           <p>PO: {purchaseLabel}</p>
           <p>Invoice: {invoice}</p>
           <p>DO: {doNumber}</p>
           <p>Item: {itemCount}</p>
         </div>
-        <p className="mt-2 text-xs text-slate-400">Setelah diselesaikan, sesi tidak bisa diubah lagi.</p>
+        <p className="mt-2 text-xs text-fg-subtle">Setelah diselesaikan, sesi tidak bisa diubah lagi.</p>
         <div className="mt-4 flex flex-col gap-2">
           <Button className="w-full" onClick={onConfirm}>
             Ya, Selesaikan
@@ -879,8 +879,8 @@ function SessionTabs({
   const tabClass = (active: boolean): string =>
     `touch-target flex-1 border-t-2 px-2 text-sm font-semibold transition ${
       active
-        ? 'border-cyan-400 bg-slate-800 text-cyan-300'
-        : 'border-transparent text-slate-300 hover:bg-slate-800'
+        ? 'border-brand-bright bg-raised text-brand-soft'
+        : 'border-transparent text-fg-muted hover:bg-raised'
     }`
 
   // Roving tabindex + arrow keys: on a keypad-first device, reaching the third tab must not cost
@@ -930,7 +930,7 @@ function SessionTabs({
               {docsComplete ? null : (
                 <span
                   aria-label="belum lengkap"
-                  className="inline-block h-2.5 w-2.5 rounded-full bg-amber-400"
+                  className="inline-block h-2.5 w-2.5 rounded-full bg-warn"
                 />
               )}
             </span>

@@ -28,16 +28,16 @@ export function SyncStatus() {
     <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
       <div className="flex min-w-0 flex-col">
         {pendingCount > 0 || syncing ? (
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-warn-text">
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             {syncing ? 'Sedang mengirim…' : `${pendingCount} dokumen belum terkirim`}
           </span>
         ) : null}
         {stale === '1' ? (
-          <span className="text-sm text-slate-300">Daftar PO mungkin belum diperbarui.</span>
+          <span className="text-sm text-fg-muted">Daftar PO mungkin belum diperbarui.</span>
         ) : null}
         {!online && pendingCount > 0 ? (
-          <span className="flex items-center gap-1.5 text-sm text-slate-300">
+          <span className="flex items-center gap-1.5 text-sm text-fg-muted">
             <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
             Offline — dikirim otomatis saat online.
           </span>
@@ -46,7 +46,7 @@ export function SyncStatus() {
       <button
         type="button"
         aria-label="Kirim dokumen yang belum terkirim"
-        className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-3 py-1.5 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200"
+        className="flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-on-brand transition hover:bg-brand-bright disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft"
         disabled={!online || syncing}
         onClick={() => void handleSync()}
       >

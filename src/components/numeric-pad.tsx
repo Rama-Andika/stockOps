@@ -1,7 +1,7 @@
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'] as const
 
 function keyClass(wide: boolean): string {
-  return `touch-target touch-none select-none rounded-lg border border-slate-600 bg-slate-800 text-xl font-bold text-slate-100 transition active:bg-slate-600 ${
+  return `touch-target touch-none select-none rounded-lg border border-line-strong bg-raised text-xl font-bold text-fg transition active:bg-control-off ${
     wide ? 'col-span-3' : ''
   }`
 }

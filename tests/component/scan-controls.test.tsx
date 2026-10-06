@@ -79,10 +79,9 @@ describe('preferensi perangkat', () => {
     window.localStorage.removeItem('stockops.preferences')
   })
 
-  it('memakai default keyboard, bunyi, getar, dan kontras normal', () => {
+  it('memakai default bunyi, getar, dan kontras normal', () => {
     window.localStorage.removeItem('stockops.preferences')
     expect(loadPreferences()).toEqual({
-      qtyInput: 'keyboard',
       feedbackBeep: true,
       feedbackVibrate: true,
       highContrast: false,
@@ -91,25 +90,30 @@ describe('preferensi perangkat', () => {
 
   it('menyimpan dan membaca preferensi operator', () => {
     savePreferences({
-      qtyInput: 'keyboard',
       feedbackBeep: false,
       feedbackVibrate: true,
       highContrast: true,
     })
     expect(loadPreferences()).toEqual({
-      qtyInput: 'keyboard',
       feedbackBeep: false,
       feedbackVibrate: true,
       highContrast: true,
     })
   })
 
-  it('preferensi lama tanpa highContrast tetap terbaca', () => {
+  // `qtyInput` was a real preference until the keypad toggle was dropped from Settings. A device
+  // upgraded from that version still has it in localStorage, so loading must ignore it silently
+  // rather than carry it through or throw.
+  it('preferensi lama (tanpa highContrast, dengan qtyInput) tetap terbaca', () => {
     window.localStorage.setItem(
       'stockops.preferences',
       JSON.stringify({ qtyInput: 'pad', feedbackBeep: true, feedbackVibrate: false }),
     )
-    expect(loadPreferences().highContrast).toBe(false)
+    expect(loadPreferences()).toEqual({
+      feedbackBeep: true,
+      feedbackVibrate: false,
+      highContrast: false,
+    })
   })
 })
 

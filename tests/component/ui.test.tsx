@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { Badge, Button, Field, Notice, Progress } from '~/components/ui'
+import { Badge, Button, Field, Notice } from '~/components/ui'
 
 describe('komponen UI (keypad-first)', () => {
   it('Button memanggil handler saat diklik', () => {
@@ -44,22 +44,4 @@ describe('komponen UI (keypad-first)', () => {
     expect(screen.getByText('Wajib diisi')).toBeInTheDocument()
   })
 
-  it('Progress menampilkan lebar sesuai rasio', () => {
-    const { container } = render(<Progress value={5} max={10} />)
-    const bar = container.querySelector('.bg-cyan-400')
-    expect(bar).not.toBeNull()
-    expect(bar).toHaveStyle({ width: '50%' })
-  })
-
-  it('Progress menandai over-receive dengan warna merah & penuh', () => {
-    const { container } = render(<Progress value={12} max={10} />)
-    const bar = container.querySelector('.bg-red-500')
-    expect(bar).not.toBeNull()
-    expect(bar).toHaveStyle({ width: '100%' })
-  })
-
-  it('Progress aman saat max = 0', () => {
-    const { container } = render(<Progress value={0} max={0} />)
-    expect(container.querySelector('.bg-cyan-400')).toHaveStyle({ width: '0%' })
-  })
 })

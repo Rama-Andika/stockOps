@@ -30,22 +30,22 @@ export function SegmentedProgress({
 
   return (
     <div>
-      <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full bg-emerald-500" style={{ width: pct(serverPart) }} />
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-raised">
+        <div className="h-full bg-ok" style={{ width: pct(serverPart) }} />
         <div
-          className="h-full bg-emerald-500/40 bg-[repeating-linear-gradient(135deg,#10b981_0_4px,transparent_4px_8px)]"
+          className="h-full bg-ok/40 bg-[repeating-linear-gradient(135deg,#10b981_0_4px,transparent_4px_8px)]"
           style={{ width: pct(pendingPart) }}
         />
-        <div className="h-full bg-amber-400" style={{ width: pct(over) }} />
+        <div className="h-full bg-warn" style={{ width: pct(over) }} />
       </div>
-      <p className="mt-1 text-sm tabular-nums text-slate-300">
-        {formatQty(total)} <span className="text-slate-400">dari</span> {formatQty(ordered)}
+      <p className="mt-1 text-sm tabular-nums text-fg-muted">
+        {formatQty(total)} <span className="text-fg-subtle">dari</span> {formatQty(ordered)}
         {unitSuffix}
         {localPending > 0 ? (
-          <span className="text-slate-400"> · {formatQty(localPending)} belum terkirim</span>
+          <span className="text-fg-subtle"> · {formatQty(localPending)} belum terkirim</span>
         ) : null}
         {over > 0 ? (
-          <span className="font-semibold text-amber-300"> · +{formatQty(over)} lebih</span>
+          <span className="font-semibold text-warn-text"> · +{formatQty(over)} lebih</span>
         ) : null}
       </p>
     </div>

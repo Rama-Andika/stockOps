@@ -41,10 +41,10 @@ export function ScanBar({
         // bottom of the screen — a full-screen backdrop would hide the scan result above it,
         // which is the one thing the operator needs to see while scanning.
         <div className="fixed inset-x-0 bottom-0 z-30">
-          <div className="border-t border-slate-700 bg-slate-900 p-3 pb-[env(safe-area-inset-bottom)]">
-            <p className="mb-2 text-center text-3xl font-black tabular-nums text-slate-100">
+          <div className="border-t border-line bg-sheet p-3 pb-[env(safe-area-inset-bottom)]">
+            <p className="mb-2 text-center text-3xl font-black tabular-nums text-fg">
               {qty === '' ? '0' : qty}{' '}
-              <span className="text-base font-bold text-slate-400">satuan PO</span>
+              <span className="text-base font-bold text-fg-subtle">satuan PO</span>
             </p>
             <NumericPad
               value={qtyTouched ? qty : ''}
@@ -53,7 +53,7 @@ export function ScanBar({
             />
             <button
               type="button"
-              className="touch-target mt-2 w-full rounded-lg bg-cyan-500 font-semibold text-slate-900 transition hover:bg-cyan-400"
+              className="touch-target mt-2 w-full rounded-lg bg-brand font-semibold text-on-brand transition hover:bg-brand-bright"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onPadOpenChange(false)}
             >
@@ -70,7 +70,7 @@ export function ScanBar({
         <input
           id="scan-barcode"
           ref={scanRef}
-          className={`${inputClass} flex-1`}
+          className={`${inputClass} flex-1 border-line-strong`}
           placeholder="Scan kode…"
           value={scan}
           onKeyDown={(event) => {
@@ -91,7 +91,7 @@ export function ScanBar({
           type="button"
           aria-expanded={padOpen}
           aria-label={padOpen ? 'Tutup keypad angka' : 'Buka keypad angka'}
-          className="touch-target w-14 shrink-0 rounded-lg bg-slate-700 font-semibold text-slate-100 transition hover:bg-slate-600"
+          className="touch-target w-14 shrink-0 rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onPadOpenChange(!padOpen)}
         >
@@ -100,7 +100,7 @@ export function ScanBar({
         <button
           type="button"
           aria-label="Tambah ke sesi"
-          className="touch-target w-14 shrink-0 rounded-lg bg-cyan-500 text-slate-900 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200"
+          className="touch-target w-14 shrink-0 rounded-lg bg-brand text-on-brand transition hover:bg-brand-bright disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft"
           disabled={!scan.trim()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={onAdd}
@@ -123,8 +123,8 @@ export function ScanBar({
             qty of 1 to the operator, who then cannot see why the scan was rejected. */}
         <input
           id="scan-qty"
-          className={`touch-target w-16 shrink-0 rounded-lg border bg-slate-950 px-2 py-3 text-center font-bold tabular-nums text-slate-100 ${
-            Number(qty) > 0 ? 'border-slate-600' : 'border-red-500'
+          className={`touch-target w-16 shrink-0 rounded-lg border bg-field px-2 py-3 text-center font-bold tabular-nums text-fg ${
+            Number(qty) > 0 ? 'border-line-strong' : 'border-danger-line'
           }`}
           inputMode="decimal"
           maxLength={8}
@@ -154,8 +154,8 @@ export function ScanBar({
             aria-label={`Qty ${chip} satuan PO`}
             className={`touch-target flex-1 rounded-lg px-2 font-semibold transition ${
               qty === String(chip)
-                ? 'bg-cyan-500 text-slate-900'
-                : 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+                ? 'bg-brand text-on-brand'
+                : 'bg-control text-fg hover:bg-control-off'
             }`}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onQtyChange(String(chip))}

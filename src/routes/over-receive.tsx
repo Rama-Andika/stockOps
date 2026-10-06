@@ -52,7 +52,7 @@ function OverReceivePage() {
     <div className="flex flex-col gap-3">
       <AppBar title="Kelebihan terima" backTo="/sessions" backLabel="Kembali ke daftar sesi" />
       <Card>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-fg-subtle">
           Daftar ini dibaca langsung dari server dan butuh koneksi. Hanya untuk melihat; persetujuan
           dilakukan di website admin.
         </p>
@@ -64,15 +64,15 @@ function OverReceivePage() {
       ) : null}
       {rows.map((row) => (
         <Card key={row.receiveItemId}>
-          <p className="font-semibold text-slate-100">{row.itemName}</p>
-          <p className="text-sm text-slate-400">
+          <p className="font-semibold text-fg">{row.itemName}</p>
+          <p className="text-sm text-fg-subtle">
             {row.purchaseNumber ?? row.purchaseId} · {row.vendorName}
           </p>
-          <p className="mt-2 text-sm tabular-nums text-slate-300">
+          <p className="mt-2 text-sm tabular-nums text-fg-muted">
             {formatQty(row.newTotal)} dari {formatQty(row.orderedQty)} ·{' '}
-            <span className="font-semibold text-amber-300">+{formatQty(row.excess)} lebih</span>
+            <span className="font-semibold text-warn-text">+{formatQty(row.excess)} lebih</span>
           </p>
-          <p className="mt-1 text-xs tabular-nums text-slate-400">Dokumen {row.number ?? '-'}</p>
+          <p className="mt-1 text-xs tabular-nums text-fg-subtle">Dokumen {row.number ?? '-'}</p>
         </Card>
       ))}
     </div>

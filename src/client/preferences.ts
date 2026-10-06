@@ -1,8 +1,6 @@
 /** Device preferences configurable by operators/IT on the Settings screen. */
 
 export interface Preferences {
-  /** 'pad' = numeric keypad starts open; 'keyboard' = use PDT physical keyboard. */
-  qtyInput: 'pad' | 'keyboard'
   /** Beep sound on scan success/reject. */
   feedbackBeep: boolean
   /** Vibration on scan success/reject. */
@@ -14,7 +12,6 @@ export interface Preferences {
 const STORAGE_KEY = 'stockops.preferences'
 
 const DEFAULTS: Preferences = {
-  qtyInput: 'keyboard',
   feedbackBeep: true,
   feedbackVibrate: true,
   highContrast: false,
@@ -31,9 +28,10 @@ export function loadPreferences(): Preferences {
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return { ...DEFAULTS }
 
+    // Unknown keys left behind by older versions (e.g. the removed `qtyInput`) are ignored:
+    // only the fields listed here are read back.
     const value = parsed as Partial<Preferences>
     return {
-      qtyInput: value.qtyInput === 'pad' ? 'pad' : 'keyboard',
       feedbackBeep: typeof value.feedbackBeep === 'boolean' ? value.feedbackBeep : DEFAULTS.feedbackBeep,
       feedbackVibrate:
         typeof value.feedbackVibrate === 'boolean' ? value.feedbackVibrate : DEFAULTS.feedbackVibrate,

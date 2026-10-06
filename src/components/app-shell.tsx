@@ -25,28 +25,28 @@ function TopBar() {
   const user = useAppStore((state) => state.user);
 
   return (
-    <header className="border-b border-slate-700 bg-slate-950/95 backdrop-blur">
+    <header className="border-b border-line bg-chrome/95 backdrop-blur">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <div className="flex items-center  gap-2">
-          <span className="text-lg font-black tracking-tight text-cyan-400">
+          <span className="text-lg font-black tracking-tight text-brand-bright">
             StockOps
           </span>
           <span
             className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${
               online
-                ? "bg-emerald-800 text-emerald-100"
-                : "bg-red-800 text-red-100"
+                ? "bg-ok-fill text-on-ok-fill"
+                : "bg-danger-fill text-on-danger-fill"
             }`}
           >
             <span
               aria-hidden="true"
-              className={`inline-block h-2.5 w-2.5 rounded-full ${online ? "bg-emerald-400" : "bg-red-400"}`}
+              className={`inline-block h-2.5 w-2.5 rounded-full ${online ? "bg-ok-dot" : "bg-danger-dot"}`}
             />
             {online ? "Online" : "Offline"}
           </span>
         </div>
         {user ? (
-          <span className="hidden text-sm text-slate-300 sm:inline">
+          <span className="hidden text-sm text-fg-muted sm:inline">
             {user.fullName}
           </span>
         ) : null}
@@ -60,7 +60,7 @@ function BottomNav() {
   const pendingCount = useAppStore((state) => state.pendingCount);
 
   return (
-    <nav className="border-t border-slate-700 bg-slate-950/95 px-2 py-1 backdrop-blur">
+    <nav className="border-t border-line bg-chrome/95 px-2 py-1 backdrop-blur">
       <div className="flex items-stretch justify-around">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -71,13 +71,15 @@ function BottomNav() {
               key={item.to}
               to={item.to}
               aria-label={item.label}
-              className={`${NAV_LINK_CLASS} text-slate-300 hover:text-slate-100`}
+              className={NAV_LINK_CLASS}
               activeProps={{
-                // `text-cyan-400!`: the router concatenates this string with the base className
-                // above, which carries `text-slate-300`. Tailwind emits `.text-slate-300` after
-                // `.text-cyan-400`, so without the important modifier the active link stays slate.
-                className: `${NAV_LINK_CLASS} bg-slate-800 text-cyan-400! font-semibold`,
+                // The router applies EITHER activeProps or inactiveProps, never both, so the two
+                // text colours can no longer collide and no important modifier is needed.
+                className: "bg-raised text-brand-bright font-semibold",
                 "aria-current": "page",
+              }}
+              inactiveProps={{
+                className: "text-fg-muted hover:text-fg",
               }}
             >
               <div className="relative">
@@ -85,7 +87,7 @@ function BottomNav() {
                 {badge ? (
                   <span
                     aria-label={`${badge} sesi menunggu sinkronisasi`}
-                    className="absolute -right-2.5 -top-1.5 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold leading-tight text-slate-950"
+                    className="absolute -right-2.5 -top-1.5 rounded-full bg-warn px-1.5 text-[10px] font-bold leading-tight text-on-warn"
                   >
                     {badge}
                   </span>

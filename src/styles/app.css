@@ -13,6 +13,82 @@
   /* Numbers only. System stack on purpose: a downloaded webfont would have to be precached
      for offline use (scripts/generate-precache.mjs) and adds weight to the PWA shell. */
   --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', monospace;
+
+  /* ==========================================================================
+     Semantic colour tokens. Every value is copied verbatim from
+     node_modules/tailwindcss/theme.css, so the migration in F4-3 is a pure
+     rename: nothing changes on screen. Tailwind v4 is OKLCH — do NOT rewrite
+     these as hex, the v3 hex values are a different colour.
+
+     Two tokens may share a value on purpose (e.g. --color-surface and
+     --color-sheet are both slate-900). They are separate roles, and a light
+     theme will need them to diverge.
+     ========================================================================== */
+
+  /* --- Neutrals: text ------------------------------------------------- */
+  --color-fg: oklch(96.8% 0.007 247.896); /* was slate-100 — primary text */
+  --color-fg-soft: oklch(92.9% 0.013 255.508); /* was slate-200 */
+  --color-fg-muted: oklch(86.9% 0.022 252.894); /* was slate-300 */
+  --color-fg-subtle: oklch(70.4% 0.04 256.788); /* was slate-400 — smallest text */
+  --color-on-brand: oklch(20.8% 0.042 265.755); /* was slate-900 — text on brand fills */
+  --color-on-warn: oklch(12.9% 0.042 264.695); /* was slate-950 — text on amber fills */
+
+  /* --- Neutrals: surfaces ---------------------------------------------- */
+  --color-surface: oklch(20.8% 0.042 265.755); /* was slate-900 — cards, used as surface/60 */
+  --color-sheet: oklch(20.8% 0.042 265.755); /* was slate-900 — solid sheets & dialogs */
+  --color-field: oklch(12.9% 0.042 264.695); /* was slate-950 — input background */
+  --color-chrome: oklch(12.9% 0.042 264.695); /* was slate-950 — bars, used as chrome/95 */
+  --color-scrim: oklch(12.9% 0.042 264.695); /* was slate-950 — backdrop, used as scrim/60 */
+  --color-raised: oklch(27.9% 0.041 260.031); /* was slate-800 — keypad keys, hover, active tab */
+  --color-control: oklch(37.2% 0.044 257.287); /* was slate-700 — secondary buttons */
+  --color-control-off: oklch(44.6% 0.043 257.281); /* was slate-600 — disabled & pressed */
+
+  /* --- Neutrals: lines -------------------------------------------------- */
+  --color-line: oklch(37.2% 0.044 257.287); /* was slate-700 */
+  --color-line-strong: oklch(44.6% 0.043 257.281); /* was slate-600 — field borders */
+  --color-line-hover: oklch(55.4% 0.046 257.417); /* was slate-500 — row hover */
+  --color-line-soft: oklch(27.9% 0.041 260.031); /* was slate-800 — list dividers */
+
+  /* --- Brand ------------------------------------------------------------ */
+  --color-brand: oklch(71.5% 0.143 215.221); /* was cyan-500 */
+  --color-brand-bright: oklch(78.9% 0.154 211.53); /* was cyan-400 — hover fill & brand text */
+  --color-brand-soft: oklch(86.5% 0.127 207.078); /* was cyan-300 */
+  --color-brand-wash: oklch(30.2% 0.056 229.695); /* was cyan-950 — used as brand-wash/40 */
+
+  /* --- Status: success --------------------------------------------------- */
+  --color-ok: oklch(69.6% 0.17 162.48); /* was emerald-500 */
+  --color-ok-dot: oklch(76.5% 0.177 163.223); /* was emerald-400 — online indicator */
+  --color-ok-bright: oklch(84.5% 0.143 164.978); /* was emerald-300 — label text */
+  --color-ok-solid: oklch(59.6% 0.145 163.225); /* was emerald-600 — toast */
+  --color-ok-fill: oklch(43.2% 0.095 166.913); /* was emerald-800 — badge & notice */
+  --color-on-ok-fill: oklch(95% 0.052 163.051); /* was emerald-100 */
+  --color-ok-wash: oklch(26.2% 0.051 172.552); /* was emerald-950 — used as ok-wash/40 */
+
+  /* --- Status: attention ------------------------------------------------- */
+  --color-warn: oklch(82.8% 0.189 84.429); /* was amber-400 */
+  --color-warn-bright: oklch(87.9% 0.169 91.605); /* was amber-300 — hover fill */
+  --color-warn-text: oklch(87.9% 0.169 91.605); /* was amber-300 — text */
+  --color-warn-solid: oklch(76.9% 0.188 70.08); /* was amber-500 — toast */
+  --color-warn-wash: oklch(27.9% 0.077 45.635); /* was amber-950 — used as warn-wash/40 */
+
+  /* --- Status: failure ---------------------------------------------------- */
+  --color-danger: oklch(57.7% 0.245 27.325); /* was red-600 */
+  --color-danger-bright: oklch(63.7% 0.237 25.331); /* was red-500 — hover fill */
+  --color-danger-line: oklch(63.7% 0.237 25.331); /* was red-500 — invalid field border */
+  --color-danger-dot: oklch(70.4% 0.191 22.216); /* was red-400 — offline indicator */
+  --color-danger-text: oklch(70.4% 0.191 22.216); /* was red-400 — error text */
+  --color-danger-soft: oklch(80.8% 0.114 19.571); /* was red-300 */
+  --color-danger-fill: oklch(44.4% 0.177 26.899); /* was red-800 — badge & notice */
+  --color-on-danger-fill: oklch(93.6% 0.032 17.717); /* was red-100 */
+  --color-danger-wash: oklch(25.8% 0.092 26.042); /* was red-950 — used as danger-wash/40 */
+
+  /* --- Status: information ------------------------------------------------ */
+  --color-info: oklch(68.5% 0.169 237.323); /* was sky-500 — card border */
+  --color-info-solid: oklch(50% 0.134 242.749); /* was sky-700 — toast */
+  --color-info-fill: oklch(44.3% 0.11 240.79); /* was sky-800 — notice */
+  --color-on-info-fill: oklch(95.1% 0.026 236.824); /* was sky-100 */
+  --color-info-text: oklch(82.8% 0.111 230.318); /* was sky-300 */
+  --color-info-wash: oklch(29.3% 0.066 243.157); /* was sky-950 — used as info-wash/40 */
 }
 
 :root {
@@ -86,19 +162,19 @@ button {
 }
 
 /* Translucent panels go solid: 60% opacity over black is nearly invisible outdoors. */
-:root[data-contrast='high'] .bg-slate-900\/60 {
+:root[data-contrast='high'] .bg-surface\/60 {
   background-color: #10151c;
 }
 
 /* Borders carry the layout when glare washes out fills. */
-:root[data-contrast='high'] .border-slate-700,
-:root[data-contrast='high'] .border-slate-600 {
+:root[data-contrast='high'] .border-line,
+:root[data-contrast='high'] .border-line-strong {
   border-color: #7c8b99;
 }
 
 /* Secondary text up to full white; it is the smallest text on screen. */
-:root[data-contrast='high'] .text-slate-400,
-:root[data-contrast='high'] .text-slate-300 {
+:root[data-contrast='high'] .text-fg-subtle,
+:root[data-contrast='high'] .text-fg-muted {
   color: #ffffff;
 }
 

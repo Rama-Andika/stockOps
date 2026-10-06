@@ -32,7 +32,7 @@ function SessionsPage() {
   return (
     <div className="flex flex-col gap-3">
       <Card title="Sesi Penerimaan">
-        <p className="text-sm text-slate-400">Pantau status dan tindakan sesi pada daftar.</p>
+        <p className="text-sm text-fg-subtle">Pantau status dan tindakan sesi pada daftar.</p>
       </Card>
 
       {sessions.length === 0 ? (
@@ -46,23 +46,23 @@ function SessionsPage() {
           key={session.sessionId}
           to="/sessions/$sessionId"
           params={{ sessionId: session.sessionId }}
-          className="block rounded-xl border border-slate-700 bg-slate-900/60 p-3 transition hover:border-slate-500"
+          className="block rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-lg font-bold text-slate-100">
+              <p className="text-lg font-bold text-fg">
                 {session.number ?? 'Belum punya nomor'}
               </p>
-              <p className="text-slate-300">
+              <p className="text-fg-muted">
                 {session.purchaseNumber ?? session.purchaseId} • {session.vendorName ?? '-'}
               </p>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-fg-subtle">
                 {session.syncedAt
                   ? `Masuk sistem ${formatDateTime(session.syncedAt)}`
                   : `Dibuat ${formatDateTime(session.createdAt)}`}
               </p>
               {session.lastError ? (
-                <p className="text-sm text-red-300">{session.lastError}</p>
+                <p className="text-sm text-danger-soft">{session.lastError}</p>
               ) : null}
             </div>
             <Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>

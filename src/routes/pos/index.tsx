@@ -57,23 +57,23 @@ function PosListPage() {
         <Link
           to="/sessions/$sessionId"
           params={{ sessionId: activeSession.sessionId }}
-          className="touch-target flex items-center gap-3 rounded-xl border border-cyan-500 bg-cyan-950/40 p-3"
+          className="touch-target flex items-center gap-3 rounded-xl border border-brand bg-brand-wash/40 p-3"
         >
-          <Play className="h-6 w-6 shrink-0 text-cyan-300" aria-hidden="true" />
+          <Play className="h-6 w-6 shrink-0 text-brand-soft" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            <span className="block font-bold text-slate-100">Lanjutkan sesi berjalan</span>
-            <span className="block truncate text-sm text-slate-300">
+            <span className="block font-bold text-fg">Lanjutkan sesi berjalan</span>
+            <span className="block truncate text-sm text-fg-muted">
               {activeSession.purchaseNumber ?? activeSession.purchaseId} ·{' '}
               {activeSession.vendorName ?? '-'}
             </span>
           </span>
-          <ChevronRight className="h-6 w-6 shrink-0 text-cyan-300" aria-hidden="true" />
+          <ChevronRight className="h-6 w-6 shrink-0 text-brand-soft" aria-hidden="true" />
         </Link>
       ) : null}
 
       <Card title="Daftar PO (CHECKED)">
         <input
-          className={inputClass}
+          className={`${inputClass} w-full border-line-strong`}
           aria-label="Cari PO"
           placeholder="Cari nomor PO atau vendor…"
           value={term}
@@ -92,7 +92,7 @@ function PosListPage() {
             {pullProgress.running ? 'Mengunduh…' : 'Unduh data sekarang'}
           </Button>
           {online ? null : (
-            <p className="mt-2 text-center text-sm text-slate-400">
+            <p className="mt-2 text-center text-sm text-fg-subtle">
               Sambungkan perangkat ke jaringan dulu untuk mengunduh data.
             </p>
           )}
@@ -104,13 +104,13 @@ function PosListPage() {
           key={row.purchaseId}
           to="/pos/$purchaseId"
           params={{ purchaseId: row.purchaseId }}
-          className="block rounded-xl border border-slate-700 bg-slate-900/60 p-3 transition hover:border-slate-500"
+          className="block rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
         >
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-lg font-bold text-slate-100">{row.number ?? row.purchaseId}</p>
-              <p className="text-slate-300">{row.vendorName}</p>
-              <p className="text-sm text-slate-400">{formatDate(row.purchDate)}</p>
+              <p className="text-lg font-bold text-fg">{row.number ?? row.purchaseId}</p>
+              <p className="text-fg-muted">{row.vendorName}</p>
+              <p className="text-sm text-fg-subtle">{formatDate(row.purchDate)}</p>
             </div>
             <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
           </div>

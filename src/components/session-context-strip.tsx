@@ -26,14 +26,14 @@ export const SessionContextStrip = memo(function SessionContextStrip({
   excessTotal: number
 }) {
   return (
-    <div className="border-b border-slate-700 pb-2">
+    <div className="border-b border-line pb-2">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-base font-bold tabular-nums text-slate-100">
+        <p className="min-w-0 truncate text-base font-bold tabular-nums text-fg">
           {purchaseLabel}
         </p>
-        <p className="shrink-0 text-sm text-slate-400">{itemCount} item discan</p>
+        <p className="shrink-0 text-sm text-fg-subtle">{itemCount} item discan</p>
       </div>
-      <p className="truncate text-sm text-slate-400">{vendorName}</p>
+      <p className="truncate text-sm text-fg-subtle">{vendorName}</p>
       <div className="mt-1">
         <SegmentedProgress
           ordered={ordered}
@@ -42,7 +42,7 @@ export const SessionContextStrip = memo(function SessionContextStrip({
         />
       </div>
       {overReceive ? (
-        <p className="mt-1 text-sm font-semibold text-amber-300">
+        <p className="mt-1 text-sm font-semibold text-warn-text">
           Kelebihan terima {formatQty(excessTotal)} — menunggu persetujuan admin.
         </p>
       ) : null}

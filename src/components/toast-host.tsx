@@ -2,10 +2,10 @@ import { useSyncExternalStore } from 'react'
 import { dismissToast, getToasts, subscribeToasts, type ToastTone } from '~/client/toast'
 
 const TONE_STYLES: Record<ToastTone, string> = {
-  success: 'bg-emerald-600 text-white',
-  danger: 'bg-red-600 text-white',
-  info: 'bg-sky-700 text-white',
-  warn: 'bg-amber-500 text-slate-950',
+  success: 'bg-ok-solid text-white',
+  danger: 'bg-danger text-white',
+  info: 'bg-info-solid text-white',
+  warn: 'bg-warn-solid text-on-warn',
 }
 
 /** Renders the toast stack in the top-right corner. Mounted once in AppShell. */

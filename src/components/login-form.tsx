@@ -56,12 +56,12 @@ export function LoginForm() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-4 p-4">
       <div className="text-center">
-        <h1 className="text-3xl font-black tracking-tight text-cyan-400">StockOps</h1>
-        <p className="mt-1 text-slate-300">Penerimaan Barang — Perangkat PDT</p>
+        <h1 className="text-3xl font-black tracking-tight text-brand-bright">StockOps</h1>
+        <p className="mt-1 text-fg-muted">Penerimaan Barang — Perangkat PDT</p>
         <p className="mt-2">
           <span
             className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${
-              online ? 'bg-emerald-800 text-emerald-100' : 'bg-red-800 text-red-100'
+              online ? 'bg-ok-fill text-on-ok-fill' : 'bg-danger-fill text-on-danger-fill'
             }`}
           >
             {online ? 'Online' : 'Offline'}
@@ -70,7 +70,7 @@ export function LoginForm() {
       </div>
 
       {insecureContext ? (
-        <div role="alert" className="rounded-lg bg-amber-400 px-4 py-3 text-base font-semibold text-slate-950">
+        <div role="alert" className="rounded-lg bg-warn px-4 py-3 text-base font-semibold text-on-warn">
           Koneksi tidak aman (http://). Login dan mode offline membutuhkan alamat https://. Minta admin
           alamat aplikasi yang benar.
         </div>
@@ -88,7 +88,7 @@ export function LoginForm() {
             <input
               ref={idRef}
               aria-label="ID Pengguna"
-              className={inputClass}
+              className={`${inputClass} w-full border-line-strong`}
               value={loginId}
               autoComplete="username"
               onChange={(event) => setLoginId(event.target.value)}
@@ -123,7 +123,7 @@ function PasswordField({ value, onChange }: { value: string; onChange: (value: s
     <div className="relative">
       <input
         aria-label="Password"
-        className={`${inputClass} pr-12`}
+        className={`${inputClass} w-full border-line-strong pr-12`}
         type={showPassword ? 'text' : 'password'}
         value={value}
         autoComplete="current-password"
@@ -135,7 +135,7 @@ function PasswordField({ value, onChange }: { value: string; onChange: (value: s
         aria-pressed={showPassword}
         title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
         onClick={() => setShowPassword((value) => !value)}
-        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-slate-400 transition hover:text-slate-100 focus:text-slate-100"
+        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-lg text-fg-subtle transition hover:text-fg focus:text-fg"
       >
         {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
       </button>

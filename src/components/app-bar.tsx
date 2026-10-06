@@ -18,15 +18,15 @@ export function AppBar({
   actions?: ReactNode
 }) {
   return (
-    <header className="mb-1 flex items-center gap-2 border-b border-slate-700 pb-1">
+    <header className="mb-1 flex items-center gap-2 border-b border-line pb-1">
       <Link
         to={backTo}
         aria-label={backLabel}
-        className="touch-target flex w-12 shrink-0 items-center justify-center rounded-lg text-slate-200 transition hover:bg-slate-800"
+        className="touch-target flex w-12 shrink-0 items-center justify-center rounded-lg text-fg-soft transition hover:bg-raised"
       >
         <ArrowLeft className="h-6 w-6" aria-hidden="true" />
       </Link>
-      <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-slate-100">{title}</h1>
+      <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-fg">{title}</h1>
       {actions}
     </header>
   )

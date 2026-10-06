@@ -83,14 +83,14 @@ export function ConfirmButton({
 
   const base =
     tone === 'danger'
-      ? 'bg-red-600 text-white hover:bg-red-500'
-      : 'bg-slate-700 text-slate-100 hover:bg-slate-600'
+      ? 'bg-danger text-white hover:bg-danger-bright'
+      : 'bg-control text-fg hover:bg-control-off'
 
   return (
     <button
       type="button"
       {...props}
-      className={`relative touch-target touch-none select-none overflow-hidden rounded-lg px-5 py-3 font-semibold transition ${base} disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-200 ${className}`}
+      className={`relative touch-target touch-none select-none overflow-hidden rounded-lg px-5 py-3 font-semibold transition ${base} disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft ${className}`}
       onPointerDown={(event) => {
         if (event.button !== 0) return
         start('pointer')

@@ -74,7 +74,7 @@ function PosDetailPage() {
         actions={<Badge tone={toneFor(detail.progress.progress)}>{PROGRESS_LABEL[detail.progress.progress]}</Badge>}
       />
       <Card title={detail.purchase.vendorName}>
-        <p className="text-sm text-slate-400">Tanggal PO: {formatDate(detail.purchase.purchDate)}</p>
+        <p className="text-sm text-fg-subtle">Tanggal PO: {formatDate(detail.purchase.purchDate)}</p>
         <div className="mt-3">
           <SegmentedProgress
             ordered={detail.progress.orderedTotal}
@@ -82,19 +82,19 @@ function PosDetailPage() {
             localPending={detail.progress.localPendingTotal}
           />
         </div>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-fg-subtle">
           Angka ini dihitung di perangkat. Jumlah resmi mengikuti server setelah dokumen terkirim.
         </p>
       </Card>
 
       <Card title="Item PO">
-        <ul className="flex flex-col divide-y divide-slate-800">
+        <ul className="flex flex-col divide-y divide-line-soft">
           {detail.items.map((row) => (
             <li key={row.purchaseItemId} className="flex flex-col gap-1 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-slate-100">{row.item?.name ?? row.itemMasterId}</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="font-semibold text-fg">{row.item?.name ?? row.itemMasterId}</p>
+                  <p className="text-sm text-fg-subtle">
                     {row.item?.code ?? '-'} • {unitMap.get(row.uomId) ?? row.uomId}
                   </p>
                 </div>
@@ -120,7 +120,7 @@ function PosDetailPage() {
 
       {/* The primary action stays reachable on a PO with twenty lines: it sticks to the bottom of
           the scroll container instead of sitting at the end of the list. */}
-      <div className="sticky bottom-0 -mx-3 border-t border-slate-700 bg-slate-950/95 px-3 py-2 backdrop-blur">
+      <div className="sticky bottom-0 -mx-3 border-t border-line bg-chrome/95 px-3 py-2 backdrop-blur">
         <Button className="w-full" disabled={busy || allItemsFull} onClick={() => void startReception()}>
           {busy ? 'Menyiapkan…' : allItemsFull ? 'Semua item sudah diterima penuh' : 'Mulai Penerimaan'}
         </Button>
