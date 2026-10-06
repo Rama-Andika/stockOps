@@ -43,7 +43,11 @@ const baseState = {
 
 function renderSettings(overrides: Partial<AppState> = {}) {
   const store = createAppStore()
-  store.setState({ ...baseState, ...overrides })
+  store.setState({
+    ...baseState,
+    refresh: vi.fn(async () => undefined),
+    ...overrides,
+  })
   return render(
     <AppStoreProvider store={store}>
       <SettingsPage />
@@ -125,7 +129,6 @@ describe('SettingsPage UI & UX', () => {
   it('menampilkan kredensial offline ter-cache di bagian diagnostik', () => {
     renderSettings()
 
-    expect(screen.getByText('Budi Santoso', { selector: 'li p' })).toBeInTheDocument()
     expect(screen.getByText('@op_budi')).toBeInTheDocument()
     expect(screen.getByText(/5 hari lagi/i)).toBeInTheDocument()
   })

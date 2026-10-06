@@ -489,6 +489,50 @@ function SettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Kredensial Offline */}
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-fg-muted">
+                Kredensial Offline Ter-cache ({credentials.length})
+              </p>
+            </div>
+            {credentials.length === 0 ? (
+              <EmptyState>Belum ada kredensial tersimpan di perangkat ini.</EmptyState>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {credentials.map((credential) => {
+                  const expired = isCredentialExpired(credential, now);
+                  const days = remainingDays(credential, now);
+                  return (
+                    <li
+                      key={credential.key}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface/40 p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-fg truncate text-sm">
+                          {credential.fullName}
+                        </p>
+                        <p className="text-xs text-fg-subtle truncate">
+                          @{credential.loginId}
+                        </p>
+                      </div>
+                      <Badge
+                        tone={
+                          expired ? "danger" : days <= 2 ? "warn" : "success"
+                        }
+                      >
+                        {expired ? "Kedaluwarsa" : `${days} hari lagi`}
+                      </Badge>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-fg-subtle leading-relaxed">
+              Kredensial diamankan dengan WebCrypto salt hashing. Password teks asli tidak pernah disimpan di perangkat.
+            </p>
+          </div>
         </div>
       </details>
 
