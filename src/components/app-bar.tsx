@@ -22,7 +22,7 @@ export function AppBar({
       <Link
         to={backTo}
         aria-label={backLabel}
-        className="touch-target flex w-12 shrink-0 items-center justify-center rounded-lg text-fg-soft transition hover:bg-raised"
+        className="touch-target flex w-14 shrink-0 items-center justify-center rounded-lg text-fg-soft transition hover:bg-raised"
       >
         <ArrowLeft className="h-6 w-6" aria-hidden="true" />
       </Link>

@@ -254,5 +254,16 @@ describe('ScanBar', () => {
     fireEvent.change(qtyInput, { target: { value: '1.999' } })
     expect(onQtyChange).not.toHaveBeenCalled()
   })
+
+  it('kolom qty boleh dikosongkan, karena kosong adalah keadaan tidak valid yang sah', () => {
+    const onQtyChange = vi.fn()
+    render(<Harness onQtyChange={onQtyChange} />)
+    const qtyInput = screen.getByLabelText('Qty dalam satuan PO')
+
+    // If the guard ever became \d{1,5}, clearing the field would be impossible and the red
+    // aria-invalid state would become unreachable — with no other test failing.
+    fireEvent.change(qtyInput, { target: { value: '' } })
+    expect(onQtyChange).toHaveBeenLastCalledWith('')
+  })
 })
 

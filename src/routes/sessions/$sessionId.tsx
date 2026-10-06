@@ -545,6 +545,12 @@ function SessionDetailPage() {
                   setQtyTouched(true)
                 }}
                 onAdd={() => void handleAdd()}
+                // Escape clears a result that is WAITING for the operator. The success card is
+                // not waiting — it is replaced by the next scan — and clearing it would remove
+                // "Batalkan scan ini", the only route to the precise undo of the last increment.
+                onEscape={() => {
+                  if (heroState.kind !== 'OK') dismissHero()
+                }}
               />
             </div>
           ) : null}
@@ -825,7 +831,7 @@ function FinalizeDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center">
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-3">
       <button
         type="button"
         aria-label="Batal finalisasi"

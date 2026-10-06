@@ -43,4 +43,33 @@ kosong, **tidak ada** penangan tombol hardware yang boleh ditambahkan ke aplikas
 | --- | --- | --- |
 | Pindah ke tab Dokumen | tombol fungsi 1 | hanya saat tab Scan aktif dan sudah ada item |
 | Batalkan scan terakhir | tombol fungsi 2 | hanya saat kartu hasil scan menampilkan tombol undo |
-| Tutup pesan error | Esc | sudah bekerja untuk dialog, belum untuk kartu hasil scan |
+
+**Sudah terpasang, tidak menunggu konfirmasi:** `Esc` menutup dialog (edit qty, konfirmasi
+finalisasi), menutup sheet keypad, dan membersihkan kartu hasil scan yang menunggu keputusan
+operator. Kartu sukses sengaja dikecualikan supaya tombol "Batalkan scan ini" tidak ikut hilang.
+
+---
+
+## Syarat provisioning (berlaku untuk SEMUA perangkat)
+
+Aplikasi ini berjalan di browser/WebView, dan aplikasi web **tidak bisa menerima Android Intent**.
+
+1. **Scanner wajib dalam mode keyboard-wedge** (sering disebut *HID*, *keyboard emulation*, atau
+   *keystroke output*). Barcode diketik seperti keyboard dan diakhiri `Enter`.
+2. **Mode Intent broadcast harus dimatikan.** Bila aktif, barcode tidak akan pernah sampai ke kolom
+   scan. Gejalanya: scanner berbunyi dan lampu menyala, tetapi tidak ada yang bertambah di layar —
+   terlihat seperti aplikasi rusak, padahal murni konfigurasi perangkat.
+3. **Karakter penutup harus `Enter`**, bukan `Tab` atau tanpa penutup. Dengan `Tab`, fokus akan
+   berpindah alih-alih menambahkan item.
+4. **Alamat aplikasi harus `https://`** (atau `localhost`). `crypto.subtle` dan service worker
+   menuntut secure context: tanpa itu login dan mode offline tidak bekerja sama sekali.
+
+### Kenapa tidak ada kode tombol hardware di aplikasi ini
+
+Pemetaan tombol berbeda-beda antar merek PDT, jadi memetakan satu merek akan merusak merek lain.
+Sebagai gantinya seluruh alur dapat diselesaikan dengan tiga hal yang seragam di hampir semua
+perangkat: sentuhan, keyboard-wedge scanner, dan navigasi keyboard standar (`Tab`, `Shift+Tab`,
+`Enter`, `Escape`, panah kiri/kanan pada bar tab).
+
+Artinya tabel pengukuran di atas **tidak menghalangi apa pun**. Ia hanya diperlukan bila suatu saat
+diputuskan untuk menambahkan jalan pintas khusus perangkat.

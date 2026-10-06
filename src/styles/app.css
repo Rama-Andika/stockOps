@@ -6,9 +6,11 @@
    ============================================================ */
 
 @theme {
-  --color-ink: #0b1220;
-  --color-panel: #111a2e;
-  --color-accent: #22d3ee;
+  /* The page itself. Values kept exactly as they were as hard-coded hex in `body`, so this is a
+     rename, not a restyle. They are the last two surfaces that were outside the token system —
+     a light theme cannot exist until both can be swapped. */
+  --color-ground: #0b1220;
+  --color-ground-fg: #e2e8f0;
   --font-sans: 'Segoe UI', system-ui, sans-serif;
   /* Numbers only. System stack on purpose: a downloaded webfont would have to be precached
      for offline use (scripts/generate-precache.mjs) and adds weight to the PWA shell. */
@@ -20,9 +22,13 @@
      rename: nothing changes on screen. Tailwind v4 is OKLCH — do NOT rewrite
      these as hex, the v3 hex values are a different colour.
 
-     Two tokens may share a value on purpose (e.g. --color-surface and
-     --color-sheet are both slate-900). They are separate roles, and a light
-     theme will need them to diverge.
+     RULE — one CSS property, one colour class per element.
+     Never put two classes for the same property on one element and expect the
+     later one in the string to win. Tailwind decides by STYLESHEET order, which
+     for these tokens is alphabetical by token name: .border-danger-line is
+     emitted before .border-line-strong, so `border-line-strong` would silently
+     beat the red invalid border. Use a ternary so only one class is ever
+     present (see the qty field in scan-bar.tsx), not the `!` modifier.
      ========================================================================== */
 
   /* --- Neutrals: text ------------------------------------------------- */
@@ -102,8 +108,8 @@ body {
 }
 
 body {
-  background: #0b1220;
-  color: #e2e8f0;
+  background: var(--color-ground);
+  color: var(--color-ground-fg);
   font-family: var(--font-sans);
   /* Small PDT screen: large base font for readability. */
   font-size: 18px;
@@ -138,9 +144,11 @@ button {
   font: inherit;
 }
 
-/* Focus is always clearly visible (keyboard navigation). */
+/* Focus is always clearly visible (keyboard navigation). It uses the brand token so the ring
+   matches every other brand surface; the old --color-accent was a v3 hex of cyan-400, which is a
+   slightly different colour from the v4 oklch cyan-400 used everywhere else. */
 :focus-visible {
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--color-brand-bright);
   outline-offset: 2px;
 }
 

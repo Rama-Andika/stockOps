@@ -3,8 +3,12 @@ import { Plus } from 'lucide-react'
 import { NumericPad } from './numeric-pad'
 import { inputClass } from './ui'
 
-/** Qty shortcuts for the common cases; anything else goes through the keypad. */
-const QTY_CHIPS = [1, 2, 5, 12] as const
+/**
+ * Qty shortcuts for the common cases; anything else is typed into the qty field or entered on the
+ * keypad. Three, not four: on a 320px PDT screen four chips are only ~50px wide, below the 56px
+ * touch target NF-8 promises. These three map to real packing units (single, pair, dozen/carton).
+ */
+const QTY_CHIPS = [1, 2, 12] as const
 
 /**
  * The pinned bottom bar of the scan cockpit. The barcode field keeps `scanRef` so the focus
@@ -21,6 +25,7 @@ export function ScanBar({
   onScanChange,
   onQtyChange,
   onAdd,
+  onEscape,
 }: {
   scan: string
   qty: string
@@ -31,6 +36,8 @@ export function ScanBar({
   onScanChange: (value: string) => void
   onQtyChange: (value: string) => void
   onAdd: () => void
+  /** Escape with the keypad already closed. The session screen clears the scan result with it. */
+  onEscape?: () => void
 }) {
 
   return (
@@ -78,11 +85,14 @@ export function ScanBar({
               event.preventDefault()
               onAdd()
             }
-            // Second way out of the keypad sheet: it covers the "123" toggle that opened it, so
-            // without this the only exit is the "Selesai" button.
-            if (event.key === 'Escape' && padOpen) {
+            if (event.key === 'Escape') {
               event.preventDefault()
-              onPadOpenChange(false)
+              // With the keypad open, Escape is its second way out: the sheet covers the "123"
+              // toggle that opened it. With the keypad closed, Escape clears the scan result —
+              // its buttons sit ABOVE this bar in the DOM, so reaching them from the barcode
+              // field would otherwise cost several Shift+Tab presses.
+              if (padOpen) onPadOpenChange(false)
+              else onEscape?.()
             }
           }}
           onChange={(event) => onScanChange(event.target.value)}
