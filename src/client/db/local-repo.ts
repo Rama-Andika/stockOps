@@ -501,8 +501,31 @@ export class LocalRepository {
     return this.db.sessions.orderBy('sequence').reverse().toArray()
   }
 
+  /**
+   * Running sessions, newest first. The order matters and is therefore decided here, once: the PO
+   * list shows `[0]` as "the session to continue" and the send-status screen lists them all, so
+   * two callers would otherwise be free to disagree about which one is current. `sequence` is the
+   * monotonic counter assigned by `createSession`.
+   */
   async runningSessions(): Promise<LocalSession[]> {
-    return this.db.sessions.where('status').equals(SESSION_STATUS.RUNNING).toArray()
+    const running = await this.db.sessions
+      .where('status')
+      .equals(SESSION_STATUS.RUNNING)
+      .toArray()
+    return running.sort((a, b) => b.sequence - a.sequence)
+  }
+
+  /**
+   * How many lines each session holds, keyed by sessionId. One pass over the table instead of one
+   * query per session, because the send-status screen needs the count for every row at once.
+   * Sessions with no lines are absent from the map, so read it with `?? 0`.
+   */
+  async countItemsBySession(): Promise<Map<string, number>> {
+    const counts = new Map<string, number>()
+    await this.db.sessionItems.each((line) => {
+      counts.set(line.sessionId, (counts.get(line.sessionId) ?? 0) + 1)
+    })
+    return counts
   }
 
   /** FR-4.6: Unfinalized session is stored locally & can be resumed. */

@@ -1,4 +1,5 @@
-import { AlertTriangle, Upload, WifiOff } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Upload, WifiOff } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { localRepo } from '~/client/db/local-repo'
 import { useLive } from '~/client/hooks/use-live'
 import { useAppStore } from '~/client/state/store/app-store'
@@ -26,11 +27,15 @@ export function SyncStatus() {
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
-      <div className="flex min-w-0 flex-col">
+      {/* A link, not plain text: this is the ambient signal that something is waiting, and the
+          screen that can explain it is one tap away. The cockpit hides BottomNav, so while the
+          operator is scanning this is the only route to it. */}
+      <Link to="/sessions" className="flex min-w-0 flex-col rounded-lg hover:bg-raised">
         {pendingCount > 0 || syncing ? (
           <span className="flex items-center gap-1.5 text-sm font-semibold text-warn-text">
             <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
             {syncing ? 'Sedang mengirim…' : `${pendingCount} dokumen belum terkirim`}
+            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
           </span>
         ) : null}
         {stale === '1' ? (
@@ -42,7 +47,7 @@ export function SyncStatus() {
             Offline — dikirim otomatis saat online.
           </span>
         ) : null}
-      </div>
+      </Link>
       <button
         type="button"
         aria-label="Kirim dokumen yang belum terkirim"

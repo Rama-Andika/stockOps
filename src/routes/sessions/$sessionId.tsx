@@ -1,14 +1,12 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { localRepo, sessionTabKey } from '~/client/db/local-repo'
-import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { useSessionData } from '~/client/hooks/use-session-data'
 import { addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
 import { playFeedback } from '~/client/feedback'
 import { toast } from '~/client/toast'
-import { Upload } from 'lucide-react'
 import { AppBar } from '~/components/app-bar'
 import { ConfirmButton } from '~/components/confirm-button'
 import { ScanBar } from '~/components/scan-bar'
@@ -44,9 +42,6 @@ type SessionTab = 'scan' | 'items'
 
 function SessionDetailPage() {
   const { sessionId } = Route.useParams()
-  const sync = useAppStore((state) => state.sync)
-  const syncing = useAppStore((state) => state.syncing)
-  const online = useAppStore((state) => state.online)
   const navigate = useNavigate()
 
   // Shared with the review screen — see src/client/hooks/use-session-data.ts. Called before any
@@ -293,12 +288,6 @@ function SessionDetailPage() {
     void navigate({ to: '/sessions/review/$sessionId', params: { sessionId } })
   }
 
-  const handleRetrySync = async () => {
-    const result = await sync()
-    if (result.ok) toast('success', result.message)
-    else toast(online ? 'danger' : 'warn', result.message)
-  }
-
   const handleCancel = async () => {
     await localRepo.deleteSession(session.sessionId)
     void navigate({ to: '/sessions' })
@@ -314,6 +303,10 @@ function SessionDetailPage() {
           backLabel="Kembali ke daftar sesi"
           actions={<Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>}
         />
+        {/* No over-receive line here any more: session.overReceive is written only by markSynced,
+            so it could only ever be true on a document that already reached the server — never
+            while scanning. The warning BEFORE sending is the review screen's callout, and the
+            one AFTER is on the send-status row. */}
         <SessionContextStrip
           purchaseLabel={session.purchaseNumber ?? session.purchaseId}
           vendorName={session.vendorName ?? '-'}
@@ -321,8 +314,6 @@ function SessionDetailPage() {
           ordered={purchaseProgress?.orderedTotal ?? 0}
           serverReceived={purchaseProgress?.serverReceivedTotal ?? 0}
           localPending={purchaseProgress?.localPendingTotal ?? 0}
-          overReceive={session.overReceive}
-          excessTotal={session.excessTotal}
         />
       </div>
 
@@ -427,14 +418,19 @@ function SessionDetailPage() {
             {session.status === SESSION_STATUS.PENDING || session.status === SESSION_STATUS.FAILED ? (
               <>
                 {session.lastError ? <Notice tone="danger">{session.lastError}</Notice> : null}
-                <Button
-                  className="flex w-full items-center justify-center gap-1"
-                  aria-label="Upload"
-                  disabled={syncing}
-                  onClick={() => void handleRetrySync()}
+                {/* No per-document send button here. The one that used to sit on this spot called
+                    sync(), which pushes the WHOLE outbox — so a button next to one document was
+                    sending all of them. Sending is a device-level action, and it lives on the
+                    screen that shows every document's state. */}
+                <Notice tone="warn">
+                  Dokumen ini belum terkirim. Pengiriman berlaku untuk semua dokumen sekaligus.
+                </Notice>
+                <Link
+                  to="/sessions"
+                  className="touch-target flex w-full items-center justify-center gap-1 rounded-lg bg-brand font-semibold text-on-brand transition hover:bg-brand-bright"
                 >
-                  <Upload className="h-5 w-5" aria-hidden="true" />  Upload
-                </Button>
+                  Buka daftar Penerimaan
+                </Link>
               </>
             ) : null}
             {session.status === SESSION_STATUS.REJECTED ? (
