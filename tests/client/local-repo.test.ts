@@ -4,6 +4,7 @@ import { StockOpsDb } from '~/client/db/local-db'
 import { LocalRepository } from '~/client/db/local-repo'
 import { SESSION_STATUS, PROGRESS_STATUS } from '~/shared/constants'
 import { expiryFrom } from '~/client/auth/offline-auth'
+import { canEditSession, ownerName } from '~/shared/session-owner'
 
 let db: StockOpsDb
 let repo: LocalRepository
@@ -112,6 +113,31 @@ describe('LocalRepository (Dexie)', () => {
       expect(session.number).toBeNull()
       expect(session.sequence).toBe(1)
       expect(session.sessionId).toMatch(/^[0-9a-f-]{36}$/)
+    })
+
+    it('menyimpan nama pemilik pada sesi baru, dan hanya pemilik yang boleh mengubah', async () => {
+      const session = await repo.createSession({
+        purchaseId: 'P1',
+        userId: '1200001',
+        userFullName: 'Budi Santoso',
+        userLoginId: 'op_budi',
+        deviceId: 'D1',
+      })
+      expect(session.userFullName).toBe('Budi Santoso')
+      expect(session.userLoginId).toBe('op_budi')
+      expect(ownerName(session)).toBe('Budi Santoso')
+      expect(canEditSession(session, '1200001')).toBe(true)
+      // Satu PDT dipakai bergantian: operator lain tidak boleh melanjutkan sesi ini.
+      expect(canEditSession(session, '1200002')).toBe(false)
+    })
+
+    it('pemanggil tanpa nama pemilik menyimpan null, bukan undefined', async () => {
+      // Jalur ini dipakai seluruh test lain di berkas ini. Nilainya harus null supaya sama dengan
+      // hasil migrasi v1 -> v2 dan supaya `ownerName` memberi label generik, bukan string kosong.
+      const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
+      expect(session.userFullName).toBeNull()
+      expect(session.userLoginId).toBeNull()
+      expect(ownerName(session)).toBe('Operator lain')
     })
 
     it('menambah & menggabungkan qty baris yang sama (FR-4.5)', async () => {

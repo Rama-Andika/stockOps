@@ -6,9 +6,10 @@ import { useLive } from '~/client/hooks/use-live'
 import { useAppStore } from '~/client/state/store/app-store'
 import { toast } from '~/client/toast'
 import { SendStatusStrip } from '~/components/send-status-strip'
-import { SessionStatusRow } from '~/components/session-status-row'
-import { Card, EmptyState } from '~/components/ui'
+import { SessionGroupList } from '~/components/session-group-list'
+import { Card, EmptyState, Loading } from '~/components/ui'
 import { SESSION_STATUS } from '~/shared/constants'
+import { isOwnedBy } from '~/shared/session-owner'
 
 export const Route = createFileRoute('/sessions/')({
   component: SessionsPage,
@@ -21,6 +22,7 @@ export const Route = createFileRoute('/sessions/')({
  */
 function SessionsPage() {
   const online = useAppStore((state) => state.online)
+  const user = useAppStore((state) => state.user)
   const syncing = useAppStore((state) => state.syncing)
   const pendingCount = useAppStore((state) => state.pendingCount)
   const sync = useAppStore((state) => state.sync)
@@ -35,6 +37,19 @@ function SessionsPage() {
   const runningCount = useMemo(
     () => sessions.filter((session) => session.status === SESSION_STATUS.RUNNING).length,
     [sessions],
+  )
+  // Kept separate from `runningCount` on purpose. `runningCount` feeds SendStatusStrip, which
+  // states a fact about the DEVICE ("1 sesi masih berjalan … belum dikirim") and is right to
+  // count everybody's. The line below the strip speaks TO the operator ("selesaikan satu per
+  // satu") and would be an instruction they cannot follow if it counted sessions they are not
+  // allowed to finish.
+  const myRunningCount = useMemo(
+    () =>
+      sessions.filter(
+        (session) =>
+          session.status === SESSION_STATUS.RUNNING && isOwnedBy(session, user?.userId ?? null),
+      ).length,
+    [sessions, user?.userId],
   )
   // The newest syncedAt across every session, not the time of the last sync ATTEMPT: it answers
   // "when did my work last land", and it needs no new state because every synced session already
@@ -53,6 +68,12 @@ function SessionsPage() {
     const result = await sync()
     toast(result.ok ? 'success' : online ? 'danger' : 'warn', result.message)
   }
+
+  // Same window the cockpit and the review screen guard: with no logged-in user the shell is one
+  // effect away from redirecting to /login (app-shell.tsx:119-123), and `splitByOwner` with a null
+  // id puts EVERY row under "Operator lain" — so for one render the operator would be told their
+  // own documents belong to somebody else and are read-only.
+  if (!user) return <Loading label="Memuat dokumen…" />
 
   return (
     <div className="flex flex-col gap-3">
@@ -83,9 +104,9 @@ function SessionsPage() {
 
       {/* Still `> 1`: the strip now speaks for running sessions in general, and this line adds
           the one thing it does not say — that the PO list can only offer one of them. */}
-      {runningCount > 1 ? (
+      {myRunningCount > 1 ? (
         <p className="text-sm font-semibold text-warn-text">
-          {runningCount} sesi masih berjalan. Selesaikan satu per satu.
+          {myRunningCount} sesi milikmu masih berjalan. Selesaikan satu per satu.
         </p>
       ) : null}
 
@@ -96,15 +117,13 @@ function SessionsPage() {
           </EmptyState>
         </Card>
       ) : (
-        <div className="flex flex-col gap-2">
-          {sessions.map((session) => (
-            <SessionStatusRow
-              key={session.sessionId}
-              session={session}
-              itemCount={itemCounts.get(session.sessionId) ?? 0}
-            />
-          ))}
-        </div>
+        // `user.userId`, not `user?.userId ?? null`: the guard above has already returned for a
+        // missing user, and a null here would silently regroup every row as somebody else's.
+        <SessionGroupList
+          sessions={sessions}
+          itemCounts={itemCounts}
+          currentUserId={user.userId}
+        />
       )}
     </div>
   )

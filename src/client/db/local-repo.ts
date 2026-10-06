@@ -457,6 +457,14 @@ export class LocalRepository {
   async createSession(input: {
     purchaseId: string
     userId: string
+    /**
+     * Owner name, stored on the session. Optional because roughly forty-five calls in
+     * `tests/client/` pass only the three ids, and a required field would turn a product change
+     * into a mass test edit. The one caller in the app (`routes/pos/$purchaseId.tsx`) always
+     * passes both.
+     */
+    userFullName?: string | null
+    userLoginId?: string | null
     deviceId: string
     receiveDate?: string
   }): Promise<LocalSession> {
@@ -467,6 +475,10 @@ export class LocalRepository {
       purchaseNumber: purchase?.number ?? null,
       vendorName: purchase?.vendorName ?? null,
       userId: input.userId,
+      // `?? null`, never left undefined: the row is read back by `ownerName`, and a stored null is
+      // what the migration writes too, so both paths produce the same "Operator lain".
+      userFullName: input.userFullName ?? null,
+      userLoginId: input.userLoginId ?? null,
       deviceId: input.deviceId,
       status: SESSION_STATUS.RUNNING,
       invoiceNumber: '',

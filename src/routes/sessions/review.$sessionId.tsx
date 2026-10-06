@@ -10,6 +10,7 @@ import { ReviewSummary } from '~/components/review-summary'
 import { VendorDocCard } from '~/components/vendor-doc-card'
 import { Button, Card, EmptyState, Loading, Notice } from '~/components/ui'
 import { SESSION_STATUS } from '~/shared/constants'
+import { isOwnedBy, ownerName } from '~/shared/session-owner'
 import { formatQty } from '~/shared/format'
 import { toLocalDateTime } from '~/shared/receive-date'
 
@@ -36,6 +37,7 @@ function SessionReviewPage() {
   const navigate = useNavigate()
   const sync = useAppStore((state) => state.sync)
   const online = useAppStore((state) => state.online)
+  const user = useAppStore((state) => state.user)
   const {
     session,
     lines,
@@ -61,6 +63,9 @@ function SessionReviewPage() {
   }, [session?.invoiceNumber, session?.doNumber])
 
   if (!session) return <Loading label="Memuat sesi…" />
+  // Same window as in the cockpit: the shell is about to redirect to /login, and refusing the
+  // screen as "somebody else's" would be the wrong reason.
+  if (!user) return <Loading label="Memuat sesi…" />
 
   const toCockpit = () => {
     void navigate({ to: '/sessions/$sessionId', params: { sessionId } })
@@ -88,6 +93,31 @@ function SessionReviewPage() {
       await localRepo.setMeta(sessionTabKey(sessionId), openTab).catch(() => undefined)
     }
     toCockpit()
+  }
+
+  // Only the owner may finalize. Through the UI this screen is already unreachable for anybody
+  // else — the Review button lives in the cockpit's tab bar, which a read-only cockpit does not
+  // render — so this guard exists for the URL being opened directly (history, a tab left open).
+  //
+  // Checked BEFORE the status guard so the message names the owner instead of claiming the
+  // session is finished, which for a colleague's RUNNING session would simply be untrue.
+  if (!isOwnedBy(session, user.userId)) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="shrink-0 px-3 pt-2">
+          <AppBar title="Review & kirim" onBack={toCockpit} backLabel="Kembali ke sesi" />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          <Notice tone="warn">
+            Sesi ini milik {ownerName(session)}. Hanya pemiliknya yang bisa menyelesaikan dan
+            mengirim dokumen ini.
+          </Notice>
+          <Button className="mt-3 w-full" onClick={toCockpit}>
+            Lihat sesi
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   // A finalized session must not be able to walk back into this screen and send again:

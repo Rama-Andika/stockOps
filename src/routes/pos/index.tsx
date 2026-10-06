@@ -9,6 +9,7 @@ import { SegmentedProgress } from "~/components/segmented-progress";
 import { Badge, Button, Card, EmptyState, inputClass } from "~/components/ui";
 import { PROGRESS_LABEL, type ProgressStatus } from "~/shared/constants";
 import { formatDate } from "~/shared/format";
+import { splitByOwner } from "~/shared/session-owner";
 
 export const Route = createFileRoute("/pos/")({
   component: PosListPage,
@@ -46,8 +47,16 @@ function PosListPage() {
   const online = useAppStore((state) => state.online);
   const pullProgress = useAppStore((state) => state.pullProgress);
   const downloadData = useAppStore((state) => state.downloadData);
+  const user = useAppStore((state) => state.user);
   const running = useLive(() => localRepo.runningSessions(), [], []);
-  const activeSession = running[0];
+  // `runningSessions()` is device-wide, and this banner is an invitation to press. It may only
+  // ever point at a session this operator is allowed to continue — pressing a colleague's would
+  // land on the ownership gate, which is a dead end reached from a green "continue" banner.
+  const { mine: myRunning, others: otherRunning } = useMemo(
+    () => splitByOwner(running, user?.userId ?? null),
+    [running, user?.userId],
+  );
+  const activeSession = myRunning[0];
 
   const handleDownload = async () => {
     const result = await downloadData();
@@ -95,12 +104,20 @@ function PosListPage() {
               {activeSession.vendorName ?? '-'}
             </span>
             {/* `runningSessions()` orders newest first (local-repo.ts), so this banner points at
-                the session most recently started. Saying so matters once there is more than one:
-                without it the banner looks like THE running session rather than one of several,
-                and the others are only reachable from the Penerimaan list. */}
-            {running.length > 1 ? (
+                the operator's OWN most recently started session. Saying so matters once there is
+                more than one: without it the banner looks like THE running session rather than
+                one of several, and the others are only reachable from the Penerimaan list. */}
+            {myRunning.length > 1 ? (
               <span className="block text-sm font-semibold text-warn-text">
-                +{running.length - 1} sesi lain juga berjalan — lihat di Penerimaan.
+                +{myRunning.length - 1} sesi milikmu juga berjalan — lihat di Penerimaan.
+              </span>
+            ) : null}
+            {/* Separate line, separate wording: "mine, elsewhere" and "someone else's" are two
+                different facts, and one combined count would read as work this operator can
+                finish. */}
+            {otherRunning.length > 0 ? (
+              <span className="block text-sm text-fg-subtle">
+                {otherRunning.length} sesi operator lain juga berjalan di perangkat ini.
               </span>
             ) : null}
           </span>
@@ -109,6 +126,17 @@ function PosListPage() {
             aria-hidden="true"
           />
         </Link>
+      ) : null}
+
+      {/* No banner of their own, but the device is holding somebody else's unfinished work. Said
+          on this screen because this is where a new session starts: the qty of those sessions is
+          already counted into the progress meters below, so an operator who does not know they
+          exist will read those numbers as the server's. */}
+      {!activeSession && otherRunning.length > 0 ? (
+        <p className="rounded-xl border border-line bg-surface/60 p-3 text-sm text-fg-muted">
+          {otherRunning.length} sesi operator lain masih berjalan di perangkat ini. Hanya
+          pemiliknya yang bisa melanjutkan — lihat di Penerimaan.
+        </p>
       ) : null}
 
       <Card>

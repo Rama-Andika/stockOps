@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import { localRepo, sessionTabKey } from '~/client/db/local-repo'
 import { useLive } from '~/client/hooks/use-live'
 import { useSessionData } from '~/client/hooks/use-session-data'
+import { useAppStore } from '~/client/state/store/app-store'
 import { addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
 import { playFeedback } from '~/client/feedback'
@@ -12,10 +13,12 @@ import { ConfirmButton } from '~/components/confirm-button'
 import { ScanBar } from '~/components/scan-bar'
 import { ScanHero, type ScanHeroState } from '~/components/scan-hero'
 import { SessionContextStrip } from '~/components/session-context-strip'
+import { SessionOwnerGate } from '~/components/session-owner-gate'
 import { VendorDocCard } from '~/components/vendor-doc-card'
 import { Badge, Button, Card, EmptyState, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
+import { canEditSession, isOwnedBy, ownerName } from '~/shared/session-owner'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
   component: SessionDetailPage,
@@ -75,6 +78,18 @@ function SessionDetailPage() {
   const scanRef = useRef<HTMLInputElement>(null)
   // Scans are saved strictly one after another (FIFO), even when the scanner is faster than IndexedDB.
   const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const user = useAppStore((state) => state.user)
+  // Acknowledgement of the ownership gate below. Route state on purpose — not a search param,
+  // not persisted: it lasts exactly as long as this screen stays open, so reopening the session
+  // asks again. It is the cheap half of the rule; the half that actually protects the document is
+  // `canEdit`, which does not depend on it at all.
+  const [ownerAcknowledged, setOwnerAcknowledged] = useState(false)
+  const currentUserId = user?.userId ?? null
+  // Plain consts, deliberately computed HERE: the two effects below guard on "may this operator
+  // scan into this session", and they cannot read `editable`, which is declared after the early
+  // return for a missing session.
+  const isOwner = Boolean(session && isOwnedBy(session, currentUserId))
+  const canEdit = Boolean(session && canEditSession(session, currentUserId))
 
   // Keep the scanner's keystrokes landing in the barcode field. While the qty editor is open
   // focus belongs to it; when it closes the field gets focus back, otherwise the scanner's Enter
@@ -82,11 +97,11 @@ function SessionDetailPage() {
   // `tab` is in the deps because the barcode field only exists on the scan tab: coming back from
   // the item tab remounts it, and without this the focus would stay on the tab button.
   useEffect(() => {
-    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
+    if (!canEdit || editingLineId) return
     if (tab !== 'scan') return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [session?.status, tab, editingLineId])
+  }, [canEdit, tab, editingLineId])
 
   // Scanner wedge. The effect above only runs when one of its deps changes, so a tap on dead space
   // (the context strip, the empty area of the scan result, the app bar title) drops focus to <body>
@@ -95,7 +110,7 @@ function SessionDetailPage() {
   // triggering character included — into the barcode field. From the second character onwards the
   // field has focus and receives them normally, and the scanner's closing Enter lands there too.
   useEffect(() => {
-    if (session?.status !== SESSION_STATUS.RUNNING || editingLineId) return
+    if (!canEdit || editingLineId) return
     if (tab !== 'scan') return
     const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -123,13 +138,33 @@ function SessionDetailPage() {
     }
     window.addEventListener('keydown', onWindowKeyDown)
     return () => window.removeEventListener('keydown', onWindowKeyDown)
-  }, [session?.status, tab, editingLineId])
+  }, [canEdit, tab, editingLineId])
 
   const dismissHero = useCallback(() => setHeroState({ kind: 'IDLE' }), [])
 
   if (!session) return <Loading label="Memuat sesi…" />
+  // No logged-in user means the shell is about to redirect to /login (app-shell.tsx:119-123).
+  // Showing the ownership gate in that window would claim a session is somebody else's purely
+  // because nobody is logged in yet.
+  if (!user) return <Loading label="Memuat sesi…" />
 
-  const editable = session.status === SESSION_STATUS.RUNNING
+  // Step 1 of the rule: acknowledge whose session this is. Shown for every status — a colleague's
+  // finished document is no more mine than their running one — and shown INSTEAD of the cockpit,
+  // so the scanner wedge above never runs for a non-owner.
+  if (!isOwner && !ownerAcknowledged) {
+    return (
+      <SessionOwnerGate
+        ownerName={ownerName(session)}
+        createdAt={session.createdAt}
+        onAcknowledge={() => setOwnerAcknowledged(true)}
+      />
+    )
+  }
+
+  // Step 2: `editable` now means "RUNNING **and** mine". Every control that can change the
+  // session already keys off it — scan bar, tab bar, qty sheet, the per-line button, the cancel
+  // button — so a non-owner gets the read-only cockpit without any of them learning a new rule.
+  const editable = canEdit
   const editingLine = editingLineId
     ? (lines.find((line) => line.lineId === editingLineId) ?? null)
     : null
@@ -250,17 +285,25 @@ function SessionDetailPage() {
   }
 
   /**
-   * "Buka PO itu" on the NOT_IN_PO card. When this device already has a RUNNING session for that
-   * PO, go straight to the session instead of to the PO detail screen: that screen carries no
+   * "Buka PO itu" on the NOT_IN_PO card. When this operator already has a RUNNING session of their
+   * OWN for that PO, go straight to it instead of to the PO detail screen: that screen carries no
    * "Lanjutkan sesi berjalan" banner — that one lives on the PO LIST (routes/pos/index.tsx) — and
    * its "Mulai Penerimaan" button calls `createSession` unconditionally, which has no dedupe. So
-   * landing there would let the operator start a SECOND session for a PO already being received
-   * and record the same delivery twice. Either way the session being left stays RUNNING in Dexie
-   * and is reachable from the session list.
+   * landing there would let the operator start a SECOND session for a PO they are already
+   * receiving and record the same delivery twice.
+   *
+   * `isOwnedBy` is what keeps the shortcut useful. A colleague's RUNNING session for that PO is
+   * not something this operator may continue, so jumping into it would strand them on the
+   * ownership gate, whose only exits are "look" and "back to the list" — never the PO screen,
+   * which is exactly where they ARE allowed to start a session of their own (with the warning
+   * that names the other operator). Either way the session being left stays RUNNING in Dexie and
+   * is reachable from the session list.
    */
   const openPurchase = async (purchaseId: string) => {
     const running = await localRepo.runningSessions()
-    const existing = running.find((row) => row.purchaseId === purchaseId)
+    const existing = running.find(
+      (row) => row.purchaseId === purchaseId && isOwnedBy(row, currentUserId),
+    )
     if (existing) {
       void navigate({ to: '/sessions/$sessionId', params: { sessionId: existing.sessionId } })
       return
@@ -324,6 +367,21 @@ function SessionDetailPage() {
         id={editable ? 'session-tab-panel' : undefined}
         aria-labelledby={editable ? `session-tab-${tab}` : undefined}
       >
+        {/* The sentence deliberately says nothing about SENDING. Sending is a device-level action
+            by design — pressing Kirim pushes the whole outbox, a colleague's finalized documents
+            included — so "only the owner can send" would be false, and on a PENDING document it
+            would sit directly above the notice below that says the opposite. */}
+        {isOwner ? null : (
+          <div className="mb-2">
+            <Notice tone="warn">
+              Dokumen milik {ownerName(session)} — hanya bisa dilihat.
+              {session.status === SESSION_STATUS.RUNNING
+                ? ' Scan dan penyelesaian dokumen ini hanya bisa dilakukan oleh pemiliknya.'
+                : ' Dokumen ini sudah difinalisasi, jadi tidak bisa diubah oleh siapa pun.'}
+            </Notice>
+          </div>
+        )}
+
         {editable && tab === 'scan' ? (
           <ScanHero
             state={heroState}
@@ -396,8 +454,12 @@ function SessionDetailPage() {
           </div>
         ) : null}
 
-        {/* Read-only only: on a RUNNING session these numbers are edited on the review screen. */}
-        {!editable ? (
+        {/* Read-only only: on a RUNNING session these numbers are edited on the review screen.
+            The condition is the STATUS, not `editable`: now that `editable` also means "mine", a
+            colleague's RUNNING session would render this card with two empty disabled fields,
+            which reads as "the vendor's paperwork has no numbers" rather than "they have not
+            typed them in yet". */}
+        {session.status !== SESSION_STATUS.RUNNING ? (
           <div className="mt-2">
             <VendorDocCard
               invoice={session.invoiceNumber}
@@ -438,13 +500,24 @@ function SessionDetailPage() {
                 <Notice tone="danger">
                   Sesi ditolak server: {session.lastError ?? 'PO tidak dapat diterima.'}
                 </Notice>
-                <ConfirmButton
-                  tone="danger"
-                  className="w-full"
-                  label="Hapus sesi dari perangkat"
-                  confirmLabel="Tahan terus… sesi akan dihapus"
-                  onConfirm={() => void handleCancel()}
-                />
+                {/* Gated on OWNERSHIP, not on `editable`. `editable` is false for every rejected
+                    session — that is what this whole block hangs off — so without this check the
+                    delete button also rendered on a colleague's document: a second write path
+                    around the ownership rule, and the only one that destroys data, since
+                    `deleteSession` removes the session together with every scanned line. */}
+                {isOwner ? (
+                  <ConfirmButton
+                    tone="danger"
+                    className="w-full"
+                    label="Hapus sesi dari perangkat"
+                    confirmLabel="Tahan terus… sesi akan dihapus"
+                    onConfirm={() => void handleCancel()}
+                  />
+                ) : (
+                  <p className="text-sm text-fg-subtle">
+                    Hanya {ownerName(session)} yang bisa menghapus dokumen ini dari perangkat.
+                  </p>
+                )}
               </>
             ) : null}
             {session.status === SESSION_STATUS.SYNCED ? (

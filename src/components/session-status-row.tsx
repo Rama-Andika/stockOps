@@ -4,11 +4,16 @@ import { Badge } from './ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatDateTime, formatQty } from '~/shared/format'
 import { rejectionReasonText } from '~/shared/session-view'
+import { isOwnedBy, ownerName } from '~/shared/session-owner'
 
 /** Only the fields the row shows — so a test can build one without a whole Dexie session. */
 export interface SessionRowInput {
   sessionId: string
   status: SessionStatus
+  /** Owner of the session. `LocalSession` satisfies these three without importing it. */
+  userId: string
+  userFullName: string | null
+  userLoginId: string | null
   number: string | null
   purchaseNumber: string | null
   purchaseId: string
@@ -63,11 +68,18 @@ function detailLine(session: SessionRowInput): string {
 export function SessionStatusRow({
   session,
   itemCount,
+  currentUserId,
 }: {
   session: SessionRowInput
   itemCount: number
+  /** `null` while no operator is logged in — then no row is "mine". */
+  currentUserId: string | null
 }) {
   const rejected = session.status === SESSION_STATUS.REJECTED
+  // Rendered ONLY on a row that belongs to somebody else. On this operator's own rows it would
+  // repeat the group heading above them ("Sesi saya") once per row, and this list is the one
+  // screen where vertical space should pay for documents rather than for labels.
+  const foreignOwner = isOwnedBy(session, currentUserId) ? null : ownerName(session)
   return (
     <Link
       to="/sessions/$sessionId"
@@ -86,6 +98,11 @@ export function SessionStatusRow({
         <span className="block truncate text-sm text-fg-subtle">
           {session.vendorName ?? '-'} · {itemCount} item
         </span>
+        {foreignOwner ? (
+          <span className="block truncate text-sm font-semibold text-warn-text">
+            Milik {foreignOwner}
+          </span>
+        ) : null}
         <span className={`block text-sm ${rejected ? 'text-danger-soft' : 'text-fg-muted'}`}>
           {detailLine(session)}
         </span>

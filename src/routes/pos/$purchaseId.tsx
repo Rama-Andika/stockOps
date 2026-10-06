@@ -8,6 +8,7 @@ import { SegmentedProgress } from '~/components/segmented-progress'
 import { Badge, Button, Card, EmptyState, Loading, Notice } from '~/components/ui'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
 import { formatDate } from '~/shared/format'
+import { isOwnedBy, ownerName } from '~/shared/session-owner'
 
 export const Route = createFileRoute('/pos/$purchaseId')({
   component: PosDetailPage,
@@ -29,6 +30,9 @@ function PosDetailPage() {
 
   const detail = useLive(() => localRepo.getPurchaseDetail(purchaseId), [purchaseId], undefined)
   const unitRows = useLive(() => localRepo.db.units.toArray(), [], [])
+  // Device-wide here, filtered to this PO further down. Called next to the other live queries
+  // because the two early returns below must not sit between a hook and its siblings.
+  const runningSessions = useLive(() => localRepo.runningSessions(), [], [])
   const unitMap = useMemo(() => new Map(unitRows.map((row) => [row.uomId, row.unit])), [unitRows])
 
   if (!detail) return <Loading label="Memuat detail PO…" />
@@ -49,6 +53,23 @@ function PosDetailPage() {
         row.totalReceivedQty >= row.orderedQty,
     )
 
+  // Other operators' RUNNING sessions for THIS PO. Their scanned qty is already inside
+  // `localPendingQty` — `getPurchaseDetail` counts every session that is neither SYNCED nor
+  // REJECTED — so it moves the meters above and can even make `allItemsFull` true while nothing
+  // has reached the server. Naming the owner turns that into something the operator can act on
+  // instead of a number that does not match the paperwork in their hand.
+  const foreignRunning = runningSessions.filter(
+    (row) => row.purchaseId === purchaseId && !isOwnedBy(row, user?.userId ?? null),
+  )
+  let foreignOwnerLabel: string | null = null
+  const firstForeign = foreignRunning[0]
+  if (firstForeign) {
+    const extra = foreignRunning.length - 1
+    // "(+N sesi lain)", not "+N operator lain": several of them can belong to one operator.
+    foreignOwnerLabel =
+      extra > 0 ? `${ownerName(firstForeign)} (+${extra} sesi lain)` : ownerName(firstForeign)
+  }
+
   const startReception = async () => {
     if (!user) return
     const device = deviceId ?? (await localRepo.ensureDeviceId())
@@ -57,6 +78,11 @@ function PosDetailPage() {
       const session = await localRepo.createSession({
         purchaseId,
         userId: user.userId,
+        // Denormalized once, never refreshed: the document should name the operator as they were
+        // when the goods were received, and the credential this comes from can be revoked by the
+        // admin and deleted from the device (`removeCredentialsForUsers`).
+        userFullName: user.fullName,
+        userLoginId: user.loginId,
         deviceId: device,
       })
       void navigate({ to: '/sessions/$sessionId', params: { sessionId: session.sessionId } })
@@ -112,8 +138,23 @@ function PosDetailPage() {
         </ul>
       </Card>
 
+      {foreignOwnerLabel ? (
+        <div className="mb-2">
+          <Notice tone="warn">
+            {foreignOwnerLabel} sedang menerima PO ini di perangkat ini dan sesinya belum dikirim.
+            Qty-nya sudah ikut dihitung pada angka di atas. Kamu masih boleh memulai penerimaan
+            sendiri — pastikan tidak menghitung barang yang sama dua kali.
+          </Notice>
+        </div>
+      ) : null}
+
       {allItemsFull ? (
-        <Notice tone="warn">Semua item sudah diterima penuh — tidak bisa memulai penerimaan baru.</Notice>
+        <Notice tone="warn">
+          Semua item sudah diterima penuh — tidak bisa memulai penerimaan baru.
+          {foreignOwnerLabel
+            ? ` Angka itu termasuk sesi berjalan milik ${foreignOwnerLabel} yang belum dikirim, jadi belum tentu sudah masuk sistem.`
+            : ''}
+        </Notice>
       ) : (
         <Notice tone="info">Sesi bisa dijeda dan dilanjutkan kapan saja.</Notice>
       )}

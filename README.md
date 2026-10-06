@@ -135,6 +135,15 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
 - **Baris ganda dalam satu sesi** (item PO yang sama dua kali) dijumlahkan saat menilai over-receive;
   baris pengulangan hanya melaporkan kelebihan yang ditambahkannya sendiri, sehingga `excessTotal`
   sama dengan total akhir dikurangi jumlah dipesan.
+- **Pemilik sesi (satu PDT dipakai bergantian):** setiap sesi menyimpan `userId` **dan** nama
+  operator yang membuatnya (didenormalisasi saat sesi dibuat, jadi tetap tampil walau kredensial
+  user sudah dicabut admin dan dihapus dari perangkat). Daftar Penerimaan memisahkan "Sesi saya"
+  dari "Operator lain"; membuka sesi milik operator lain memunculkan konfirmasi lalu layar
+  **baca-saja** — scan, ubah qty, undo, batalkan, dan finalisasi hanya untuk pemiliknya
+  (`canEditSession` di `src/shared/session-owner.ts`). PO yang punya sesi berjalan milik operator
+  lain **tetap** boleh diterima lewat sesi baru (dengan peringatan yang menyebut pemiliknya), dan
+  **pengiriman tidak dibatasi**: tombol Kirim mendorong seluruh outbox termasuk dokumen operator
+  lain, supaya dokumen final tidak tertahan menunggu pemiliknya login.
 
 ### 3.3 Keputusan untuk celah yang ada di PRD (didokumentasikan, bukan disembunyikan)
 
@@ -331,5 +340,12 @@ pekerjaan terpisah yang belum dijadwalkan.
 - Otorisasi bersifat per **perangkat**: `userId` di payload sesi belum dicocokkan dengan kredensial yang
   terautentikasi, jadi perangkat yang memegang satu kredensial valid secara teknis bisa mengirim sesi atas
   nama user lain (jejak `pos_receive.user_id`). Perlu keputusan produk bila dianggap risiko.
+- **Penanda pemilik sesi adalah pencegah kekeliruan, bukan kontrol akses.** Seluruh aturannya
+  berjalan di perangkat (`src/shared/session-owner.ts` + layar sesi); server tidak memeriksa pemilik
+  sesi sama sekali, sehingga keterbatasan `userId` pada butir di atas tetap berlaku utuh.
+- Sesi **berjalan** milik operator yang tidak kembali (mis. kredensialnya dicabut admin) tidak bisa
+  dilanjutkan, diambil alih, atau dihapus oleh operator lain. Sesi itu menetap di perangkat, dan
+  qty-nya tetap ikut dihitung pada progres PO lokal — PO-nya masih bisa diterima lewat sesi baru,
+  dan layar detail PO menyebutkan asal angkanya. Fitur ambil-alih/purge belum dijadwalkan.
 - Percobaan login online belum dibatasi (tanpa rate limit/lockout) dan password `sysuser` bersifat
   plaintext (legacy sistem admin).

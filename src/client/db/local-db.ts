@@ -87,6 +87,14 @@ export interface LocalSession {
   /** Vendor name (denormalized). */
   vendorName: string | null
   userId: string
+  /**
+   * Owner name, denormalized when the session is created — not looked up at render time. The
+   * credential it comes from is deleted from the device when the admin revokes that user
+   * (`removeCredentialsForUsers`), and a document should still name the operator who received the
+   * goods. `null` only for rows the v1 -> v2 migration could not resolve.
+   */
+  userFullName: string | null
+  userLoginId: string | null
   deviceId: string
   status: SessionStatus
   invoiceNumber: string
@@ -160,6 +168,37 @@ export class StockOpsDb extends Dexie {
       meta: 'key',
       syncLog: '++id, at, level',
     })
+
+    // v2 only adds two NON-INDEXED fields to `sessions` (userFullName, userLoginId). Dexie needs
+    // declarations for indexes, not for stored fields, so the store line below is deliberately
+    // identical to v1: this version exists for the backfill, not for a schema change. It is
+    // restated rather than omitted so the newest version's schema is readable in one place.
+    //
+    // No index on `userId` on purpose: both call sites that care about ownership already hold the
+    // whole array in memory (`listSessions()` for the receiving list, `runningSessions()` for the
+    // PO banner) and filter it with `splitByOwner`. An index nothing queries would only cost write
+    // time on every scan.
+    this.version(2)
+      .stores({
+        sessions: 'sessionId, purchaseId, status, sequence, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        // Runs ONLY when an existing v1 database is opened. A fresh install (and every
+        // `new StockOpsDb(...)` in the tests) is created at v2 directly and never calls this.
+        const credentials = await tx.table<LocalCredential>('credentials').toArray()
+        const byUserId = new Map(credentials.map((row) => [row.userId, row]))
+        await tx
+          .table<LocalSession>('sessions')
+          .toCollection()
+          .modify((session) => {
+            const credential = byUserId.get(session.userId)
+            // Explicit null, never left undefined: a session whose owner credential was already
+            // revoked and deleted must read as "Operator lain", and `ownerName` treats both the
+            // same — but a stored null says the migration DID look.
+            session.userFullName = credential?.fullName ?? null
+            session.userLoginId = credential?.loginId ?? null
+          })
+      })
   }
 }
 

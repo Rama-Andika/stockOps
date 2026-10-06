@@ -73,6 +73,19 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
   `tests/component/ui.test.tsx` asserts its colour classes — new screens use `SegmentedProgress`;
   high-contrast mode is an override layer on `data-contrast="high"`, NOT a light theme, because colours
   are hard-coded Tailwind `slate-*` classes across every component.
+- **Session ownership (plans/implementation-plan-pemilik-sesi-mvp.md):** one PDT is shared between
+  operators, so `LocalSession` carries the owner's denormalized name (`userFullName`,
+  `userLoginId`, backfilled by the Dexie v2 upgrade) and every screen asks
+  `src/shared/session-owner.ts` instead of comparing ids — `canEditSession` means "RUNNING AND
+  mine", which is what the cockpit's `editable` now is. A non-owner gets `SessionOwnerGate` and
+  then a read-only cockpit; the two focus/wedge effects must guard on the same value or a
+  read-only screen keeps stealing the scanner. Mind the inverse: the cockpit's `!editable` blocks
+  render for a colleague's document as well, so anything in them that WRITES — today the
+  "Hapus sesi dari perangkat" button on a REJECTED session — needs its own `isOwner` check
+  (`tests/component/session-cockpit-ownership.test.tsx` locks both directions), and their copy must
+  not claim that only the owner can send. Sending is deliberately NOT restricted (the outbox
+  is device-level), and there is no takeover or purge for a colleague's stranded session. It is a
+  mistake guard, not access control: the server never checks the owner.
 
 ## Repo conventions
 
