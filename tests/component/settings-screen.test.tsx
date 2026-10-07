@@ -5,6 +5,7 @@ import { createAppStore } from '~/client/state/store/app-store'
 import { AppStoreProvider } from '~/client/state/store/app-store-provider'
 import type { AppState } from '~/client/state/store/types'
 import { Route } from '~/routes/settings'
+import { getToasts } from '~/client/toast'
 
 const SettingsPage = Route.options.component as React.ComponentType
 
@@ -149,5 +150,34 @@ describe('SettingsPage UI & UX', () => {
     // Copy-nya load-bearing: saklar ini pencegah kekeliruan, bukan kontrol akses, dan tidak boleh
     // terbaca seolah admin akan melihat sesuatu.
     expect(screen.getByText(/tidak dikirim ke\s+server/)).toBeInTheDocument()
+  })
+
+  /**
+   * Kedua arah dari satu aturan: app bar hanya punya SATU baris status, dan `SyncStatus`
+   * memenanginya kapan pun ia punya sesuatu untuk dikatakan. Jadi pesan "Muat ulang ada di bagian
+   * atas layar" benar hanya ketika baris itu sunyi. Tanpa kedua tes ini, jalur `quiet` tidak
+   * dijaga apa pun selain komentar — dan sempat salah sekali.
+   */
+  it('"Cek Pembaruan": saat antrean kirim sunyi, operator diarahkan ke tombol di app bar', async () => {
+    renderSettings({ updateReady: true, pendingCount: 0 })
+
+    fireEvent.click(screen.getByRole('button', { name: /Cek Pembaruan/i }))
+
+    await waitFor(() => {
+      expect(getToasts().at(-1)?.text).toMatch(/ada di bagian atas layar/)
+    })
+  })
+
+  it('"Cek Pembaruan": saat masih ada dokumen belum terkirim, TIDAK menjanjikan tombol itu', async () => {
+    renderSettings({ updateReady: true, pendingCount: 2 })
+
+    fireEvent.click(screen.getByRole('button', { name: /Cek Pembaruan/i }))
+
+    await waitFor(() => {
+      const text = getToasts().at(-1)?.text ?? ''
+      // Yang benar adalah menyuruh mengirim dulu — bukan menunjuk tombol yang sedang tidak dirender.
+      expect(text).toMatch(/Kirim dulu dokumen yang belum terkirim/)
+      expect(text).not.toMatch(/Tombol "Muat ulang" ada di bagian atas layar/)
+    })
   })
 })

@@ -8,6 +8,7 @@ import { loadPreferences } from '~/client/preferences'
 import { addPickedItem, addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
 import { playFeedback } from '~/client/feedback'
+import { setScanFocusHandler } from '~/client/scan-focus'
 import { toast } from '~/client/toast'
 import { AppBar } from '~/components/app-bar'
 import { ConfirmButton } from '~/components/confirm-button'
@@ -205,6 +206,21 @@ function SessionDetailPage() {
     }
     window.addEventListener('keydown', onWindowKeyDown)
     return () => window.removeEventListener('keydown', onWindowKeyDown)
+  }, [canEdit, tab, editingLineId, pickerOpen])
+
+  // Lets the app bar put the focus back into the barcode field — see src/client/scan-focus.ts.
+  // The "Nanti" button of the update banner lives in the app bar, which is a SIBLING of this
+  // route, so it has no other way to reach `scanRef`.
+  //
+  // The condition and the deps are deliberately IDENTICAL to the two effects above. A read-only
+  // cockpit must not claim the scanner, and while the qty sheet or the picker is open the focus is
+  // THEIRS: with no handler registered, `requestScanFocus()` is simply a no-op, which is the right
+  // answer — better a focus that stays put than one yanked out of the picker's search field.
+  useEffect(() => {
+    if (!canEdit || editingLineId || pickerOpen) return
+    if (tab !== 'scan') return
+    setScanFocusHandler(() => scanRef.current?.focus())
+    return () => setScanFocusHandler(null)
   }, [canEdit, tab, editingLineId, pickerOpen])
 
   const dismissHero = useCallback(() => setHeroState({ kind: 'IDLE' }), [])

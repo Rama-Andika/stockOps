@@ -1,12 +1,13 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAppStore } from "~/client/state/store/app-store";
-import { registerServiceWorker } from "~/client/pwa";
+import { checkForUpdate, registerServiceWorker } from "~/client/pwa";
 import { applyContrastPreference } from "~/client/theme";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Settings } from "lucide-react";
-import { SyncStatus } from "./sync-status";
+import { SyncStatus, useSendStatus } from "./sync-status";
+import { UpdateBanner } from "./update-banner";
 
 // z-index scale used across the app, highest first:
 //   60 toast (ToastHost) · 40 dialogs (LineEditSheet) · 30 keypad sheet (ScanBar).
@@ -22,6 +23,11 @@ const NAV_ITEMS = [
 
 function TopBar() {
   const online = useAppStore((state) => state.online);
+  // The app bar's status row is shared. `SyncStatus` renders nothing while it is quiet, and only
+  // then may the update banner take the row — see the comment on `useSendStatus`. The decision
+  // lives here, in the component that owns the layout, so that `UpdateBanner` stays a component a
+  // test can render on its own.
+  const { quiet } = useSendStatus();
   const user = useAppStore((state) => state.user);
 
   return (
@@ -51,6 +57,7 @@ function TopBar() {
           </span>
         ) : null}
       </div>
+      {quiet ? <UpdateBanner /> : null}
       <SyncStatus />
     </header>
   );
@@ -106,15 +113,35 @@ function BottomNav() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const ready = useAppStore((state) => state.ready);
+  const markUpdateReady = useAppStore((state) => state.markUpdateReady);
+  const online = useAppStore((state) => state.online);
   const user = useAppStore((state) => state.user);
   const location = useLocation();
   const navigate = useNavigate();
   const isLogin = location.pathname === "/login";
 
   useEffect(() => {
-    registerServiceWorker();
+    registerServiceWorker(markUpdateReady);
     applyContrastPreference();
-  }, []);
+    // `markUpdateReady` is a zustand action and therefore a stable reference, so this effect still
+    // runs exactly once. It is in the deps because it is used, not because it changes.
+  }, [markUpdateReady]);
+
+  // Ask for a new build whenever the device comes back online.
+  //
+  // `register()` above already performs one update check per app start, but a PDT is opened once
+  // in the morning and left open: SPA navigation never remounts this shell, so without this the
+  // only remaining path for the rest of the shift is the manual button in Pengaturan. Going
+  // offline and back is the one thing that reliably happens on a warehouse floor.
+  //
+  // Deliberately NOT gated on a logged-in user, unlike the auto-sync effect in
+  // app-store-provider.tsx: this reaches no ERP data and needs no credentials. It is also safe on
+  // the first run, when `registration` is not resolved yet — `checkForUpdate` is a no-op then,
+  // and the registration's own check covers that moment.
+  useEffect(() => {
+    if (!online) return;
+    void checkForUpdate();
+  }, [online]);
 
   useEffect(() => {
     if (!ready) return;

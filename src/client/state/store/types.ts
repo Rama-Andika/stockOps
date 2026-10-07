@@ -23,6 +23,26 @@ export interface PullProgressState {
 export interface AppBootstrapState {
   ready: boolean
   setReady: (ready: boolean) => void
+  /**
+   * A newer service worker is installed and waiting. One-way: a build does not un-deploy itself,
+   * so nothing ever sets this back to false. Whether the BANNER shows is `updateSnoozed`'s job,
+   * not this flag's.
+   */
+  updateReady: boolean
+  /**
+   * True while the operator's "Nanti" is still in force. In memory on purpose, NOT persisted:
+   * closing the app is itself a way of taking the update, so a fresh app session should offer it
+   * again. The window is UPDATE_SNOOZE_MS in app-slice.ts.
+   */
+  updateSnoozed: boolean
+  markUpdateReady: () => void
+  snoozeUpdate: () => void
+  /**
+   * Cancels an active "Nanti". Called by "Cek Pembaruan" in Pengaturan: asking for a check IS
+   * asking to see the offer, and without this the operator would get a toast pointing at a banner
+   * that is still snoozed and therefore invisible.
+   */
+  clearUpdateSnooze: () => void
 }
 
 export interface AuthState {

@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LocalSession } from '~/client/db/local-db'
+import { requestScanFocus } from '~/client/scan-focus'
 import { SESSION_STATUS, type SessionStatus } from '~/shared/constants'
 
 /**
@@ -159,6 +160,27 @@ describe('kokpit: sesi milik sendiri tidak ikut terkunci', () => {
     expect(
       screen.getByRole('button', { name: /Hapus sesi dari perangkat/ }),
     ).toBeInTheDocument()
+  })
+
+  it('RUNNING milik sendiri: requestScanFocus() mengembalikan fokus ke field barcode', () => {
+    // Separuh kedua dari aturan fokus banner versi. Tombol "Nanti" hidup di app bar, DI LUAR
+    // route ini, jadi ia tidak bisa menyentuh `scanRef` dan hanya memanggil `requestScanFocus()`.
+    // Inilah sisi yang harus menjawab panggilan itu: dengan fokus tertinggal di elemen lain,
+    // Enter penutup dari scanner akan menekan elemen ITU, bukan mengirim hasil scan.
+    currentUser = BUDI
+    currentSession = budiSession(SESSION_STATUS.RUNNING)
+    render(<Cockpit />)
+
+    const field = screen.getByLabelText('Barcode atau kode barang')
+    const elsewhere = document.createElement('button')
+    document.body.appendChild(elsewhere)
+    elsewhere.focus()
+    expect(document.activeElement).toBe(elsewhere)
+
+    requestScanFocus()
+    expect(document.activeElement).toBe(field)
+
+    elsewhere.remove()
   })
 
   it('RUNNING milik sendiri: kokpit penuh — tab bar dan field scan hidup', () => {

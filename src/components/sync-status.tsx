@@ -6,22 +6,41 @@ import { toast } from '~/client/toast'
 import { PURCHASES_STALE_META_KEY } from '~/shared/constants'
 
 /**
+ * The one definition of "the send surface has nothing to say", plus the three values its text
+ * needs.
+ *
+ * Exported because `UpdateBanner` shares this row in the app bar and has to yield to it — the
+ * decision itself lives in `TopBar` (src/components/app-shell.tsx), which owns the layout. The
+ * moment there is something to send, the operator needs the count and the "Kirim" button more
+ * than a reload offer that will come back by itself 15 minutes later. A second copy of this
+ * condition inside the banner would be free to drift away from this one.
+ */
+export function useSendStatus(): {
+  quiet: boolean
+  syncing: boolean
+  pendingCount: number
+  stale: boolean
+} {
+  const syncing = useAppStore((state) => state.syncing)
+  const pendingCount = useAppStore((state) => state.pendingCount)
+  const stale = useLive(() => localRepo.getMeta(PURCHASES_STALE_META_KEY), [], null) === '1'
+  return { quiet: pendingCount === 0 && !syncing && !stale, syncing, pendingCount, stale }
+}
+
+/**
  * One status surface for sending. It renders nothing while there is nothing to do, so the
  * shell stays quiet during normal scanning.
  */
 export function SyncStatus() {
   const online = useAppStore((state) => state.online)
-  const syncing = useAppStore((state) => state.syncing)
-  const pendingCount = useAppStore((state) => state.pendingCount)
   const sync = useAppStore((state) => state.sync)
-  const stale = useLive(() => localRepo.getMeta(PURCHASES_STALE_META_KEY), [], null)
+  const { quiet, syncing, pendingCount, stale } = useSendStatus()
 
   const handleSync = async () => {
     const result = await sync()
     toast(result.ok ? 'success' : online ? 'danger' : 'warn', result.message)
   }
 
-  const quiet = pendingCount === 0 && !syncing && stale !== '1'
   if (quiet) return null
 
   return (
@@ -40,7 +59,7 @@ export function SyncStatus() {
             {syncing ? 'Sedang mengirim…' : `${pendingCount} dokumen belum terkirim`}
           </span>
         ) : null}
-        {stale === '1' ? (
+        {stale ? (
           <span className="text-sm text-fg-muted">Daftar PO mungkin belum diperbarui.</span>
         ) : null}
         {!online && pendingCount > 0 ? (

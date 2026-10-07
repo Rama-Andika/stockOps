@@ -5,6 +5,7 @@ import { useAppStore } from "~/client/state/store/app-store";
 import { useLive } from "~/client/hooks/use-live";
 import { ConfirmButton } from "~/components/confirm-button";
 import { Badge, Button, Card } from "~/components/ui";
+import { useSendStatus } from "~/components/sync-status";
 import { toast } from "~/client/toast";
 import {
   loadPreferences,
@@ -14,6 +15,8 @@ import {
 import { applyContrastPreference } from "~/client/theme";
 import { playFeedback } from "~/client/feedback";
 import { formatDateTime, formatRelativeDateTime } from "~/shared/format";
+import { formatAppVersion } from "~/shared/app-version";
+import { checkForUpdate } from "~/client/pwa";
 import {
   Check,
   ChevronDown,
@@ -150,6 +153,12 @@ function SettingsPage() {
     loadPreferences(),
   );
   const [copied, setCopied] = useState(false);
+  const updateReady = useAppStore((state) => state.updateReady);
+  const clearUpdateSnooze = useAppStore((state) => state.clearUpdateSnooze);
+  // Read for ONE reason: the app bar gives this row to `SyncStatus` whenever it has something to
+  // say, so when it is not quiet the update banner is not on screen and the toast below must not
+  // claim otherwise. Same single definition `TopBar` uses — never a second copy of the condition.
+  const { quiet } = useSendStatus();
 
   const counts = useLive(() => localRepo.masterCounts(), [], {});
   const sessionCount = useLive(() => localRepo.db.sessions.count(), [], 0);
@@ -185,6 +194,30 @@ function SettingsPage() {
     toast(
       "info",
       `${removed} sesi tersinkron dibersihkan. Data master dipertahankan.`,
+    );
+  };
+
+  const handleCheckUpdate = async () => {
+    // Asking for a check IS asking to see the offer, so an active "Nanti" is cancelled here.
+    // Without it the toast below would point at a banner that is still snoozed and invisible.
+    clearUpdateSnooze();
+    await checkForUpdate();
+    // Deliberately not a verdict. `registration.update()` resolves when the CHECK is done, which
+    // can be before a new worker has finished installing, so "ada / tidak ada versi baru" would
+    // sometimes be a lie. `updateReady` here is this render's value and is used only to say where
+    // to look.
+    //
+    // The `quiet` branch is the part that is easy to get wrong, and it was wrong once: the app bar
+    // gives its one row to `SyncStatus` whenever the outbox is not empty, so pointing at a
+    // "Muat ulang" button up there is false exactly when the operator has unsent documents — which
+    // is the normal state at the end of a shift. Then the honest instruction is what to do FIRST.
+    toast(
+      "info",
+      !updateReady
+        ? "Pemeriksaan dikirim."
+        : quiet
+          ? 'Versi baru sudah siap. Tombol "Muat ulang" ada di bagian atas layar.'
+          : "Versi baru sudah siap. Kirim dulu dokumen yang belum terkirim — tawaran muat ulang muncul di bagian atas layar setelah antrean kosong.",
     );
   };
 
@@ -399,10 +432,10 @@ function SettingsPage() {
             onChange={(checked) => updatePreferences({ manualPick: checked })}
           />
           <p className="text-xs text-fg-subtle px-1">
-            Switch ini berlaku untuk perangkat ini saja dan bisa diubah operator mana
-            pun — pencegah kekeliruan, bukan kontrol akses. Dokumen yang sudah
-            terkirim tidak terpengaruh, dan penanda "Manual" tidak dikirim ke
-            server.
+            Switch ini berlaku untuk perangkat ini saja dan bisa diubah operator
+            mana pun — pencegah kekeliruan, bukan kontrol akses. Dokumen yang
+            sudah terkirim tidak terpengaruh, dan penanda "Manual" tidak dikirim
+            ke server.
           </p>
         </div>
       </Card>
@@ -441,6 +474,39 @@ function SettingsPage() {
             <p className="mt-1 text-xl font-bold  text-fg">
               {formatBytes(usage?.usage)}
             </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* 4b. Versi Aplikasi */}
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <ShieldCheck
+              className="h-5 w-5 text-brand-bright"
+              aria-hidden="true"
+            />
+            <span>Versi Aplikasi</span>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface/40 p-2.5">
+            <span className="text-xs text-fg-subtle">Versi terpasang</span>
+            <span className="font-mono text-sm font-bold text-fg">
+              {formatAppVersion()}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="secondary"
+              className="flex w-full items-center justify-center gap-2 font-semibold"
+              disabled={!online}
+              onClick={() => void handleCheckUpdate()}
+            >
+              <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Cek Pembaruan</span>
+            </Button>
           </div>
         </div>
       </Card>

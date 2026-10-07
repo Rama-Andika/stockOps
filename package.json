@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite dev --host",
-    "build": "vite build && node scripts/generate-precache.mjs",
+    "build": "vite build && node scripts/generate-precache.mjs && node scripts/stamp-sw.mjs",
     "preview": "vite preview --host",
     "start": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",

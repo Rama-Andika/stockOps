@@ -10,7 +10,25 @@
  * by scripts/generate-precache.mjs (run after `vite build`).
  */
 
-const CACHE_VERSION = 'stockops-v18'
+// APP_VERSION and BUILD_TIME are rewritten in dist/client/sw.js by scripts/stamp-sw.mjs, which
+// runs as the last step of `npm run build`. This file — public/sw.js — keeps the 'dev' values
+// and is never modified by the build.
+//
+// Do NOT change the SHAPE of the next two lines (one declaration per line, single quotes, value
+// exactly 'dev'): stamp-sw.mjs matches them as literal text and FAILS the build when it cannot
+// find each of them exactly once.
+//
+// BUILD_TIME is part of CACHE_VERSION on purpose. It makes this file's bytes differ on every
+// build, and that is the only thing that makes the browser run `install` again — `install` being
+// the only moment the precache manifest is read. It replaces the old manual "bump CACHE_VERSION
+// before every release" step, which silently did nothing whenever it was forgotten.
+//
+// Consequence, accepted: every update invalidates every cache (see `activate` below) and the
+// device re-downloads all assets. Over a warehouse LAN that is fine, but a rollout does need the
+// PDT to be online.
+const APP_VERSION = 'dev'
+const BUILD_TIME = 'dev'
+const CACHE_VERSION = `stockops-${APP_VERSION}-${BUILD_TIME}`
 const SHELL_CACHE = `${CACHE_VERSION}-shell`
 const ASSET_CACHE = `${CACHE_VERSION}-assets`
 const SHELL_URL = '/_shell.html'
@@ -57,7 +75,14 @@ self.addEventListener('install', (event) => {
         // Manifest not yet available (e.g. during dev) — proceed without asset precaching.
       }
 
-      await self.skipWaiting()
+      // NO skipWaiting() here, ON PURPOSE. This is the one line that turns a forced update into
+      // a requested one: the new worker stops in `waiting` and changes nothing until the operator
+      // accepts the banner (the 'message' listener below).
+      //
+      // What activating by itself used to do: `activate` deletes every cache that does not belong
+      // to the current CACHE_VERSION, so it pulled the route chunks out from under a tab that was
+      // still lazy-loading them — in the middle of a scan session, with no warning the operator
+      // could act on.
     })(),
   )
 })
@@ -72,6 +97,20 @@ self.addEventListener('activate', (event) => {
       await self.clients.claim()
     })(),
   )
+})
+
+/**
+ * The ONLY way this worker ever activates while another one is in control. The app posts
+ * SKIP_WAITING when the operator accepts the "Versi baru siap" banner — see activateUpdate() in
+ * src/client/pwa.ts.
+ *
+ * Deliberately narrow: one message type, no reply, no payload. The banner does not show the new
+ * version number, which is precisely why no two-way protocol with this worker is needed.
+ */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    void self.skipWaiting()
+  }
 })
 
 function isServerCall(pathname) {
