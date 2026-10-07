@@ -25,7 +25,7 @@ describe('evaluateLine', () => {
     expect(result.excess).toBe(1)
   })
 
-  it('tidak ada toleransi: kelebihan 0.01 tetap over-receive (BR-5)', () => {
+  it('tidak ada toleransi: kelebihan 0.01 tetap over-receive', () => {
     const result = evaluateLine({ purchaseItemId: 'PI-1', qty: 4.01 }, ordered, already)
     expect(result.overReceive).toBe(true)
     expect(result.excess).toBe(0.01)

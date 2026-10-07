@@ -1,6 +1,10 @@
 /**
- * Data contracts (Zod) for server functions and sync payloads.
- * All bigint columns are always transported as strings (BR-12).
+ * Zod contracts for every server function and sync payload — the one place where the shape of
+ * the wire is defined, so client and server cannot drift apart.
+ *
+ * Every bigint column crosses as a string, never a number: these IDs are larger than
+ * JavaScript can represent exactly, and JSON would quietly round them. `bigintString` below
+ * is what enforces it.
  */
 
 import { z } from 'zod'
@@ -157,7 +161,8 @@ export const pullResultSchema = z.object({
   offset: z.number().int().min(0),
   nextOffset: z.number().int().min(0).nullable(),
   total: z.number().int().min(0),
-  // Row values are always serializable primitives (BR-12: bigint = string).
+  // Rows stay generic: pulled tables differ in shape, so values are only constrained to
+  // serializable primitives — with every bigint already converted to a string.
   rows: z.array(z.record(z.string(), pullCellSchema)),
   pulledAt: z.string(),
 })

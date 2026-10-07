@@ -77,13 +77,13 @@ describe('LocalRepository (Dexie)', () => {
       expect(counts).toEqual({ purchases: 1, purchaseItems: 2, items: 2, units: 2, vendors: 1, vendorItems: 1 })
     })
 
-    it('mencari PO berdasarkan nomor/vendor (FR-3.1, offline)', async () => {
+    it('mencari PO berdasarkan nomor/vendor (offline)', async () => {
       expect(await repo.searchPurchases('PO1025')).toHaveLength(1)
       expect(await repo.searchPurchases('vendor a')).toHaveLength(1)
       expect(await repo.searchPurchases('tidak ada')).toHaveLength(0)
     })
 
-    it('mencocokkan barcode, barcode_2, barcode_3, dan kode (FR-4.3, B-4)', async () => {
+    it('mencocokkan barcode, barcode_2, barcode_3, dan kode', async () => {
       expect((await repo.getItemByBarcodeOrCode('22001771'))?.itemMasterId).toBe('I1')
       expect((await repo.getItemByBarcodeOrCode('899123'))?.itemMasterId).toBe('I1')
       expect((await repo.getItemByBarcodeOrCode('ALT-2'))?.itemMasterId).toBe('I2')
@@ -91,13 +91,13 @@ describe('LocalRepository (Dexie)', () => {
       expect(await repo.getItemByBarcodeOrCode('TIDAK-ADA')).toBeUndefined()
     })
 
-    it('mengambil data vendor-item untuk konversi (BR-7)', async () => {
+    it('mengambil data vendor-item untuk konversi', async () => {
       const rows = await repo.getVendorItems('V1', 'I1')
       expect(rows).toHaveLength(1)
       expect(Number(rows[0]?.convQty)).toBe(12)
     })
 
-    it('clearMasterData TIDAK menghapus sesi (FR-2.2)', async () => {
+    it('clearMasterData TIDAK menghapus sesi', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.clearMasterData()
       expect(await repo.getSession(session.sessionId)).toBeDefined()
@@ -106,7 +106,7 @@ describe('LocalRepository (Dexie)', () => {
   })
 
   describe('sesi penerimaan', () => {
-    it('membuat sesi baru berstatus RUNNING dengan ID lokal (FR-4.1)', async () => {
+    it('membuat sesi baru berstatus RUNNING dengan ID lokal', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       expect(session.status).toBe(SESSION_STATUS.RUNNING)
       expect(session.receiveId).toBeNull()
@@ -140,7 +140,7 @@ describe('LocalRepository (Dexie)', () => {
       expect(ownerName(session)).toBe('Operator lain')
     })
 
-    it('menambah & menggabungkan qty baris yang sama (FR-4.5)', async () => {
+    it('menambah & menggabungkan qty baris yang sama', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.addOrIncrementLine(session.sessionId, {
         purchaseItemId: 'PI1',
@@ -188,7 +188,7 @@ describe('LocalRepository (Dexie)', () => {
       expect(items[0]?.qty).toBe(2)
     })
 
-    it('mengubah & menghapus baris sebelum finalisasi (FR-4.5)', async () => {
+    it('mengubah & menghapus baris sebelum finalisasi', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       const line = await repo.addOrIncrementLine(session.sessionId, {
         purchaseItemId: 'PI2',
@@ -206,7 +206,7 @@ describe('LocalRepository (Dexie)', () => {
       expect(await repo.sessionItems(session.sessionId)).toHaveLength(0)
     })
 
-    it('finalisasi memindahkan sesi ke antrian FIFO (FR-4.7, FR-5.1)', async () => {
+    it('finalisasi memindahkan sesi ke antrian FIFO', async () => {
       const first = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       const second = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.finalizeSession(first.sessionId, {
@@ -224,7 +224,7 @@ describe('LocalRepository (Dexie)', () => {
       expect(outbox[0]?.status).toBe(SESSION_STATUS.PENDING)
     })
 
-    it('menyimpan nomor resmi & mengunci sesi setelah sukses (FR-5.5, FR-4.8)', async () => {
+    it('menyimpan nomor resmi & mengunci sesi setelah sukses', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.markSynced(session.sessionId, {
         receiveId: '1441151880758558720',
@@ -238,7 +238,7 @@ describe('LocalRepository (Dexie)', () => {
       expect(saved?.syncedAt).toBeTruthy()
     })
 
-    it('menandai gagal tanpa menghapus data (FR-5.6)', async () => {
+    it('menandai gagal tanpa menghapus data', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.addOrIncrementLine(session.sessionId, {
         purchaseItemId: 'PI1',
@@ -306,7 +306,7 @@ describe('LocalRepository (Dexie)', () => {
       expect(await repo.outboxSessions()).toHaveLength(1)
     })
 
-    it('membersihkan sesi tersinkron saja (FR-8.2)', async () => {
+    it('membersihkan sesi tersinkron saja', async () => {
       const a = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       const b = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.markSynced(a.sessionId, { receiveId: '1', number: 'IN1', overReceive: false, excessTotal: 0 })
@@ -317,7 +317,7 @@ describe('LocalRepository (Dexie)', () => {
     })
   })
 
-  describe('progress PO (FR-3.2)', () => {
+  describe('progress PO', () => {
     it('menggabungkan qty tersinkron server + sesi lokal yang belum terkirim', async () => {
       const session = await repo.createSession({ purchaseId: 'P1', userId: '1200001', deviceId: 'D1' })
       await repo.addOrIncrementLine(session.sessionId, {
@@ -434,8 +434,8 @@ describe('LocalRepository (Dexie)', () => {
     })
   })
 
-  describe('kredensial offline (FR-1.4)', () => {
-    it('menyimpan per (device, user) & mencabut berdasarkan daftar user (BR-19)', async () => {
+  describe('kredensial offline', () => {
+    it('menyimpan per (device, user) & mencabut berdasarkan daftar user', async () => {
       const now = new Date('2026-01-01T00:00:00Z')
       await repo.saveCredential({
         key: 'D1:1200001',

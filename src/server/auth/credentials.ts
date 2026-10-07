@@ -1,12 +1,16 @@
 /**
- * Credential fingerprinting (BR-19).
+ * Password fingerprints: how the server detects that a cached credential is no longer valid.
  *
- * The HMAC key exists ONLY on the server. During online login, the server computes
- * the password fingerprint and returns it to the device to be cached. During
- * synchronization, the device sends the fingerprint back; the server recomputes
- * it from `sysuser` and compares. This ensures:
- * - plaintext passwords never need to be stored/sent to the device,
- * - the device does not need to hold the HMAC key.
+ * A PDT may work offline for days, so a password or login_id changed in `sysuser` has to be
+ * noticed at the next sync and the device's cached credentials revoked. Comparing passwords
+ * directly would mean keeping one on the device; instead the server derives an HMAC
+ * fingerprint at online login, the device caches only that, sends it back with every sync,
+ * and the server recomputes it from `sysuser` to compare.
+ *
+ * The HMAC key never leaves the server. Two consequences worth knowing before touching it:
+ * no plaintext password is ever stored on or sent to a device, and changing the key
+ * invalidates every cached credential on every device at once — which is a usable kill switch
+ * but also an accidental fleet-wide logout if it happens during a shift.
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto'

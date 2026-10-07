@@ -118,10 +118,14 @@ async function fetchAllChunks(
 }
 
 /**
- * FR-2.1 / FR-2.2 / BR-16: FULL download of master data & CHECKED POs, paginated
- * (chunking) with progress. Everything is downloaded first and only then swapped in
- * with one local transaction, so a dropped connection keeps the previous data intact.
- * Does not touch local receiving sessions.
+ * FULL download of master data and receivable POs, chunk by chunk with progress.
+ *
+ * Full and not incremental, deliberately: there is no change-tracking column to drive a delta
+ * sync against, so correctness comes from replacing everything.
+ *
+ * Everything is fetched first and only then swapped in, in one local transaction. A connection
+ * dropping halfway therefore costs the operator a retry, not a device that can no longer
+ * resolve a barcode. Receiving sessions are never part of the swap.
  */
 export async function pullAllData(
   repo: LocalRepository,
@@ -165,7 +169,11 @@ export async function pullAllData(
   return { counts, pulledAt: new Date().toISOString() }
 }
 
-/** FR-2.3: Refresh PO list without touching ongoing sessions (download first, then swap). */
+/**
+ * Refreshes the PO list and its progress figures, leaving the item master and every local
+ * session alone. Download first, then swap, for the same reason as the full pull: a failed
+ * refresh must leave the operator with the data they had.
+ */
 export async function refreshPurchases(
   repo: LocalRepository,
   transport: SyncTransport = serverTransport,
@@ -211,7 +219,13 @@ export async function refreshPurchases(
 }
 
 
-/** Transforms local session into sync payload (FR-5.2, BR-8/BR-12). */
+/**
+ * Flattens a local session into the push payload.
+ *
+ * Fields are mapped one by one on purpose rather than spread: device-only state must not leak
+ * to the server, and every id goes out as a string, since these values are too large for a
+ * JSON number to carry intact. No document number is sent — the server assigns it.
+ */
 export function buildSessionPayload(
   session: LocalSession,
   items: readonly LocalSessionItem[],
@@ -253,9 +267,11 @@ export interface SyncOutcome {
 }
 
 /**
- * FR-5.1/5.3/5.5/5.6: Send entire outbox in FIFO order, then
- * update each session status. Local data is never deleted before
- * the server confirms success.
+ * Sends the outbox oldest first and writes the server's answer onto each session.
+ *
+ * Nothing local is ever deleted before the server has confirmed it stored the document. The
+ * answers are applied per session, so one rejected delivery does not disturb the others, and a
+ * session the server said nothing about is marked failed rather than left in limbo.
  */
 export async function syncOutbox(
   repo: LocalRepository,
@@ -323,7 +339,8 @@ export async function syncOutbox(
       SYNC_TIMEOUT_MS,
     )
   } catch (error) {
-    // FR-5.6: transport failure -> all sessions revert to "Failed — retry".
+    // The request itself never landed, so nothing was stored: every session goes back to the
+    // queue as a retryable failure. This is the ordinary case in a warehouse, not an error.
     const message = error instanceof Error ? error.message : 'Koneksi ke server gagal.'
     for (const payload of payloads) {
       await repo.markFailed(payload.sessionId, message)
@@ -426,7 +443,10 @@ export async function syncOutbox(
   }
 }
 
-/** Queue summary for indicators (FR-7.2). */
+/**
+ * How many sessions are still waiting to reach the server, for the queue badge in the app bar.
+ * Counts PENDING and FAILED together: to the operator both mean "not in the system yet".
+ */
 export async function countPendingSessions(repo: LocalRepository): Promise<number> {
   const pending = await repo.db.sessions.where('status').equals(SESSION_STATUS.PENDING).count()
   const failed = await repo.db.sessions.where('status').equals(SESSION_STATUS.FAILED).count()

@@ -10,7 +10,7 @@ import {
 } from '~/shared/memo'
 import { MEMO_MAX_LENGTH } from '~/shared/constants'
 
-describe('session note (idempotensi FR-5.3)', () => {
+describe('session note (kunci idempotensi)', () => {
   const note = buildSessionNote({
     sessionId: '8f14e45f-ea3d-4b7a-9c1e-0123456789ab',
     deviceId: 'device-abc',
@@ -35,7 +35,7 @@ describe('session note (idempotensi FR-5.3)', () => {
   })
 })
 
-describe('over-receive memo (FR-6.2)', () => {
+describe('over-receive memo', () => {
   it('membangun & membaca kembali penanda over-receive', () => {
     const memo = buildOverReceiveMemo({ orderedQty: 10, newTotal: 11, excess: 1 })
     expect(isOverReceiveMemo(memo)).toBe(true)

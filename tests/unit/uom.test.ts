@@ -33,7 +33,7 @@ describe('resolveConvQty', () => {
     expect(result.source).toBe('vendor-item')
   })
 
-  it('default faktor 1 bila tidak ada data sama sekali (BR-7)', () => {
+  it('default faktor 1 bila tidak ada data sama sekali', () => {
     const result = resolveConvQty(rows, {
       vendorId: '404',
       itemMasterId: '404',

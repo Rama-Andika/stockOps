@@ -1,8 +1,9 @@
 @import 'tailwindcss';
 
 /* ============================================================
-   StockOps - Keypad-first UI theme for PDT devices (small screen & keypad)
-   (NF-8: large fonts, large buttons, high contrast)
+   StockOps — UI theme for PDT devices: a small screen, a hardware keypad and no pointer.
+   Large type, large targets and strong contrast are requirements here, not taste: the
+   operator is wearing gloves, holding a box, and reading this in direct sunlight.
    ============================================================ */
 
 @theme {
@@ -159,9 +160,12 @@ button {
 }
 
 /* ============================================================
-   High-contrast mode (bright loading dock). Set by src/client/theme.ts as
-   data-contrast="high" on <html>. One override layer on top of the dark theme:
-   NOT a light theme — see plans/implementation-plan-ux-refresh-f2-sistem.md, F2-2.
+   High-contrast mode, for a loading dock in full daylight. Set by src/client/theme.ts as
+   data-contrast="high" on <html>.
+
+   One override layer on top of the dark theme, NOT a light theme. The difference matters:
+   component colours are hard-coded slate-* classes throughout, so a real light theme would
+   mean touching every component, while this layer only has to win where contrast is too low.
    ============================================================ */
 
 :root[data-contrast='high'] body {

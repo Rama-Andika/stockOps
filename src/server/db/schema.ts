@@ -1,12 +1,15 @@
 /**
- * Drizzle schema for the admin system's EXISTING tables (BR-18).
+ * Drizzle definitions MIRRORING the admin system's existing tables. This app is a guest in
+ * that database: it owns none of these tables and must never change their shape.
  *
- * The definitions here INTENTIONALLY cover only columns read/written by the application.
- * The underlying tables are NOT modified: we do not run migrations/Drizzle Kit.
- * Undeclared columns retain their database default values
- * during INSERT.
+ * So the definitions here INTENTIONALLY cover only the columns the app reads or writes. Never
+ * generate or run a migration against this schema, and never point Drizzle Kit at the real
+ * database — the file follows the DDL, it does not define it. Columns left undeclared keep
+ * their database defaults on INSERT, which is exactly what we want for the dozens of admin
+ * columns this app has no business filling in.
  *
- * bigint uses mode 'bigint' (NOT number) to preserve precision (BR-12).
+ * Every bigint uses mode 'bigint', never 'number': these ids exceed what a JavaScript number
+ * can hold exactly.
  */
 
 import {

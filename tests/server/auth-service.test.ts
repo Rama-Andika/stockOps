@@ -20,7 +20,7 @@ describe('auth-service', () => {
     await closeDb()
   })
 
-  describe('loginOnline (FR-1.1)', () => {
+  describe('loginOnline', () => {
     it('berhasil untuk kredensial benar & user aktif', async () => {
       const result = await loginOnline({
         loginId: CREDENTIALS.ACTIVE.loginId,
@@ -83,7 +83,7 @@ describe('auth-service', () => {
     })
   })
 
-  describe('checkCredentialRevocations (FR-1.6 / BR-19)', () => {
+  describe('checkCredentialRevocations', () => {
     it('tidak mencabut apa pun bila kredensial belum berubah', async () => {
       const revoked = await checkCredentialRevocations([
         {

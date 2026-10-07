@@ -282,11 +282,17 @@ async function processSession(
   const sessionLockName = `stockops:sess:${session.sessionId}`
 
   return withNamedLock(sessionLockName, async () => {
-    // 1) Fast idempotency check (FR-5.3).
+    // 1) Has this session already been stored? A device whose answer never arrived retries the
+    //    same session, so the session marker in pos_receive.note is looked up first and the
+    //    existing document replayed. Checked a second time inside the transaction below,
+    //    because this read races with a concurrent push of the same session.
     const existing = await findExistingReceive(ctx.db, session.sessionId, ctx.pdtAppIdx)
     if (existing) return buildReplayResult(ctx.db, session, existing)
 
-    // 2) PO validation (BR-1).
+    // 2) The PO must still exist and still be CHECKED. Admin can close or delete it while the
+    //    device is offline with a session already open, so its status is re-read here and never
+    //    taken from the payload. Both failures below are PERMANENT: the device turns the
+    //    session into a rejection and drops it from the queue instead of retrying forever.
     const purchaseRows = await ctx.db
       .select({
         purchaseId: posPurchase.purchaseId,
@@ -318,7 +324,10 @@ async function processSession(
 
     const vendorId = purchase.vendorId ?? BigInt(0)
 
-    // 3) Fetch referenced PO items & verify they belong to this PO (BR-14).
+    // 3) Load the referenced PO lines and prove that each one belongs to THIS PO and to the
+    //    item the device claims. The device checks this too, but it may have been working from
+    //    a days-old pull; letting a mismatch through would book received goods against someone
+    //    else's order.
     const purchaseItemIds = [...new Set(session.items.map((item) => BigInt(item.purchaseItemId)))]
     const purchaseItemRows = await ctx.db
       .select({
@@ -357,7 +366,8 @@ async function processSession(
       }
     }
 
-    // 4) Smallest stock unit per item (PRD 12.4).
+    // 4) Smallest stock unit per item, which is what pos_receive_item.uom_id stores. The qty
+    //    itself stays in the PO unit — src/shared/uom.ts explains which column holds which.
     const itemIds = [...new Set(session.items.map((item) => BigInt(item.itemMasterId)))]
     const itemRows = await ctx.db
       .select({ itemMasterId: posItemMaster.itemMasterId, uomStockId: posItemMaster.uomStockId })
@@ -365,7 +375,10 @@ async function processSession(
       .where(inArray(posItemMaster.itemMasterId, itemIds))
     const stockUomByItem = new Map(itemRows.map((row) => [String(row.itemMasterId), row.uomStockId]))
 
-    // 5) Total already received across all documents (FR-5.4, BR-4, BR-6).
+    // 5) Qty already received for these PO lines, summed over every document and device. Read
+    //    here rather than trusted from the payload: several PDTs may be receiving one PO at the
+    //    same time, so this is the only point where the real total exists. It decides whether
+    //    the session is an over-receive — which is flagged, not refused.
     const alreadyRows = await ctx.db
       .select({
         purchaseItemId: posReceiveItem.purchaseItemId,
@@ -417,7 +430,10 @@ async function processSession(
     const sanitized = sanitizeReceiveDate(session.receiveDate, now)
     const prefixNumber = buildPrefix(ctx.prefix, sanitized.parsed)
 
-    // 7) Save in a single transaction (FR-5.7), numbering serialized by lock (BR-8).
+    // 7) Document and all its lines in ONE transaction: a half-written receipt is wrong in
+    //    admin and invisible to the device, which would retry and duplicate it. The lock around
+    //    the transaction serializes the numbering — the counter is MAX(counter) + 1 for the
+    //    month, which two concurrent pushes would otherwise read as the same value.
     return withNamedLock(`stockops:doc:${prefixNumber}`, async () =>
       ctx.db.transaction(async (tx) => {
         // Re-check idempotency inside the lock.
@@ -568,12 +584,18 @@ async function processSession(
 }
 
 /**
- * FR-5.1/5.3/5.4/5.5/5.6/5.7: session synchronization (FIFO) + credential revocation check.
+ * Turns a device's finalized sessions into receiving documents, one session at a time and in
+ * the order the device sent them (oldest first).
+ *
+ * Each session is answered individually: one bad session does not sink the rest of the push,
+ * and the answer tells the device whether to retry (temporary) or give up (permanent). A
+ * session that throws unexpectedly is reported as a temporary failure, because the operator's
+ * work must never be dropped on the strength of a server bug.
  */
 export async function syncPush(input: PushInput, options: SyncOptions = {}): Promise<PushResult> {
   const ctx = buildContext(options)
 
-  // BR-19: check credentials first (applies to all cached users).
+  // Revocation check first, for every credential cached on the device — not just the sender.
   const revoked = await checkCredentialRevocations(input.credentials, ctx.db)
 
   // Device authentication: at least one cached credential must still be valid.
@@ -608,7 +630,10 @@ export async function syncPush(input: PushInput, options: SyncOptions = {}): Pro
   return { results, revoked, serverTime: new Date().toISOString() }
 }
 
-/** Over-receive worklist for admin (FR-6.4) — used for verification & demo. */
+/**
+ * The over-receive lines admin has to decide on, read back out of the memo markers. Used here
+ * for verification and demos.
+ */
 export async function overReceiveWorklist(db: Database = getDb(), limit = 50) {
   const rows = await db
     .select({

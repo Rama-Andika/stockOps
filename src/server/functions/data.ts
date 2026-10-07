@@ -4,9 +4,14 @@ import { UNAUTHORIZED_MESSAGE, assertAuthorizedDevice } from '../services/auth-s
 import { pullChunk } from '../services/pull-service'
 
 /**
- * FR-2.1 / FR-2.3 / NF-4 — Paginated download of master data & CHECKED POs.
- * BR-13 — without location filter.
- * Only devices holding a still-valid credential may download (see assertAuthorizedDevice).
+ * Chunked download of master data and receivable POs, used both for the full first pull and
+ * for refreshing the PO list later. Chunked because a first pull is around 50k items.
+ *
+ * Every CHECKED PO is sent, with no filter by warehouse location — that filter is a known gap,
+ * not an oversight, so expect a device to hold POs for locations it will never receive.
+ *
+ * Reads ERP data, so it demands a still-valid cached credential (assertAuthorizedDevice). Any
+ * new server function that touches ERP data has to do the same.
  */
 export const pullDataFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => pullInputSchema.parse(data))

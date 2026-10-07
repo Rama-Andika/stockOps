@@ -19,8 +19,11 @@ function nullableStr(value: unknown): string | null {
 }
 
 /**
- * Total qty already received per PO item, from ALL documents/devices (FR-5.4).
- * Cached briefly because this aggregate is used repeatedly during chunked pulls.
+ * Qty already received per PO item, summed over ALL documents and devices — the figure the
+ * device needs to show real progress and to warn about over-receive before a push.
+ *
+ * Cached for a few seconds because one chunked pull asks for it on every chunk; the cost is
+ * that a PO list may be a moment behind a colleague's just-synced delivery.
  */
 export async function getReceivedAggregate(db: Database = getDb()): Promise<Map<string, string>> {
   return memoize(RECEIVED_AGGREGATE_CACHE_KEY, RECEIVED_AGGREGATE_TTL_MS, async () => {
@@ -219,8 +222,12 @@ const LOADERS: Record<PullKind, (db: Database, offset: number, limit: number) =>
 }
 
 /**
- * FR-2.1/FR-2.4/NF-4: Paginated download (chunking) of master data & CHECKED POs.
- * All CHECKED POs are pulled without location filter (BR-13).
+ * One chunk of a download, for master data as well as for receivable POs. Chunked because a
+ * first pull covers around 50k master items, far more than one response can carry over a
+ * warehouse connection.
+ *
+ * Only CHECKED POs are sent, and with no filter by warehouse location — a device therefore
+ * holds POs it will never receive. That is a known gap, not a bug to patch here.
  */
 export async function pullChunk(
   kind: PullKind,

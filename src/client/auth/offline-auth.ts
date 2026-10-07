@@ -1,10 +1,17 @@
 /**
- * Offline authentication (FR-1.2, FR-1.3, NF-5).
+ * Logging in with no connection, which a warehouse PDT does most of the time.
  *
- * Passwords are NEVER stored as plain text: what is stored is a
- * PBKDF2-SHA256 hash with a random salt per (device, user). HMAC fingerprint
- * (computed by server) is stored separately only for credential change detection
- * (BR-19) and does not substitute for passwords.
+ * Passwords are NEVER kept as plain text. What is cached is a PBKDF2-SHA256 hash with a random
+ * salt per (device, user), so a stolen device yields nothing reusable. Offline login is
+ * allowed for a limited number of days since the last online login; after that the operator
+ * must come back online, which is also the moment the server gets to revoke a credential
+ * whose password changed.
+ *
+ * The server-issued HMAC fingerprint stored alongside is for that revocation check only. It is
+ * not a second password and must never be accepted in place of one.
+ *
+ * All of this needs Web Crypto, which browsers only expose in a secure context: on localhost
+ * or HTTPS. A PDT opening the app over plain http on a LAN address cannot log in at all.
  */
 
 import type { LocalCredential } from '../db/local-db'
@@ -91,7 +98,11 @@ export interface OfflineVerifyResult {
   reason?: OfflineLoginFailure
 }
 
-/** FR-1.2/FR-1.3: verify offline login against local credentials. */
+/**
+ * Checks a password against the credential cached on this device, and refuses one that has
+ * gone past its offline window. The distinct failure reasons matter to the caller: "never
+ * cached here" and "expired, go online" are different instructions for the operator.
+ */
 export async function verifyOfflineCredential(
   credential: LocalCredential | undefined,
   password: string,

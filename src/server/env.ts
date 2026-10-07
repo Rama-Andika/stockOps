@@ -42,7 +42,11 @@ export const serverEnv: ServerEnv = {
   receivePrefix: readString('RECEIVE_DOC_PREFIX', 'IN'),
 }
 
-/** PDT appIdx must differ from admin, otherwise IDs can collide (BR-17). */
+/**
+ * The PDT's application index must differ from admin's. Both mint IDs into the same tables
+ * with no shared sequence, and the index is the only thing keeping their ranges apart — share
+ * it and the two writers eventually collide on a primary key.
+ */
 export function assertDistinctAppIdx(env: ServerEnv = serverEnv): void {
   if (env.pdtAppIdx === env.adminAppIdx) {
     throw new Error(

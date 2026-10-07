@@ -17,12 +17,14 @@ import type { ActionResult, AppState, AuthState, CurrentUser } from './types'
 
 const DEVICE_SECRET_ITERATIONS = DEFAULT_PBKDF2_ITERATIONS
 
-/** Master data stale threshold in milliseconds (FR-2.1). */
 const MASTER_STALE_MS = MASTER_DATA_STALE_HOURS * 60 * 60 * 1000
 
 /**
- * FR-2.1: FULL download only if data has never been downloaded (lastPullAt empty),
- * its value is invalid, or older than the stale threshold (12 hours).
+ * Whether an online login should pull everything again: nothing was ever downloaded, the
+ * stored timestamp is unusable, or the data is older than the stale window.
+ *
+ * An unparseable timestamp counts as stale on purpose — a slow full download is a far smaller
+ * problem than a shift scanned against a catalogue of unknown age.
  */
 function shouldFullDownload(lastPullAt: string | null, now: Date): boolean {
   if (!lastPullAt) return true
@@ -81,8 +83,9 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthState> = (set, 
       })
       await get().refresh()
 
-      // FR-2.1: full download only when data does not exist or is stale (> 12 hours).
-      // Otherwise, a lightweight PO refresh suffices so master data is not re-downloaded on every login.
+      // Full download only when the local data is missing or stale. Otherwise a PO refresh is
+      // enough: re-pulling 50k master items on every shift change would keep operators waiting
+      // at the login screen for data that has not changed.
       if (shouldFullDownload(get().lastPullAt, new Date())) {
         const pull = await get().downloadData()
         return pull.ok
@@ -123,7 +126,9 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthState> = (set, 
 
     logout: async () => {
       persistUser(null)
-      // FR-1.5: local data remains stored, only application access is locked.
+      // Logging out locks access, nothing more: master data, cached credentials and above all
+      // unsent sessions stay on the device. Wiping them here would destroy another operator's
+      // queued work on a shared PDT.
     },
   }
 }

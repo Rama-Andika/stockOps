@@ -1,10 +1,14 @@
 /**
- * Document number (BR-8, FR-5.2).
+ * Official number of a receiving document: <PREFIX><MMYY><NNNN>, e.g. IN04260001.
  *
- * Format: <PREFIX><MMYY><NNNN>  example: IN04260001
- * - prefix_number = "IN" + MMYY  (example: IN0426)
- * - counter       = monthly sequential counter (example: 1)
- * - number        = prefix + counter zero-padded to 4 digits
+ * - prefix_number = "IN" + MMYY   (e.g. IN0426)
+ * - counter       = sequential within one prefix, so it restarts every month
+ * - number        = prefix_number + counter zero-padded to 4 digits
+ *
+ * Both parts are assigned by the server at sync time and never on the device. The counter is
+ * MAX(counter) + 1 for that prefix, which only holds while a single writer owns the numbering
+ * lock; a device numbering its own documents offline would hand out duplicates the moment two
+ * PDTs synced in the same month. Until a session is synced it carries a local UUID instead.
  */
 
 export function pad2(value: number): string {

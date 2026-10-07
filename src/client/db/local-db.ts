@@ -61,8 +61,11 @@ export interface LocalVendorItem {
 }
 
 /**
- * Offline credentials per (device, user) — FR-1.4.
- * Passwords are NOT stored; only salted hash + fingerprint (BR-19).
+ * A cached credential, keyed per (device, user) because one PDT is shared between operators
+ * and each of them must be able to log in offline on it.
+ *
+ * No password is stored — only its salted hash, plus the server-issued fingerprint used to
+ * detect that the password has since been changed in the admin system.
  */
 export interface LocalCredential {
   key: string

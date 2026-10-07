@@ -2,8 +2,8 @@ import { Card, Field, inputClass } from './ui'
 
 /**
  * Invoice and delivery-note numbers from the vendor's paperwork. Both are required before a
- * session can be finalized (FR-4.7), which is why the error state is a prop rather than local:
- * the screen that validates owns it.
+ * session can be finalized, which is why the error state is a prop rather than local: the
+ * screen that validates owns it.
  *
  * The change handlers are optional so a read-only session can render the same card without
  * supplying two no-op functions.

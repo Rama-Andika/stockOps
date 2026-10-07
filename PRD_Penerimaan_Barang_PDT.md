@@ -450,27 +450,31 @@ Setiap kebutuhan fungsional diberi ID `FR-<fitur>.<nomor>` dan ditulis dalam ben
 
 ## 10. Aturan Bisnis (Business Rules)
 
-| ID | Aturan |
-| --- | --- |
-| BR-1 | Hanya PO berstatus `CHECKED` yang ditarik ke device dan boleh diproses penerimaannya. |
-| BR-2 | Aplikasi PDT hanya membuat dokumen penerimaan berstatus `DRAFT`. Proses `APPROVED` dan `CHECKED` dilakukan di website admin. |
-| BR-3 | **Satu sesi scan per device = satu dokumen `pos_receive`.** Satu PO boleh memiliki banyak dokumen penerimaan. |
-| BR-4 | **Satu PO boleh dikerjakan oleh banyak PDT secara bersamaan.** Perbandingan kuantitas dihitung terpusat (agregat) di server saat sinkronisasi. |
-| BR-5 | Over-receive (total diterima > dipesan) **tidak ditolak**, tetapi ditandai dan menunggu persetujuan admin. Saat ini **tanpa toleransi**. |
-| BR-6 | Perbandingan over-receive: `jumlah total qty semua item penerimaan untuk satu item PO ≤ qty dipesan` — keduanya dalam **satuan yang sama (satuan PO)**. |
-| BR-7 | Operator menginput qty **langsung dalam satuan PO**. Faktor konversi `conv_qty` dari `pos_vendor_item` disimpan sebagai `qty_purchase` (dengan `conv_unit` = 1). Bila data konversi tidak ada, dipakai faktor 1. |
-| BR-8 | `receive_id`, `receive_item_id`, `number`, `counter`, dan `prefix_number` dibuat **di server saat sinkronisasi**. Device memakai ID sementara (UUID) sebelum sinkronisasi. |
-| BR-9 | `invoice_number` dan `do_number` **wajib diisi** di device sebelum sesi difinalisasi. |
-| BR-10 | Login offline maksimal **7 hari** sejak login online terakhir; setelah itu wajib login online. |
-| BR-11 | User **boleh login dari device mana pun**; tidak ada penguncian akun ke device. |
-| BR-12 | Seluruh kolom `bigint` ditangani sebagai **string/BigInt**, bukan number JavaScript, untuk mencegah hilangnya presisi (ID berukuran lebih dari 2^53). |
-| BR-13 | Untuk fase ini, semua PO `CHECKED` ditarik **tanpa filter lokasi**. Filter per lokasi menyusul. |
-| BR-14 | Barang yang di-scan harus merupakan bagian dari PO yang sedang dikerjakan. Barang di luar PO ditolak dengan peringatan. |
-| BR-15 | Sesi yang sudah tersinkron menjadi **read-only** di device. |
-| BR-16 | Data master & PO diunduh **penuh** saat login pertama + tombol unduh ulang manual. Tidak menggunakan sinkronisasi inkremental berbasis kolom `last_update`. |
-| BR-17 | Skema ID sistem admin tetap dihormati: aplikasi PDT menggunakan **index aplikasi (appIdx) tersendiri** yang direservasi khusus agar ID tidak bertabrakan dengan ID buatan website admin. |
-| BR-18 | Aplikasi **tidak mengubah schema database admin**; hanya membaca dan menulis tabel yang sudah ada. |
-| BR-19 | Perubahan `login_id` atau `password` pada `sysuser` wajib dicabut dari semua device pada **kesempatan sinkronisasi berikutnya**. Deteksi dilakukan dengan membandingkan `login_id` dan fingerprint password (HMAC dengan kunci rahasia di server, bukan password plaintext) di sisi server; pencabutan berlaku untuk **semua user yang ter-cache** di tiap device. Aturan ini melengkapi BR-10: BR-10 = batas maksimum offline, BR-19 = pencabutan lebih cepat begitu device online. |
+Kolom **Implementasi** adalah arah penelusuran dari dokumen ke kode. Arah sebaliknya tidak ada:
+komentar di kode tidak menyebut ID aturan, melainkan menjelaskan aturannya sendiri — lihat
+"Code comments" di `CLAUDE.md`.
+
+| ID | Aturan | Implementasi |
+| --- | --- | --- |
+| BR-1 | Hanya PO berstatus `CHECKED` yang ditarik ke device dan boleh diproses penerimaannya. | `src/shared/constants.ts` (`PULLABLE_PURCHASE_STATUS`), `src/server/services/pull-service.ts`, `src/server/services/sync-service.ts` (cek ulang saat push) |
+| BR-2 | Aplikasi PDT hanya membuat dokumen penerimaan berstatus `DRAFT`. Proses `APPROVED` dan `CHECKED` dilakukan di website admin. | `src/shared/constants.ts` (`RECEIVE_STATUS_DRAFT`), `src/server/services/sync-service.ts` |
+| BR-3 | **Satu sesi scan per device = satu dokumen `pos_receive`.** Satu PO boleh memiliki banyak dokumen penerimaan. | `src/server/services/sync-service.ts` (`processSession`) |
+| BR-4 | **Satu PO boleh dikerjakan oleh banyak PDT secara bersamaan.** Perbandingan kuantitas dihitung terpusat (agregat) di server saat sinkronisasi. | `src/server/services/sync-service.ts`, `src/server/services/pull-service.ts` (`getReceivedAggregate`), `src/shared/session-owner.ts` |
+| BR-5 | Over-receive (total diterima > dipesan) **tidak ditolak**, tetapi ditandai dan menunggu persetujuan admin. Saat ini **tanpa toleransi**. | `src/shared/over-receive.ts`, `src/shared/memo.ts`, `src/components/item-picker.tsx` (peringatan sebelum tulis) |
+| BR-6 | Perbandingan over-receive: `jumlah total qty semua item penerimaan untuk satu item PO ≤ qty dipesan` — keduanya dalam **satuan yang sama (satuan PO)**. | `src/shared/over-receive.ts` (`evaluateSession`) |
+| BR-7 | Operator menginput qty **langsung dalam satuan PO**. Faktor konversi `conv_qty` dari `pos_vendor_item` disimpan sebagai `qty_purchase` (dengan `conv_unit` = 1). Bila data konversi tidak ada, dipakai faktor 1. | `src/shared/uom.ts`, `src/client/services/scanning.ts` (`resolveWithConversion`) |
+| BR-8 | `receive_id`, `receive_item_id`, `number`, `counter`, dan `prefix_number` dibuat **di server saat sinkronisasi**. Device memakai ID sementara (UUID) sebelum sinkronisasi. | `src/shared/doc-number.ts`, `src/shared/ids.ts`, `src/server/services/sync-service.ts` (lock penomoran) |
+| BR-9 | `invoice_number` dan `do_number` **wajib diisi** di device sebelum sesi difinalisasi. | `src/components/vendor-doc-card.tsx`, `src/routes/sessions/review.$sessionId.tsx` |
+| BR-10 | Login offline maksimal **7 hari** sejak login online terakhir; setelah itu wajib login online. | `src/client/auth/offline-auth.ts`, `src/server/env.ts` (`sessionTtlDays`) |
+| BR-11 | User **boleh login dari device mana pun**; tidak ada penguncian akun ke device. | `src/client/db/local-db.ts` (`LocalCredential`, kunci per device+user), `src/client/db/local-repo.ts` |
+| BR-12 | Seluruh kolom `bigint` ditangani sebagai **string/BigInt**, bukan number JavaScript, untuk mencegah hilangnya presisi (ID berukuran lebih dari 2^53). | `src/shared/ids.ts`, `src/shared/schemas.ts` (`bigintString`), `src/server/db/client.ts` (`bigNumberStrings`), `src/server/db/schema.ts` |
+| BR-13 | Untuk fase ini, semua PO `CHECKED` ditarik **tanpa filter lokasi**. Filter per lokasi menyusul. | `src/server/services/pull-service.ts`, `src/server/functions/data.ts` |
+| BR-14 | Barang yang di-scan harus merupakan bagian dari PO yang sedang dikerjakan. Barang di luar PO ditolak dengan peringatan. | `src/client/services/scanning.ts` (`resolveScan`), `src/server/services/sync-service.ts` (langkah 3) |
+| BR-15 | Sesi yang sudah tersinkron menjadi **read-only** di device. | `src/client/db/local-repo.ts` (`markSynced`), `src/shared/session-owner.ts` (`canEditSession`) |
+| BR-16 | Data master & PO diunduh **penuh** saat login pertama + tombol unduh ulang manual. Tidak menggunakan sinkronisasi inkremental berbasis kolom `last_update`. | `src/client/sync/engine.ts` (`pullAllData`), `src/shared/constants.ts` (`MASTER_DATA_STALE_HOURS`) |
+| BR-17 | Skema ID sistem admin tetap dihormati: aplikasi PDT menggunakan **index aplikasi (appIdx) tersendiri** yang direservasi khusus agar ID tidak bertabrakan dengan ID buatan website admin. | `src/shared/ids.ts`, `src/server/env.ts` (`assertDistinctAppIdx`) |
+| BR-18 | Aplikasi **tidak mengubah schema database admin**; hanya membaca dan menulis tabel yang sudah ada. | `src/server/db/schema.ts` (mirror DDL, tanpa migrasi), `src/shared/memo.ts` (state menumpang kolom teks) |
+| BR-19 | Perubahan `login_id` atau `password` pada `sysuser` wajib dicabut dari semua device pada **kesempatan sinkronisasi berikutnya**. Deteksi dilakukan dengan membandingkan `login_id` dan fingerprint password (HMAC dengan kunci rahasia di server, bukan password plaintext) di sisi server; pencabutan berlaku untuk **semua user yang ter-cache** di tiap device. Aturan ini melengkapi BR-10: BR-10 = batas maksimum offline, BR-19 = pencabutan lebih cepat begitu device online. | `src/server/auth/credentials.ts`, `src/server/services/auth-service.ts` (`checkCredentialRevocations`), `src/client/db/local-repo.ts` (`removeCredentialsForUsers`) |
 
 ---
 
@@ -714,3 +718,28 @@ Produk dianggap selesai bila semua terpenuhi:
 | 1.1 | 26 September 2026 | Menambahkan FR-1.6 & BR-19: pencabutan kredensial otomatis saat `login_id`/`password` berubah di `sysuser` (deteksi sisi server via fingerprint, berlaku untuk semua user ter-cache, pada sinkronisasi berikutnya). |
 | 1.2 | 26 September 2026 | Menetralkan sebutan perangkat target (dari model spesifik menjadi "perangkat PDT") dan menghapus referensi alat scanner vendor-specific, agar aplikasi tidak terikat pada satu model perangkat. |
 
+
+---
+
+## 18. Peta Implementasi (FR & NF → kode)
+
+Penelusuran dari kebutuhan ke kode, pada tingkat kelompok. Arahnya satu: komentar di kode
+**tidak** menyebut ID — komentar menjelaskan aturannya sendiri beserta akibat bila diubah.
+Konvensinya ada di `CLAUDE.md`, bagian "What this is".
+
+| Kebutuhan | Implementasi utama |
+| --- | --- |
+| FR-1.x — Autentikasi (login online/offline, batas 7 hari, logout, pencabutan) | `src/server/services/auth-service.ts`, `src/server/auth/credentials.ts`, `src/client/auth/offline-auth.ts`, `src/client/state/store/auth-slice.ts`, `src/routes/login.tsx` |
+| FR-2.x — Unduh & segarkan data (penuh, chunking, daftar PO) | `src/server/services/pull-service.ts`, `src/client/sync/engine.ts` (`pullAllData`, `refreshPurchases`), `src/client/db/local-repo.ts` (`replaceMasterData`, `replacePurchases`) |
+| FR-3.x — Daftar PO, detail, mulai penerimaan | `src/routes/pos/index.tsx`, `src/routes/pos/$purchaseId.tsx`, `src/client/db/local-repo.ts` (`getPurchaseProgress`), `src/shared/over-receive.ts` (`progressOf`) |
+| FR-4.x — Sesi penerimaan: scan, qty, jeda, finalisasi | `src/client/services/scanning.ts`, `src/client/db/local-repo.ts`, `src/routes/sessions/$sessionId.tsx`, `src/components/item-picker.tsx`, `src/components/vendor-doc-card.tsx` |
+| FR-5.x — Sinkronisasi (FIFO, idempotensi, penomoran, kegagalan, transaksi) | `src/client/sync/engine.ts` (`syncOutbox`), `src/server/services/sync-service.ts`, `src/shared/memo.ts`, `src/shared/doc-number.ts`, `src/shared/ids.ts` |
+| FR-6.x — Over-receive: hitung, tandai, tampilkan, worklist admin | `src/shared/over-receive.ts`, `src/shared/memo.ts`, `src/server/services/sync-service.ts` (`overReceiveWorklist`), `src/routes/over-receive.tsx` |
+| FR-7.x — Indikator koneksi, antrian, status sesi | `src/components/sync-status.tsx`, `src/components/session-status-row.tsx`, `src/client/sync/engine.ts` (`countPendingSessions`), `src/shared/constants.ts` (`SESSION_STATUS`) |
+| FR-8.x — Pemeliharaan: unduh ulang, kapasitas penyimpanan | `src/routes/settings.tsx`, `src/client/db/local-repo.ts` (`deleteSyncedSessions`) |
+| NF-1, NF-9 — Offline penuh & pulih setelah aplikasi ditutup | `public/sw.js`, `src/client/db/local-db.ts`, `src/client/db/local-repo.ts` (sesi tersimpan sejak scan pertama) |
+| NF-4 — Performa dengan ±50 rb master barang | `src/shared/constants.ts` (`DEFAULT_PULL_CHUNK_SIZE`), `src/client/sync/engine.ts` (chunking + progress), indeks Dexie di `src/client/db/local-db.ts` |
+| NF-5 — Keamanan kredensial di device | `src/client/auth/offline-auth.ts` (PBKDF2 + salt), `src/server/auth/credentials.ts` (HMAC fingerprint), `src/client/secure-context.ts` |
+| NF-7 — Integritas ID antar penulis | `src/shared/ids.ts`, `src/server/env.ts` (`assertDistinctAppIdx`) |
+| NF-8 — Keypad-first (font & tombol besar, kontras, navigasi keyboard) | `src/styles/app.css`, `src/components/scan-bar.tsx`, `src/components/numeric-pad.tsx`, `src/client/scan-focus.ts`, `src/client/theme.ts` |
+| NF-10 — PWA & operasional | `public/sw.js`, `src/client/pwa.ts`, `src/components/update-banner.tsx`, `scripts/stamp-sw.mjs`, `docs/pdt-keymap.md` |

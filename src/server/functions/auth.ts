@@ -3,8 +3,10 @@ import { checkCredentialsInputSchema, loginInputSchema } from '~/shared/schemas'
 import { checkCredentialRevocations, loginOnline } from '../services/auth-service'
 
 /**
- * FR-1.1 — First online login on a device.
- * FR-1.6/BR-19 — Check credential revocation for all cached users.
+ * Online login. Required the first time a user signs in on a device, because it is the only
+ * moment the server can hand out the password fingerprint the device then caches for offline
+ * logins. `checkCredentialsFn` is the other half: at every sync the device asks whether any
+ * of its cached credentials has been revoked in the meantime.
  */
 export const loginOnlineFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => loginInputSchema.parse(data))

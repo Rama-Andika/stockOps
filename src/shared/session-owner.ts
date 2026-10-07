@@ -114,7 +114,7 @@ export function splitByOwner<T extends Pick<SessionOwnerInput, 'userId'>>(
  * Status is NOT re-checked here. Callers pass `runningSessions()`, which is RUNNING-only, and
  * requiring a `status` field in the input type would buy nothing. That RUNNING-only scope is a
  * product decision, not an oversight: a PENDING, SYNCING or FAILED document for the same PO is a
- * finished document, and one PO may legitimately be received in several deliveries (BR-4). The
+ * finished document, and one PO may legitimately be received in several deliveries. The
  * duplicate worth stopping is the one nobody meant to create.
  *
  * Order is the caller's: `runningSessions()` is newest first, so the newest session wins. Data

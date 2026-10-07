@@ -37,7 +37,7 @@ function pushInput(
   return { deviceId: 'device-test-1', sessions, credentials }
 }
 
-describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
+describe('sync-service: push, nomor dokumen, namespace ID', () => {
   beforeEach(async () => {
     await seedAll()
   })
@@ -86,7 +86,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(items).toHaveLength(1)
       const item = items[0]!
       expect(Number(item.qty)).toBe(6)
-      expect(Number(item.qty_purchase)).toBe(12) // conv_qty (BR-7), not qty x conv
+      expect(Number(item.qty_purchase)).toBe(12) // conv_qty, not qty x conv
       expect(Number(item.conv_unit)).toBe(1)
       expect(item.uom_purchase_id).toBe(FIXTURE.uom.KARTON)
       expect(item.uom_id).toBe(FIXTURE.uom.PCS)
@@ -131,7 +131,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(histId).toBeLessThanOrEqual(maxIdForApp(2))
     })
 
-    it('membuat receiveId di namespace appIdx PDT (BR-17) dan mengangkutnya sebagai string (BR-12)', async () => {
+    it('membuat receiveId di namespace appIdx PDT dan mengangkutnya sebagai string', async () => {
       const result = await syncPush(pushInput([session()]), { now: NOW })
       const receiveId = result.results[0]!.receiveId!
       expect(typeof receiveId).toBe('string')
@@ -248,7 +248,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
     })
   })
 
-  describe('idempotensi (FR-5.3, Skenario C)', () => {
+  describe('idempotensi: kirim ulang sesi yang sama', () => {
     it('mengirim ulang sesi yang sama tidak menghasilkan dokumen ganda', async () => {
       const first = await syncPush(pushInput([session()]), { now: NOW })
       const second = await syncPush(pushInput([session()]), { now: NOW })
@@ -308,14 +308,14 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(res.lines[0]?.excess).toBe(1)
       expect(res.message).toContain('menunggu persetujuan admin')
 
-      // Document remains DRAFT (BR-5), not rejected.
+      // Document remains DRAFT, not rejected.
       const headers = await queryRows<Record<string, string>>(
         sql`SELECT status, note FROM pos_receive ORDER BY receive_id`,
       )
       expect(headers).toHaveLength(2)
       expect(headers.every((row) => row.status === 'DRAFT')).toBe(true)
 
-      // Over-received item is flagged via memo column (FR-6.2).
+      // Over-received item is flagged via memo column.
       const overItems = await queryRows<Record<string, string>>(
         sql`SELECT * FROM pos_receive_item WHERE memo IS NOT NULL`,
       )
@@ -390,7 +390,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(byItem.get(FIXTURE.purchaseItem.PI2)).toBeNull()
     })
 
-    it('menampilkan item over-receive di worklist admin (FR-6.4)', async () => {
+    it('menampilkan item over-receive di worklist admin', async () => {
       await syncPush(pushInput([session()]), { now: NOW })
       await syncPush(
         pushInput([
@@ -420,7 +420,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(worklist[0]?.itemName).toBe('SISIR ANAK SAILIYA')
     })
 
-    it('receivedQty pada pull ikut bertambah setelah sinkronisasi (FR-5.4)', async () => {
+    it('receivedQty pada pull ikut bertambah setelah sinkronisasi', async () => {
       await syncPush(pushInput([session()]), { now: NOW })
       const pulled = await pullChunk('purchaseItems', 0, 100)
       const row = pulled.rows.find((r) => r.purchaseItemId === FIXTURE.purchaseItem.PI1)
@@ -428,7 +428,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
     })
   })
 
-  describe('nomor dokumen (BR-8)', () => {
+  describe('nomor dokumen', () => {
     it('menaikkan counter per bulan', async () => {
       await syncPush(pushInput([session()]), { now: NOW })
       await syncPush(pushInput([session({ sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1' })]), {
@@ -452,7 +452,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
   })
 
   describe('validasi', () => {
-    it('menolak PO yang tidak berstatus CHECKED (BR-1)', async () => {
+    it('menolak PO yang tidak berstatus CHECKED', async () => {
       const result = await syncPush(
         pushInput([
           session({
@@ -485,7 +485,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(await countRows('pos_receive')).toBe(0)
     })
 
-    it('menolak barang di luar PO (BR-14)', async () => {
+    it('menolak barang di luar PO', async () => {
       const result = await syncPush(
         pushInput([
           session({
@@ -534,7 +534,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
     })
   })
 
-  describe('transaksi utuh (FR-5.7)', () => {
+  describe('transaksi utuh', () => {
     it('membatalkan SELURUH dokumen bila satu item gagal disimpan', async () => {
       // Item ID generator that always returns the same ID -> second item INSERT violates PK.
       class ConstantIdGen {
@@ -581,7 +581,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
   })
 
   describe('konversi satuan', () => {
-    it('memakai faktor 1 bila data konversi tidak ditemukan (BR-7)', async () => {
+    it('memakai faktor 1 bila data konversi tidak ditemukan', async () => {
       await syncPush(
         pushInput([
           session({
@@ -608,7 +608,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
   })
 
   describe('kredensial & urutan', () => {
-    it('mengembalikan daftar kredensial yang dicabut saat sinkronisasi (BR-19)', async () => {
+    it('mengembalikan daftar kredensial yang dicabut saat sinkronisasi', async () => {
       const result = await syncPush(
         pushInput([session()], [
           validCredential(),
@@ -625,7 +625,7 @@ describe('sync-service (FR-5.x, F6, BR-8/BR-17)', () => {
       expect(result.results[0]?.status).toBe('SYNCED')
     })
 
-    it('memproses sesi berurutan FIFO sesuai input (FR-5.1)', async () => {
+    it('memproses sesi berurutan FIFO sesuai input', async () => {
       const first = session({ sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1' })
       const second = session({ sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee2' })
       const result = await syncPush(pushInput([first, second]), { now: NOW })

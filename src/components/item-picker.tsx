@@ -32,7 +32,9 @@ import {
  * Escape would have two meanings at once, and the focus would have to be restored through two
  * levels on a device whose only pointer is a thumb.
  *
- * Three of the four NF-8 rules that `DuplicateSessionSheet` locks apply here verbatim: `onKeyDown`
+ * Three of the four keypad-first rules that `DuplicateSessionSheet` locks apply here verbatim —
+ * a PDT has no pointer, so a dialog the keyboard cannot reach is a dialog nobody can close:
+ * `onKeyDown`
  * on the OUTER container, `tabIndex={-1}` so a tap on the chrome parks focus inside the dialog, and
  * an effect that restores the previous `activeElement` on unmount. The fourth — `tabIndex={-1}` on
  * the scrim — has nothing to apply to: this overlay is opaque (`bg-ground`) and has no scrim, so the
@@ -437,7 +439,7 @@ function PickQtyPanel({
         {/* This total counts other unsent sessions on this device, which the OVER card that appears
             after the write does NOT (`addedHero` uses serverReceived + this line's qty). That is a
             deliberate difference, not a bug on either side: the server aggregates across every
-            document and device (BR-5), so including a colleague's unsent qty is the closer estimate
+            document and device, so including a colleague's unsent qty is the closer estimate
             — but the scan path's card is long-standing behaviour and is not being changed from here.
             What the difference must not do is read as a retraction, so when the gap exists both
             lines below name where the number came from. */}
@@ -448,8 +450,8 @@ function PickQtyPanel({
             : ''}
         </p>
         {excess > 0 ? (
-          // The same language as the OVER card, because it is the same rule: flagged, never
-          // rejected (BR-5). Warning the operator here, before the write, costs nothing and saves
+          // The same language as the OVER card, because it is the same rule: flagged for admin,
+          // never rejected. Warning the operator here, before the write, costs nothing and saves
           // an undo.
           <p className="mt-1 text-sm font-semibold tabular-nums text-warn-text">
             Lebih {formatQty(excess)} {row.unit} dari pesanan. Tetap dicatat dan menunggu persetujuan

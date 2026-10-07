@@ -151,7 +151,11 @@ export class LocalRepository {
     await this.db.meta.put({ key, value })
   }
 
-  /** Identity of this device (used for per-device credentials — FR-1.4). */
+  /**
+   * This device's own id, minted once and kept in `meta`. Credentials are cached per
+   * (device, user), and the id also travels in the session marker so a document can be traced
+   * back to the PDT that recorded it.
+   */
   async ensureDeviceId(): Promise<string> {
     const existing = await this.getMeta('deviceId')
     if (existing) return existing
@@ -213,8 +217,9 @@ export class LocalRepository {
   }
 
   /**
-   * FR-2.2: Re-downloading MUST NOT delete receiving documents that have not yet
-   * been synchronized. Therefore only master/PO tables are cleared.
+   * Clears master and PO tables only. Re-downloading data MUST NOT touch receiving sessions:
+   * an unsent session is work the operator did with goods on the dock, and it exists nowhere
+   * else yet.
    */
   async clearMasterData(): Promise<void> {
     await this.db.transaction(
@@ -233,7 +238,10 @@ export class LocalRepository {
     )
   }
 
-  /** FR-2.3: Only refreshes PO list (without touching item master). */
+  /**
+   * Clears the PO tables alone, for a PO-list refresh. The item master is left in place: it is
+   * the expensive half of a download and it changes far less often than PO progress does.
+   */
   async clearPurchases(): Promise<void> {
     await this.db.transaction('rw', [this.db.purchases, this.db.purchaseItems], async () => {
       await this.db.purchases.clear()
@@ -242,9 +250,10 @@ export class LocalRepository {
   }
 
   /**
-   * FR-2.2: Atomically replaces ALL master/PO tables with a fully downloaded snapshot.
-   * Called only after every chunk arrived, so a dropped connection never leaves the
-   * device with partial or empty master data. Receiving sessions are not touched.
+   * Swaps ALL master and PO tables for a fully downloaded snapshot, in one transaction.
+   * Called only once every chunk has arrived, so a connection dropping mid-download leaves the
+   * old data intact instead of a device that can no longer resolve a barcode. Receiving
+   * sessions are never part of the swap.
    */
   async replaceMasterData(snapshot: MasterDataSnapshot): Promise<void> {
     const at = nowIso()
@@ -268,7 +277,10 @@ export class LocalRepository {
     )
   }
 
-  /** FR-2.3: Atomically replaces the PO list (item master untouched). */
+  /**
+   * Swaps the PO list in one transaction, leaving the item master alone. Same reason as
+   * `replaceMasterData`: download first, then replace, so a failed refresh costs nothing.
+   */
   async replacePurchases(
     purchases: readonly PurchaseRowInput[],
     purchaseItems: readonly PurchaseItemRowInput[],
@@ -396,8 +408,9 @@ export class LocalRepository {
    * because the scan card names one PO and reports the rest as a count — deriving that count from
    * `rows.length` capped it at `limit - 1`, so an item on nine other POs was shown as "+4".
    *
-   * No status filter is needed — the local `purchases` table only ever holds CHECKED POs (BR-1:
-   * the pull fetches only those, and refreshPurchases removes the ones that closed). A purchase
+   * No status filter is needed — the local `purchases` table only ever holds POs that may be
+   * received: the pull fetches CHECKED ones only, and refreshPurchases drops those that have
+   * since closed. A purchase
    * item whose PO is not in the table at all is dropped by the `Boolean` filter below; since
    * `replacePurchases` rewrites both tables in one transaction that cannot happen today, so the
    * filter is defensive — but it is also what keeps `total` counting only POs that really exist.
@@ -433,7 +446,11 @@ export class LocalRepository {
     }
   }
 
-  /** FR-4.3: Match barcode/barcode_2/barcode_3; B-4: fallback to item code. */
+  /**
+   * Resolves what the scanner typed: all three barcode columns first, then the item code as a
+   * fallback for a label that is too damaged to scan. Exact matches only — a partial code must
+   * not resolve to a neighbouring item.
+   */
   async getItemByBarcodeOrCode(scanned: string): Promise<LocalItem | undefined> {
     const needle = scanned.trim()
     if (!needle) return undefined
@@ -551,7 +568,11 @@ export class LocalRepository {
     return counts
   }
 
-  /** FR-4.6: Unfinalized session is stored locally & can be resumed. */
+  /**
+   * The lines of one session. Everything the operator scans lives in IndexedDB from the first
+   * scan, so a session survives the app being killed, the device being rebooted or a shift
+   * ending, and can be picked up again where it stopped.
+   */
   async sessionItems(sessionId: string): Promise<LocalSessionItem[]> {
     return this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
   }
@@ -675,7 +696,11 @@ export class LocalRepository {
     await this.db.sessions.put({ ...session, ...patch, updatedAt: nowIso() })
   }
 
-  /** FR-4.7: Finalization -> enters "Pending Synchronization" outbox. */
+  /**
+   * Closes a session for editing and puts it in the outbox, where it waits to be pushed. This
+   * is the point of no return for the operator: the invoice and DO numbers are required here
+   * because the server will not accept the document without them.
+   */
   async finalizeSession(
     sessionId: string,
     input: { invoiceNumber: string; doNumber: string; receiveDate: string },
@@ -697,7 +722,16 @@ export class LocalRepository {
     return updated
   }
 
-  /** FR-5.1: FIFO queue of pending/failed sessions. */
+  /**
+   * The outbox: sessions waiting to be pushed, oldest first by `sequence`.
+   *
+   * The order is load-bearing. One push carries a limited number of sessions, so without
+   * oldest-first a device with a long queue could starve its earliest delivery indefinitely.
+   *
+   * SYNCING is deliberately absent. Sync runs never overlap, so anything still marked SYNCING
+   * is a leftover from a crashed run; `resetStaleSyncingSessions` returns those to PENDING at
+   * the start of every run, which is what puts them back in this list.
+   */
   async outboxSessions(): Promise<LocalSession[]> {
     const pending = await this.db.sessions.where('status').equals(SESSION_STATUS.PENDING).toArray()
     const failed = await this.db.sessions.where('status').equals(SESSION_STATUS.FAILED).toArray()
@@ -735,9 +769,12 @@ export class LocalRepository {
   }
 
   /**
-   * FR-5.5/FR-4.8: Store official number & lock session (read-only).
-   * Idempotent and atomic: a session that is already SYNCED is left untouched, so a
-   * double push can never count its qty twice.
+   * Records the server's answer: the official id and document number, after which the session
+   * is read-only on the device — it exists centrally now and local edits would be a lie.
+   *
+   * Idempotent and atomic. A session that is already SYNCED is left untouched, because the
+   * same answer arriving twice (a replay, a retried push) would otherwise count its qty into
+   * the local received totals a second time.
    */
   async markSynced(
     sessionId: string,
@@ -790,7 +827,11 @@ export class LocalRepository {
     )
   }
 
-  /** FR-5.6: TEMPORARY failure -> remains in queue, data is not deleted. */
+  /**
+   * A TEMPORARY failure: the session stays in the queue with its lines intact and is retried
+   * on the next sync. Nothing is ever deleted here — being offline, or a server having a bad
+   * minute, must not cost the operator a delivery they already counted.
+   */
   async markFailed(sessionId: string, error: string, code?: string | null): Promise<void> {
     await this.db.transaction('rw', this.db.sessions, async () => {
       const session = await this.db.sessions.get(sessionId)
@@ -821,7 +862,11 @@ export class LocalRepository {
     })
   }
 
-  /** FR-8.2: Clear synced sessions (with UI confirmation). */
+  /**
+   * Frees storage by deleting sessions that are already in the central system. Only SYNCED
+   * ones: anything still in the queue exists on this device and nowhere else. The screen asks
+   * the operator to confirm first, since nothing here can be undone.
+   */
   async deleteSyncedSessions(): Promise<number> {
     const synced = await this.db.sessions.where('status').equals(SESSION_STATUS.SYNCED).toArray()
     const ids = synced.map((session) => session.sessionId)
@@ -855,7 +900,7 @@ export class LocalRepository {
     )
   }
 
-  /* ------------------------- Progress (FR-3.2) ------------------------- */
+  /* --------- Progress: how much of a PO has been received so far --------- */
 
   async getPurchaseProgress(purchaseId: string): Promise<PurchaseProgress> {
     const items = await this.getPurchaseItems(purchaseId)
@@ -954,7 +999,10 @@ export class LocalRepository {
     await this.db.credentials.delete(key)
   }
 
-  /** BR-19: Revocation applies to all cached users. */
+  /**
+   * Drops the cached credentials of users the server has revoked. Takes a list, because
+   * revocation covers every user cached on this shared PDT and not just whoever is signed in.
+   */
   async removeCredentialsForUsers(userIds: readonly string[]): Promise<number> {
     if (userIds.length === 0) return 0
     const keys = await this.db.credentials.where('userId').anyOf([...userIds]).primaryKeys()

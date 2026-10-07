@@ -15,8 +15,13 @@ export interface ScanResolution {
 }
 
 /**
- * FR-4.3 / BR-14: Resolves scan result into item + PO line + conversion factor.
- * Items not part of the PO are rejected with a message (not an exception).
+ * Turns whatever the scanner typed into an item, its line on this PO and the conversion
+ * factor for its unit.
+ *
+ * An item that exists in the master data but is not on this PO is refused — receiving it would
+ * attach goods to an order that never asked for them. Every refusal comes back as a result
+ * with a message, never as an exception: this runs on the scan hot path, where the operator
+ * needs to see what went wrong and scan the next box.
  */
 export async function resolveScan(
   repo: LocalRepository,
@@ -85,7 +90,7 @@ async function resolveWithConversion(
 }
 
 /**
- * FR-4.3 companion: resolves a PO line the operator PICKED from the list instead of scanning.
+ * `resolveScan`'s twin for a PO line the operator PICKED from the list instead of scanning.
  *
  * It starts from the `purchaseItemId` the picker already holds, so no barcode is involved at any
  * point — and it ends in the same `ScanResolution`, so everything downstream cannot tell the two
@@ -133,7 +138,14 @@ export interface AddScanResult {
   line?: LocalSessionItem
 }
 
-/** FR-4.4/FR-4.5: Adds scanned item to receiving session. */
+/**
+ * Adds a scanned item to the session, with the qty the operator keyed in — always in the PO
+ * unit, the same unit they are reading off the order.
+ *
+ * Repeated scans of one PO line are merged into a single row rather than appended, which is
+ * what makes the running total per line honest; it is also why undo subtracts a qty instead of
+ * deleting a row.
+ */
 export async function addScannedItem(
   repo: LocalRepository,
   sessionId: string,
@@ -180,7 +192,7 @@ function qtyRejection(qty: number): string | null {
 }
 
 /**
- * FR-4.4/FR-4.5 companion: adds a PO line the operator picked from the list.
+ * `addScannedItem`'s twin for a PO line the operator picked from the list.
  *
  * `qty` is ADDED to whatever the session already holds for that PO line, exactly like a scan —
  * `addOrIncrementLine` merges them into one row either way, so "replace" was never an option that

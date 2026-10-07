@@ -8,7 +8,10 @@ import { getDb } from '../db/client'
 import { UNAUTHORIZED_MESSAGE, assertAuthorizedDevice } from '../services/auth-service'
 import { overReceiveWorklist, syncPush } from '../services/sync-service'
 
-/** FR-5.x — Synchronize receiving sessions to central database (device auth is checked inside syncPush). */
+/**
+ * Pushes finalized sessions into the central database. Device authorization is checked inside
+ * syncPush rather than here, because it also needs the credentials to decide per session.
+ */
 export const syncPushFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => pushInputSchema.parse(data))
   .handler(async ({ data }) => {
@@ -22,7 +25,11 @@ export const syncPushFn = createServerFn({ method: 'POST' })
     }
   })
 
-/** FR-6.4 — Over-receive worklist (for admin verification/demo). Requires a valid device credential. */
+/**
+ * The lines flagged as over-receive, which admin works through to approve or correct. Used
+ * for verification and demos from here; the admin website has its own view of the same data.
+ * Reads ERP data, so it demands a still-valid cached credential.
+ */
 export const overReceiveWorklistFn = createServerFn({ method: 'POST' })
   .validator((data: unknown) => overReceiveWorklistInputSchema.parse(data ?? {}))
   .handler(async ({ data }) => {

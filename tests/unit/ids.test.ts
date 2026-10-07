@@ -26,7 +26,7 @@ describe('ids', () => {
     expect(decomposeId(id)).toEqual({ appIdx: 2, millis: 1_800_000_000_000, digit: 3 })
   })
 
-  it('namespace appIdx 2 tidak mungkin bertabrakan dengan appIdx 1 (BR-17)', () => {
+  it('namespace appIdx 2 tidak mungkin bertabrakan dengan appIdx 1', () => {
     expect(minIdForApp(2)).toBeGreaterThan(maxIdForApp(1))
     expect(maxIdForApp(1)).toBeLessThan(minIdForApp(2))
   })
@@ -38,7 +38,7 @@ describe('ids', () => {
     expect(() => composeId(1, 1, -1)).toThrow()
   })
 
-  it('nilai tetap presisi walau > 2^53 (BR-12)', () => {
+  it('nilai tetap presisi walau > 2^53', () => {
     const id = composeId(2, 1_775_000_000_000, 9)
     expect(id > BigInt(Number.MAX_SAFE_INTEGER)).toBe(true)
     expect(id.toString()).toBe('1441169630758558729')

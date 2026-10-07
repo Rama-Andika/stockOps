@@ -1,8 +1,15 @@
 /**
- * Item identification via barcode/code (FR-4.3, B-4, BR-14).
+ * Matching a scanned string to an item in the master data.
  *
- * Barcode matching is performed against barcode, barcode_2, and barcode_3.
- * If a barcode is damaged, the operator may search by `code` (B-4).
+ * A PDT scanner types into the barcode field like a keyboard, so what arrives here is plain
+ * text: it may be a real barcode or an item code typed by hand. Matching therefore covers all
+ * three barcode columns (barcode, barcode_2, barcode_3) AND the item `code` column, because a
+ * scuffed or torn label is routine in a warehouse and the operator must still be able to
+ * receive the goods.
+ *
+ * Finding the item is only half the job. The caller still has to check that the item is part
+ * of the PO being received — an item outside the PO is refused with a warning rather than
+ * added. That check lives in the scanning service, not here.
  */
 
 export interface ScannableItem {
@@ -23,7 +30,10 @@ function barcodeFields(item: ScannableItem): string[] {
     .filter((value) => value.length > 0)
 }
 
-/** All items matching the scanned barcode (can be more than one). */
+/**
+ * All items matching the scanned barcode. More than one hit is possible: the admin master
+ * data does not enforce unique barcodes, so the caller decides how to handle ambiguity.
+ */
 export function findItemsByBarcode(
   items: readonly ScannableItem[],
   scanned: string,
@@ -41,7 +51,11 @@ export function findItemByBarcode(
   return findItemsByBarcode(items, scanned)[0] ?? null
 }
 
-/** Manual search by item code (damaged barcode). */
+/**
+ * Exact match on the item code, the way out when a label cannot be scanned at all.
+ * Exact and not prefix on purpose — a partial code must never silently resolve to a
+ * neighbouring item.
+ */
 export function findItemByCode(
   items: readonly ScannableItem[],
   code: string,

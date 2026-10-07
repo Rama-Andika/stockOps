@@ -1,10 +1,15 @@
 /**
- * Over-receive calculation (BR-5, BR-6, FR-6.1, FR-5.4).
+ * Deciding whether a session receives more of an item than was ordered.
  *
- * Rule: The TOTAL qty of all receipts for a single PO item must not exceed
- * the ordered qty for that PO item. Comparisons use the same unit
- * (PO unit). Calculated across all documents/devices => this is a pure function
- * that accepts an "already received" snapshot from the server.
+ * The rule: for one PO item, the qty of ALL receipts added together must not exceed the
+ * ordered qty, both sides in the PO unit. Exceeding it is flagged and left for admin to
+ * approve, never rejected — a delivery that is physically in the warehouse has to be
+ * recordable, and there is currently no tolerance band.
+ *
+ * "All receipts" means every document from every device, which is why this is a pure function
+ * fed an already-received snapshot instead of reading anything itself: the only place that
+ * knows the real total is the server at sync time. The device can show a warning from its own
+ * last pull, but it is an estimate, and two PDTs on one PO will each see less than the truth.
  */
 
 import { PROGRESS_STATUS, type ProgressStatus } from './constants'
@@ -122,7 +127,10 @@ export function evaluateSession(
   }
 }
 
-/** FR-3.2: PO progress status based on ordered total vs received total. */
+/**
+ * PO progress from its ordered and received totals. Compared through gtDec2 rather than `>`
+ * so a line that is short by a rounding artefact does not read as PARTIAL forever.
+ */
 export function progressOf(orderedTotal: number, receivedTotal: number): ProgressStatus {
   const ordered = dec2(orderedTotal)
   const received = dec2(receivedTotal)

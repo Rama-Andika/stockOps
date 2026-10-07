@@ -5,7 +5,7 @@ import { invalidateCache } from '~/server/db/cache'
 import { pullChunk } from '~/server/services/pull-service'
 import { FIXTURE, seedAll } from './helpers'
 
-describe('pull-service (FR-2.1, FR-2.3, BR-13, NF-4)', () => {
+describe('pull-service', () => {
   beforeEach(async () => {
     await seedAll()
   })
@@ -15,7 +15,7 @@ describe('pull-service (FR-2.1, FR-2.3, BR-13, NF-4)', () => {
   })
 
   describe('purchases', () => {
-    it('hanya menarik PO berstatus CHECKED (BR-1)', async () => {
+    it('hanya menarik PO berstatus CHECKED', async () => {
       const result = await pullChunk('purchases', 0, 100)
       expect(result.total).toBe(2)
       expect(result.rows.every((row) => row.status === 'CHECKED')).toBe(true)
@@ -29,7 +29,7 @@ describe('pull-service (FR-2.1, FR-2.3, BR-13, NF-4)', () => {
       expect(row?.number).toBe('PO10250001')
     })
 
-    it('BR-13: menarik PO dari SEMUA lokasi (tanpa filter lokasi)', async () => {
+    it('menarik PO dari SEMUA lokasi (tanpa filter lokasi)', async () => {
       const result = await pullChunk('purchases', 0, 100)
       expect(result.rows.map((row) => row.purchaseId)).toContain(FIXTURE.purchase.CHECKED_OTHER_LOC)
       expect(result.rows.map((row) => row.locationId)).toContain(FIXTURE.location.L2)
@@ -65,7 +65,7 @@ describe('pull-service (FR-2.1, FR-2.3, BR-13, NF-4)', () => {
       expect(Number(row?.receivedQty)).toBe(0)
     })
 
-    it('receivedQty mencerminkan total lintas dokumen (FR-5.4)', async () => {
+    it('receivedQty mencerminkan total lintas dokumen', async () => {
       await getDb().execute(sql`
         INSERT INTO pos_receive
           (receive_id, status, number, counter, prefix_number, purchase_id, vendor_id, location_id, user_id)
@@ -88,7 +88,7 @@ describe('pull-service (FR-2.1, FR-2.3, BR-13, NF-4)', () => {
   })
 
   describe('data master lain', () => {
-    it('items hanya yang is_active = 1 (FR-2.1)', async () => {
+    it('items hanya yang is_active = 1', async () => {
       const result = await pullChunk('items', 0, 100)
       expect(result.total).toBe(2)
       expect(result.rows.map((row) => row.itemMasterId)).not.toContain(FIXTURE.item.I3_INACTIVE)
@@ -115,7 +115,7 @@ describe('pull-service (FR-2.1, FR-2.3, BR-13, NF-4)', () => {
       expect(String(result.rows[0]?.dueDate)).toBe('30')
     })
 
-    it('vendorItems untuk konversi satuan (BR-7)', async () => {
+    it('vendorItems untuk konversi satuan', async () => {
       const result = await pullChunk('vendorItems', 0, 100)
       expect(result.total).toBe(2)
       const row = result.rows.find((r) => r.itemMasterId === FIXTURE.item.I1)

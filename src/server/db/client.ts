@@ -10,8 +10,9 @@ let poolInstance: mysql.Pool | undefined
 let dbInstance: Database | undefined
 
 /**
- * MySQL Pool. `supportBigNumbers` + `bigNumberStrings` are MANDATORY so BIGINT
- * is returned as a string, rather than a Number that loses precision (BR-12).
+ * The MySQL pool. `supportBigNumbers` + `bigNumberStrings` are MANDATORY: without them the
+ * driver hands back BIGINT ids as JavaScript numbers, which silently rounds away their last
+ * digits. The corruption is invisible at the call site — the id simply stops matching any row.
  */
 export function createMysqlPool(database: string = serverEnv.database): mysql.Pool {
   return mysql.createPool({

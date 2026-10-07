@@ -30,7 +30,7 @@ async function makeCredential(password: string, now = new Date('2026-01-01T00:00
   }
 }
 
-describe('offline-auth (FR-1.2, NF-5)', () => {
+describe('offline-auth', () => {
   it('hash deterministik untuk salt & password yang sama', async () => {
     const salt = generateSalt()
     const a = await derivePasswordHash('rahasia', salt, ITERATIONS)
@@ -44,7 +44,7 @@ describe('offline-auth (FR-1.2, NF-5)', () => {
     expect(a).not.toBe(b)
   })
 
-  it('hash TIDAK sama dengan password plaintext (NF-5)', async () => {
+  it('hash TIDAK sama dengan password plaintext', async () => {
     const salt = generateSalt()
     const hash = await derivePasswordHash('Desubali', salt, ITERATIONS)
     expect(hash).not.toContain('Desubali')
@@ -63,12 +63,12 @@ describe('offline-auth (FR-1.2, NF-5)', () => {
     expect(result).toEqual({ ok: false, reason: 'WRONG_PASSWORD' })
   })
 
-  it('menolak bila user belum pernah login online di device ini (FR-1.2)', async () => {
+  it('menolak bila user belum pernah login online di device ini', async () => {
     const result = await verifyOfflineCredential(undefined, 'apa-saja', new Date())
     expect(result).toEqual({ ok: false, reason: 'NOT_CACHED' })
   })
 
-  it('menolak setelah 7 hari walau password benar (FR-1.3, BR-10)', async () => {
+  it('menolak setelah 7 hari walau password benar', async () => {
     const credential = await makeCredential('Desubali', new Date('2026-01-01T00:00:00Z'))
     const result = await verifyOfflineCredential(credential, 'Desubali', new Date('2026-01-09T00:00:00Z'))
     expect(result).toEqual({ ok: false, reason: 'EXPIRED' })
@@ -93,7 +93,7 @@ describe('offline-auth (FR-1.2, NF-5)', () => {
     })
   })
 
-  it('credentialKey memisahkan per device & user (FR-1.4)', () => {
+  it('credentialKey memisahkan per device & user', () => {
     expect(credentialKey('device-1', '1200001')).toBe('device-1:1200001')
     expect(credentialKey('device-1', '1200001')).not.toBe(credentialKey('device-2', '1200001'))
     expect(credentialKey('device-1', '1200001')).not.toBe(credentialKey('device-1', '1200002'))

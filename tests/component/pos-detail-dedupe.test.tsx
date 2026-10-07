@@ -237,7 +237,7 @@ describe('detail PO: duplikat ditahan lembar konfirmasi', () => {
   })
 
   it('"Buat dokumen baru" tetap membuat sesi kedua — jalan keluarnya tidak dihapus', async () => {
-    // Pengiriman terpisah untuk satu PO memang sah (BR-4). Lembar ini pengingat, bukan larangan.
+    // Pengiriman terpisah untuk satu PO memang sah. Lembar ini pengingat, bukan larangan.
     runningRows = [sesi()]
     render(<PosDetail />)
     await tekanMulai()

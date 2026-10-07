@@ -45,7 +45,9 @@ export function AppStoreProvider({
     }
   }, [resolved, refresh])
 
-  // Automatic sync when returning online or when a user logs in (FR-5.1).
+  // Push by itself the moment a connection comes back, or when someone logs in with work
+  // already queued. The operator should never have to remember to press "Kirim" for a
+  // delivery they finished an hour ago in a dead spot.
   useEffect(() => {
     if (!isBrowser() || !online || !userId) return
     void (async () => {

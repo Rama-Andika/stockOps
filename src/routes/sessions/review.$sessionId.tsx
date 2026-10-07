@@ -237,8 +237,9 @@ function SessionReviewPage() {
         <div className="mt-3">
           {/* The recap rows are plain text, not buttons. Every row would have done the same
               thing — leave for the item tab — so N rows meant N keyboard stops between the DO
-              field and the send button, 21 Tab presses on a twenty-line session, which is NF-8
-              backwards on a keypad device. One button in the header says it once. */}
+              field and the send button, 21 Tab presses on a twenty-line session. On a keypad
+              device, where Tab is how you move at all, that is the opposite of usable. One
+              button in the header says it once. */}
           <Card
             title={`Rekap item (${lines.length})`}
             actions={

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-StockOps is an offline-first PWA for warehouse operators on PDT (Portable Data Terminal) devices to record goods received against Purchase Orders. It reads from and writes to an **existing admin MySQL/MariaDB database** (tested on MariaDB 10.4) that it does not own. Requirements live in `PRD_Penerimaan_Barang_PDT.md` / `BRD_Penerimaan_Barang_PDT.md`; code comments reference their IDs (`BR-n`, `FR-n.n`, `PRD 12.x`). `README.md` (Indonesian) documents the business rules and design decisions in detail. UI strings are in Indonesian; code comments are in English.
+StockOps is an offline-first PWA for warehouse operators on PDT (Portable Data Terminal) devices to record goods received against Purchase Orders. It reads from and writes to an **existing admin MySQL/MariaDB database** (tested on MariaDB 10.4) that it does not own. Requirements live in `PRD_Penerimaan_Barang_PDT.md` (functional requirements `FR-n.n`, non-functional `NF-n`, business rules `BR-n` in §10, table/column semantics in §12) and `BRD_Penerimaan_Barang_PDT.md` (background and process, no IDs). `README.md` (Indonesian) documents the business rules and design decisions in detail. UI strings are in Indonesian; code comments are in English.
+
+**Code comments carry no requirement IDs.** A comment has to be understandable without opening any document, so it states the rule itself, why it exists, and what breaks if it changes — never `FR-5.1` as a stand-in for any of that. Traceability runs the other way: the PRD's business-rule table (§10) carries an "Implementasi" column and §18 maps the FR/NF groups onto files. Cross-reference by symbol or path (`see PERMANENT_REJECT_CODES`, `src/shared/memo.ts`), name the test that locks a load-bearing invariant, and don't restate what the code already says.
 
 Stack: TanStack Start in **SPA mode** (router + server functions), React 19, Vite, Tailwind v4, Drizzle ORM over mysql2, Zod 4, Dexie (IndexedDB), Zustand. Import alias `~/*` → `src/*`.
 

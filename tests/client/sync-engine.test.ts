@@ -74,7 +74,7 @@ afterAll(async () => {
 })
 
 describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
-  describe('pullAllData (FR-2.1, BR-16)', () => {
+  describe('pullAllData', () => {
     it('mengisi seluruh data lokal yang dibutuhkan untuk kerja offline', async () => {
       const summary = await pullAllData(repo, directTransport, { chunkSize: 2 })
       expect(summary.counts.purchases).toBe(2)
@@ -104,7 +104,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     it('scan -> finalisasi -> sinkron -> nomor resmi tersimpan lokal', async () => {
       await pullAllData(repo, directTransport)
 
-      // Operator selects PO & starts session (FR-3.3, FR-4.1).
+      // Operator selects PO & starts session.
       const session = await repo.createSession({
         purchaseId: FIXTURE.purchase.CHECKED,
         userId: FIXTURE.user.ACTIVE,
@@ -112,20 +112,20 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
         receiveDate: toLocalDateTime(new Date()),
       })
 
-      // Scan barcode (FR-4.3/FR-4.4).
+      // Scan barcode.
       const scan = await addScannedItem(repo, session.sessionId, session.purchaseId, '22001771', 6)
       expect(scan.ok).toBe(true)
       expect(scan.line?.convQty).toBe(12)
       expect(scan.line?.convFound).toBe(true)
 
-      // Finalize (FR-4.7) with invoice & DO (BR-9).
+      // Finalize with invoice & DO.
       await repo.finalizeSession(session.sessionId, {
         invoiceNumber: 'INV-100',
         doNumber: 'DO-100',
         receiveDate: session.receiveDate,
       })
 
-      // Automatic/manual synchronization (FR-5.1).
+      // Automatic/manual synchronization.
       const outcome = await syncOutbox(repo, directTransport)
       expect(outcome.synced).toBe(1)
       expect(outcome.failed).toBe(0)
@@ -135,11 +135,11 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(saved?.number).toMatch(/^IN\d{4}0001$/)
       expect(saved?.receiveId).toBeTruthy()
 
-      // Synced session = read-only: no longer present in outbox (FR-4.8).
+      // Synced session = read-only: no longer present in outbox.
       expect(await repo.outboxSessions()).toHaveLength(0)
     })
 
-    it('mengirim ulang tidak menduplikasi (FR-5.3)', async () => {
+    it('mengirim ulang tidak menduplikasi', async () => {
       await pullAllData(repo, directTransport)
       const session = await repo.createSession({
         purchaseId: FIXTURE.purchase.CHECKED,
@@ -176,7 +176,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     })
   })
 
-  describe('over-receive terlihat di klien (FR-6.3)', () => {
+  describe('over-receive terlihat di klien', () => {
     it('menandai sesi over-receive beserta kelebihannya', async () => {
       await pullAllData(repo, directTransport)
       const session = await repo.createSession({
@@ -201,7 +201,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     })
   })
 
-  describe('pencabutan kredensial saat sinkronisasi (BR-19)', () => {
+  describe('pencabutan kredensial saat sinkronisasi', () => {
     it('menghapus cache kredensial yang berubah & mengunci user', async () => {
       await pullAllData(repo, directTransport)
       await repo.saveCredential({
@@ -486,7 +486,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
     })
   })
 
-  describe('menyegarkan PO (FR-2.3) & unduh ulang (FR-2.2)', () => {
+  describe('menyegarkan PO & unduh ulang', () => {
     it('refreshPurchases tidak menghapus sesi yang belum tersinkron', async () => {
       await pullAllData(repo, directTransport)
       const session = await repo.createSession({
@@ -545,7 +545,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
   })
 
   describe('validasi scan di klien', () => {
-    it('menolak barang di luar PO (BR-14)', async () => {
+    it('menolak barang di luar PO', async () => {
       await pullAllData(repo, directTransport)
       // Barcode I2 exists in this PO, so use another PO to trigger rejection.
       const resolution = await resolveScan(repo, FIXTURE.purchase.CHECKED_OTHER_LOC, '22001773')
@@ -553,13 +553,13 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
       expect(resolution.message).toContain('bukan bagian dari PO')
     })
 
-    it('menolak barcode yang tidak dikenali (FR-4.3)', async () => {
+    it('menolak barcode yang tidak dikenali', async () => {
       await pullAllData(repo, directTransport)
       const resolution = await resolveScan(repo, FIXTURE.purchase.CHECKED, '999999999')
       expect(resolution.status).toBe('ITEM_NOT_FOUND')
     })
 
-    it('memakai faktor 1 & menandai convFound=false bila konversi tidak ada (BR-7)', async () => {
+    it('memakai faktor 1 & menandai convFound=false bila konversi tidak ada', async () => {
       await pullAllData(repo, directTransport)
       // Local item & PO line without conversion data in vendor-item.
       await repo.upsertItems([

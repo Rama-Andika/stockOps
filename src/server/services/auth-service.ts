@@ -16,8 +16,11 @@ export interface LoginInput {
 }
 
 /**
- * FR-1.1: First online login on a device.
- * Verification against `sysuser` (legacy password = plaintext).
+ * Online login, verified against `sysuser` — whose passwords are plaintext, because that is
+ * how the admin system stores them and this app does not get to change it.
+ *
+ * Required the first time a user signs in on a device: the fingerprint returned here is what
+ * the device caches to allow offline logins afterwards.
  */
 export async function loginOnline(input: LoginInput, dbOverride?: Database): Promise<LoginResult> {
   try {
@@ -54,7 +57,8 @@ export async function loginOnline(input: LoginInput, dbOverride?: Database): Pro
         fullName: match.fullName ?? input.loginId,
         companyId: String(match.companyId ?? 0n),
       },
-      // Plaintext password is NOT sent/cached; only fingerprint (BR-19).
+      // The device caches this fingerprint, never the password itself. It is also what lets
+      // the server notice later that the password in `sysuser` has changed.
       fingerprint: computeFingerprint(input.password),
       serverTime: new Date().toISOString(),
       sessionTtlDays: serverEnv.sessionTtlDays,
@@ -71,10 +75,15 @@ export async function loginOnline(input: LoginInput, dbOverride?: Database): Pro
 }
 
 /**
- * BR-19 / FR-1.6: detect changed / missing credentials.
- * Note: active status (user_status) is deliberately NOT checked anymore (see
- * "ignore user_status" change plan); inactive users are still considered valid.
- * Applies to ALL users cached on the device, not just the one currently logged in.
+ * Which of a device's cached credentials are no longer valid: the login_id or the password in
+ * `sysuser` changed, or the user row is gone. A changed password must stop working on every
+ * device, and since a PDT can be offline for days, the next sync is the first chance to say so.
+ *
+ * Applies to ALL users cached on the device, not only the one currently signed in — one PDT is
+ * shared between operators, and a revoked colleague must not be able to log in on it either.
+ *
+ * `user_status` is deliberately NOT checked: an inactive user still counts as valid here. That
+ * was a product decision, so do not "fix" it by adding the condition back.
  */
 export async function checkCredentialRevocations(
   credentials: readonly CredentialFingerprint[],

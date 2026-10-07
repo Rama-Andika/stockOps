@@ -2,12 +2,12 @@
 //
 // Principles:
 // - Only INSERT new rows with IDs clearly specific to the demo (e.g. purchase_id
-//   990001). The schema is NOT modified (BR-18).
+//   990001). The schema is NOT modified.
 // - Do not overwrite existing admin data; items use master items that
 //   ALREADY EXIST (avoiding foreign key violations).
 // - ALL bigint values are passed as STRINGS, not numbers. This is critical:
 //   Admin system IDs > 2^53, so precision is lost if passed
-//   as JavaScript numbers (BR-12).
+//   as JavaScript numbers.
 // - Idempotent; `--clean` deletes only these demo rows.
 //
 // Usage: npm run db:seed  |  npm run db:seed:clean
@@ -15,7 +15,7 @@
 import mysql from 'mysql2/promise'
 import 'dotenv/config'
 
-// bigint IDs as strings (BR-12).
+// bigint IDs as strings.
 const DEMO = {
   vendorId: '990001',
   itemIds: ['4000001', '4000002'], // master items that already exist in demo

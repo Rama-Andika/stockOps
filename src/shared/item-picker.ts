@@ -76,9 +76,9 @@ export function pickerTotalReceived(row: PickerItem): number {
  * (`src/routes/pos/$purchaseId.tsx`): received >= ordered, with the finiteness guards, so the two
  * screens cannot disagree about which lines are done.
  *
- * A complete line is NOT hidden and NOT disabled. Over-receive is flagged, never rejected (BR-5),
- * and a second delivery against a line that already looks full is exactly the case an operator has
- * to be able to record. It only sinks to the bottom of the list.
+ * A complete line is NOT hidden and NOT disabled. Receiving more than ordered is flagged for
+ * admin rather than refused, and a second delivery against a line that already looks full is
+ * exactly the case an operator has to be able to record. It only sinks to the bottom of the list.
  */
 export function isPickerItemComplete(row: PickerItem): boolean {
   const received = pickerTotalReceived(row)
@@ -110,7 +110,7 @@ export function sortPickerItems(rows: readonly PickerItem[]): PickerItem[] {
  * Case-insensitive "contains" over the name, the item code and all three barcodes.
  *
  * The barcodes are in here on purpose, even though the cockpit's scan field already accepts a typed
- * item code and an exact barcode (`getItemByBarcodeOrCode` falls back to `code`, B-4). That one is
+ * item code and an exact barcode (`getItemByBarcodeOrCode` falls back to `code`). That one is
  * an EXACT match against the whole master table; this one is a PARTIAL match against the twenty
  * lines of one PO. An operator who can still read four digits off a torn label finds the line here;
  * in the scan field those four digits are simply "not recognised".

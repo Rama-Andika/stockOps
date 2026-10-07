@@ -1,15 +1,23 @@
 /**
- * UOM semantics (BR-7, PRD 12.4).
+ * Unit-of-measure semantics of a receiving line.
  *
- * - qty           : received qty IN PO UNITS (used for validation vs order)
- * - uom_id        : smallest stock unit (pos_item_master.uom_stock_id)
- * - uom_purchase_id: PO unit (pos_purchase_item.uom_id)
- * - qty_purchase  : qty converted to stock units (for stock accounting)
+ * The operator always enters qty in the PO unit (a carton), never in the smallest stock unit
+ * (a piece), because the PO is what they are checking the delivery against. The columns
+ * written to pos_receive_item keep the two worlds apart:
  *
- * Conversion is retrieved from pos_vendor_item.conv_qty using key
- * (vendor_id, item_master_id, uom_purchase). If not found, the factor
- * used is 1 AND the result is flagged `found = false` so the UI can
- * display a warning.
+ * - qty             : received qty IN PO UNITS — the only figure compared against the order
+ * - uom_id          : smallest stock unit (pos_item_master.uom_stock_id)
+ * - uom_purchase_id : the PO unit (pos_purchase_item.uom_id)
+ * - qty_purchase    : the conversion FACTOR itself (conv_qty), not qty x factor
+ * - conv_unit       : always 1 — the numerator of "1 PO unit = conv_qty stock units"
+ *
+ * qty_purchase holding a ratio rather than a product is the easiest thing to get wrong here:
+ * with 1 carton = 12 pcs it is 12 whether the operator received 1 carton or 40. Admin's stock
+ * accounting does the multiplication itself.
+ *
+ * The factor comes from pos_vendor_item.conv_qty keyed by (vendor_id, item_master_id,
+ * uom_purchase). A vendor item with no usable conversion row falls back to factor 1 and is
+ * flagged `found: false`, so the UI can warn instead of silently booking a carton as a piece.
  */
 
 import { dec2 } from './num'
@@ -67,11 +75,14 @@ export function resolveConvQty(rows: readonly VendorItemRow[], key: ConvKey): Co
   return { convQty: 1, found: false, source: 'default' }
 }
 
-/** Round qty to 2 decimals (DB column: decimal(10,2)/(22,2)). */
-
 /**
- * Computes qty_purchase = qty (PO unit) x conv_qty.
- * Result is rounded to 2 decimals to match the decimal(22,2) column.
+ * The received quantity expressed in stock units: qty (PO unit) x conv_qty, rounded to 2
+ * decimals to match the decimal(22,2) columns.
+ *
+ * Careful: this is NOT what sync writes into qty_purchase — that column stores the bare
+ * conversion factor, see the module header. Nothing in the app writes this value today; it is
+ * kept as the single definition of the stock-unit total, and tests/unit/uom.test.ts locks its
+ * rounding.
  */
 export function computeQtyPurchase(qtyInPoUom: number, convQty: number): number {
   return dec2(toQty(qtyInPoUom) * toQty(convQty))
