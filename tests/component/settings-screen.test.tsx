@@ -130,4 +130,24 @@ describe('SettingsPage UI & UX', () => {
     expect(screen.getByText('Rincian Master Database Lokal')).toBeInTheDocument()
     expect(screen.getByText('Konversi Satuan')).toBeInTheDocument()
   })
+
+  it('saklar pilih item dari daftar PO menyala secara default dan bisa dimatikan', () => {
+    renderSettings()
+
+    const toggle = screen.getByRole('switch', { name: 'Pilih Item dari Daftar PO' })
+    // Default ON: ini satu-satunya cara mencatat barang yang barcode-nya tidak bisa discan, jadi
+    // default OFF berarti tidak ada yang memakainya.
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('menyebutkan bahwa penanda manual tidak dikirim ke server', () => {
+    renderSettings()
+
+    // Copy-nya load-bearing: saklar ini pencegah kekeliruan, bukan kontrol akses, dan tidak boleh
+    // terbaca seolah admin akan melihat sesuatu.
+    expect(screen.getByText(/tidak dikirim ke\s+server/)).toBeInTheDocument()
+  })
 })

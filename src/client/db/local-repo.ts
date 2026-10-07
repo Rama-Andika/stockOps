@@ -60,6 +60,12 @@ export interface NewLineInput {
   uomId: string
   convQty: number
   convFound: boolean
+  /**
+   * True only for an addition that came from the PO item list instead of a scan. Optional, and
+   * absent means "scanned": that is both the safe default and what every caller written before this
+   * feature meant. `addScannedItem` therefore does not pass it at all.
+   */
+  pickedManually?: boolean
 }
 
 export interface PurchaseItemProgress {
@@ -550,6 +556,25 @@ export class LocalRepository {
     return this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
   }
 
+  /**
+   * The session's line for one PO item, or `undefined` when it has none yet. At most one can exist:
+   * `[sessionId+purchaseItemId]` is what `addOrIncrementLine` merges on.
+   *
+   * It exists so a caller can learn the line's state as the DATABASE has it, immediately before
+   * adding to it — which is the only honest source for "was this line already flagged as manual?".
+   * A live-query snapshot can be a Dexie tick behind, and for that question being behind is not
+   * harmless: it would make undo clear a flag that an earlier pick had legitimately raised.
+   */
+  async findSessionLine(
+    sessionId: string,
+    purchaseItemId: string,
+  ): Promise<LocalSessionItem | undefined> {
+    return this.db.sessionItems
+      .where('[sessionId+purchaseItemId]')
+      .equals([sessionId, purchaseItemId])
+      .first()
+  }
+
   async addOrIncrementLine(sessionId: string, input: NewLineInput): Promise<LocalSessionItem> {
     // One transaction: two concurrent adds for the same PO item must merge into one line.
     return this.db.transaction('rw', [this.db.sessionItems, this.db.sessions], async () => {
@@ -559,7 +584,16 @@ export class LocalRepository {
         .first()
 
       if (existing) {
-        const updated: LocalSessionItem = { ...existing, qty: dec2(existing.qty + input.qty) }
+        // The manual flag only ever goes UP here. A line that once received qty without a barcode
+        // keeps saying so even when later scans add to it, because that is what the flag claims:
+        // "part of this qty was never scanned". The only place it comes back down is undo of the
+        // addition that raised it (`handleUndo` in routes/sessions/$sessionId.tsx), through
+        // `setLinePickedManually` below.
+        const updated: LocalSessionItem = {
+          ...existing,
+          qty: dec2(existing.qty + input.qty),
+          pickedManually: existing.pickedManually || Boolean(input.pickedManually),
+        }
         await this.db.sessionItems.put(updated)
         await this.touchSession(sessionId)
         return updated
@@ -576,6 +610,7 @@ export class LocalRepository {
         uomId: input.uomId,
         convQty: input.convQty,
         convFound: input.convFound,
+        pickedManually: Boolean(input.pickedManually),
         createdAt: nowIso(),
       }
       await this.db.sessionItems.put(line)
@@ -593,6 +628,25 @@ export class LocalRepository {
       } else {
         await this.db.sessionItems.put({ ...line, qty: dec2(qty) })
       }
+      await this.touchSession(line.sessionId)
+    })
+  }
+
+  /**
+   * Sets the manual flag on one line. The ONLY caller is undo in the scan cockpit, and the only
+   * value it ever passes is `false`: a pick that is taken back must not leave a line claiming that
+   * part of its qty was never scanned when, after the undo, all of it was. A badge that lies is
+   * worse than no badge, because the whole point of the flag is the audit trail.
+   *
+   * A separate write rather than a parameter on `setLineQty`: the two are independent, every other
+   * caller of `setLineQty` would have to learn about a flag it has no opinion on, and the worst case
+   * when this second write fails is a line that stays flagged — the conservative direction.
+   */
+  async setLinePickedManually(lineId: string, pickedManually: boolean): Promise<void> {
+    await this.db.transaction('rw', [this.db.sessionItems, this.db.sessions], async () => {
+      const line = await this.db.sessionItems.get(lineId)
+      if (!line) return
+      await this.db.sessionItems.put({ ...line, pickedManually })
       await this.touchSession(line.sessionId)
     })
   }

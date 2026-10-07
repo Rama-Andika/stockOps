@@ -273,6 +273,16 @@ function SessionReviewPage() {
                         Lebih {formatQty(excess)} {purchaseUnit} dari pesanan
                       </p>
                     ) : null}
+                    {/* A plain line, like the over-receive one above it, not a Badge: the recap rows
+                        are text, and this is a fact about the row rather than a status of it. The
+                        wording says PART, because a line can hold qty from both paths — see the
+                        field's comment in local-db.ts. */}
+                    {line.pickedManually ? (
+                      <p className="text-sm font-semibold text-fg-muted">
+                        Sebagian/seluruhnya dipilih manual dari daftar PO — tidak diverifikasi
+                        barcode.
+                      </p>
+                    ) : null}
                   </li>
                 )
               })}

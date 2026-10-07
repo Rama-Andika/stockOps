@@ -1,15 +1,17 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { localRepo, sessionTabKey } from '~/client/db/local-repo'
 import { useLive } from '~/client/hooks/use-live'
 import { useSessionData } from '~/client/hooks/use-session-data'
 import { useAppStore } from '~/client/state/store/app-store'
-import { addScannedItem } from '~/client/services/scanning'
+import { loadPreferences } from '~/client/preferences'
+import { addPickedItem, addScannedItem } from '~/client/services/scanning'
 import type { LocalSessionItem } from '~/client/db/local-db'
 import { playFeedback } from '~/client/feedback'
 import { toast } from '~/client/toast'
 import { AppBar } from '~/components/app-bar'
 import { ConfirmButton } from '~/components/confirm-button'
+import { ItemPicker } from '~/components/item-picker'
 import { ScanBar } from '~/components/scan-bar'
 import { ScanHero, type ScanHeroState } from '~/components/scan-hero'
 import { SessionContextStrip } from '~/components/session-context-strip'
@@ -18,6 +20,7 @@ import { VendorDocCard } from '~/components/vendor-doc-card'
 import { Badge, Button, Card, EmptyState, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
+import { buildPickerItems } from '~/shared/item-picker'
 import {
   canEditSession,
   findRunningSessionForPurchase,
@@ -61,16 +64,66 @@ function SessionDetailPage() {
   const [qty, setQty] = useState('1')
   const [qtyTouched, setQtyTouched] = useState(false)
   const [heroState, setHeroState] = useState<ScanHeroState>({ kind: 'IDLE' })
-  // What the last successful scan added, so undo can subtract exactly that much. A ref, not state:
-  // it is never rendered, and as state every scan would cost one extra render of the whole cockpit.
-  const lastScanRef = useRef<{ lineId: string; addedQty: number } | null>(null)
+  /**
+   * What the last successful addition did, so undo can take back exactly that much. A ref, not
+   * state: it is never rendered, and as state every scan would cost one extra render of the whole
+   * cockpit.
+   *
+   * `clearPickedOnUndo` is true only for a pick that RAISED the line's manual flag — i.e. the line
+   * was not flagged before. Undo then lowers it again, so the badge never claims "part of this qty
+   * was never scanned" about a line that, after the undo, is pure scan. It is false for every scan,
+   * because a scan never raises the flag and must never lower one that was already up.
+   */
+  const lastScanRef = useRef<{
+    lineId: string
+    addedQty: number
+    clearPickedOnUndo: boolean
+  } | null>(null)
   const [editingLineId, setEditingLineId] = useState<string | null>(null)
+  /**
+   * Whether the PO item picker is open. It is BOTH the render switch and the guard on the two
+   * effects below — see P-9.7/P-9.8 and the comment in `components/item-picker.tsx`: while this
+   * overlay is up, the barcode field must not take focus back and the scanner wedge must not
+   * redirect keystrokes into it, or the picker's search field cannot be typed into at all.
+   */
+  const [pickerOpen, setPickerOpen] = useState(false)
+  /**
+   * Read ONCE per mount, not subscribed. Pengaturan is a different route, so coming back from it
+   * remounts this component and picks up the new value; `playFeedback` reads preferences the same
+   * way, on every call, with no subscription anywhere.
+   */
+  const [manualPickEnabled] = useState(() => loadPreferences().manualPick)
   // Lives here, not in ScanBar: ScanBar unmounts on every tab switch, so keeping it there would
   // reopen the keypad each time the operator comes back to the scan tab. It always starts closed —
   // the "123" button is the only way in, and the qty field itself is always typable.
   const [padOpen, setPadOpen] = useState(false)
   const tabMetaKey = sessionTabKey(sessionId)
   const savedTab = useLive(() => localRepo.getMeta(tabMetaKey), [tabMetaKey], null)
+  /**
+   * The PO's own lines, loaded ONLY while the picker is open: this component re-renders on every
+   * character the scanner types, and the scan loop must not pay for a list it is not showing.
+   *
+   * `getPurchaseDetail` is reused as-is instead of getting a leaner sibling. It already returns,
+   * per PO line, the master row (name, code, all three barcodes) and the three qty numbers that
+   * `buildPickerItems` needs — so a new repository method would only be a second definition of the
+   * same query, free to drift.
+   */
+  const pickerDetail = useLive(
+    async () => (pickerOpen && session ? localRepo.getPurchaseDetail(session.purchaseId) : null),
+    [pickerOpen, session?.purchaseId],
+    null,
+  )
+  /**
+   * `lines` is this session's own lines, which is what makes "sudah N di sesi ini" honest — see the
+   * note on `buildPickerItems` about `localPendingQty` counting a colleague's running session too.
+   */
+  const pickerItems = useMemo(
+    () =>
+      pickerDetail
+        ? buildPickerItems(pickerDetail.items, lines, (uomId) => unitMap.get(uomId) ?? uomId)
+        : [],
+    [pickerDetail, lines, unitMap],
+  )
   // Anything other than 'items' falls back to 'scan', which also migrates a device that still has
   // 'docs' saved from before the review screen existed: the value stays in Dexie until the
   // session is deleted, so it must not be able to select a tab that is gone.
@@ -102,11 +155,14 @@ function SessionDetailPage() {
   // `tab` is in the deps because the barcode field only exists on the scan tab: coming back from
   // the item tab remounts it, and without this the focus would stay on the tab button.
   useEffect(() => {
-    if (!canEdit || editingLineId) return
+    // `pickerOpen` belongs in this condition for the same reason `editingLineId` does: while a
+    // dialog with its own text field is up, the focus is ITS business. Without it, this effect
+    // would pull the focus out of the picker's search field on every re-render.
+    if (!canEdit || editingLineId || pickerOpen) return
     if (tab !== 'scan') return
     const frame = window.requestAnimationFrame(() => scanRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [canEdit, tab, editingLineId])
+  }, [canEdit, tab, editingLineId, pickerOpen])
 
   // Scanner wedge. The effect above only runs when one of its deps changes, so a tap on dead space
   // (the context strip, the empty area of the scan result, the app bar title) drops focus to <body>
@@ -115,7 +171,13 @@ function SessionDetailPage() {
   // triggering character included — into the barcode field. From the second character onwards the
   // field has focus and receives them normally, and the scanner's closing Enter lands there too.
   useEffect(() => {
-    if (!canEdit || editingLineId) return
+    // `pickerOpen` again, and here it is the one that actually breaks things when forgotten: this
+    // listener sits on `window`, so it fires for keystrokes typed into the picker's search field
+    // too — `event.target` is that `<input>`, which the guard below lets through, but the moment the
+    // operator taps the picker's heading the focus is on a non-field element and every character
+    // gets redirected into the barcode field BEHIND the overlay. Invisible, and it reads as a broken
+    // keyboard.
+    if (!canEdit || editingLineId || pickerOpen) return
     if (tab !== 'scan') return
     const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) return
@@ -143,7 +205,7 @@ function SessionDetailPage() {
     }
     window.addEventListener('keydown', onWindowKeyDown)
     return () => window.removeEventListener('keydown', onWindowKeyDown)
-  }, [canEdit, tab, editingLineId])
+  }, [canEdit, tab, editingLineId, pickerOpen])
 
   const dismissHero = useCallback(() => setHeroState({ kind: 'IDLE' }), [])
 
@@ -178,6 +240,46 @@ function SessionDetailPage() {
     : undefined
   const editingItem = editingLine ? items[editingLine.itemMasterId] : undefined
 
+  /**
+   * The OK/OVER card for ONE successful addition. Shared by the scanner and the PO picker, so both
+   * report a receipt the same way — over-receive included.
+   *
+   * Keeping it in one place is what stops the picker from quietly skipping the OVER card, which is
+   * the only warning the operator gets at the moment a qty goes above the order. A second copy of
+   * "excess = serverReceived + line.qty − ordered" is exactly the kind of duplication that drifts.
+   *
+   * Declared inside the component because it reads `unitMap`. It holds no state of its own.
+   */
+  const addedHero = (
+    itemName: string,
+    itemCode: string | null,
+    addedQty: number,
+    line: LocalSessionItem,
+    ordered: number,
+    serverReceived: number,
+  ): ScanHeroState => {
+    // `line.qty` is the line's total AFTER the merge, so this is the item's new total, not the
+    // addition. That is what both cards report.
+    const itemTotal = serverReceived + line.qty
+    const excess = itemTotal - ordered
+    const purchaseUnit = unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId
+    if (excess > 0) {
+      return { kind: 'OVER', itemName, ordered, newTotal: itemTotal, excess, unit: purchaseUnit }
+    }
+    return {
+      kind: 'OK',
+      itemName,
+      itemCode,
+      addedQty,
+      purchaseUnit,
+      stockQty: addedQty * line.convQty,
+      stockUnit: unitMap.get(line.uomId) ?? line.uomId,
+      itemOrdered: ordered,
+      itemTotal,
+      itemServerReceived: serverReceived,
+    }
+  }
+
   const processScan = async (code: string, qtyText: string) => {
     try {
       const addedQty = Number(qtyText)
@@ -191,37 +293,19 @@ function SessionDetailPage() {
       if (result.ok && result.line && result.resolution.purchaseItem && result.resolution.item) {
         const purchaseItem = result.resolution.purchaseItem
         const line = result.line
-        const ordered = Number(purchaseItem.qty ?? 0)
-        const serverReceived = Number(purchaseItem.receivedQty ?? 0)
-        const itemTotal = serverReceived + line.qty
-        const excess = itemTotal - ordered
-        const purchaseUnit = unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId
-        lastScanRef.current = { lineId: line.lineId, addedQty }
-        if (excess > 0) {
-          setHeroState({
-            kind: 'OVER',
-            itemName: result.resolution.item.name,
-            ordered,
-            newTotal: itemTotal,
-            excess,
-            unit: purchaseUnit,
-          })
-          playFeedback('over')
-        } else {
-          setHeroState({
-            kind: 'OK',
-            itemName: result.resolution.item.name,
-            itemCode: result.resolution.item.code,
-            addedQty,
-            purchaseUnit,
-            stockQty: addedQty * line.convQty,
-            stockUnit: unitMap.get(line.uomId) ?? line.uomId,
-            itemOrdered: ordered,
-            itemTotal,
-            itemServerReceived: serverReceived,
-          })
-          playFeedback('success')
-        }
+        const hero = addedHero(
+          result.resolution.item.name,
+          result.resolution.item.code,
+          addedQty,
+          line,
+          Number(purchaseItem.qty ?? 0),
+          Number(purchaseItem.receivedQty ?? 0),
+        )
+        // A scan never raises the manual flag, so undo of a scan must never lower one that was
+        // already up: that flag belongs to an earlier pick this undo has nothing to do with.
+        lastScanRef.current = { lineId: line.lineId, addedQty, clearPickedOnUndo: false }
+        setHeroState(hero)
+        playFeedback(hero.kind === 'OVER' ? 'over' : 'success')
         setQty('1')
         setQtyTouched(false)
       } else if (result.resolution.status === 'ITEM_NOT_FOUND') {
@@ -266,9 +350,13 @@ function SessionDetailPage() {
   }
 
   /**
-   * Undo subtracts exactly the qty the last scan added. `addOrIncrementLine` merges repeated
-   * scans of one item into a single line, so removing the whole line would delete more than
-   * the last scan; the line is only removed when nothing would be left.
+   * Undo takes back exactly the qty the last addition added — a scan or a pick, the same way.
+   * `addOrIncrementLine` merges repeated additions for one item into a single line, so removing the
+   * whole line would delete more than the last addition; the line is only removed when nothing
+   * would be left.
+   *
+   * The manual flag is lowered only when `clearPickedOnUndo` says this very addition raised it.
+   * Nothing else in the app lowers it — see `addOrIncrementLine`, where it can only go up.
    */
   const handleUndo = async () => {
     const target = lastScanRef.current
@@ -279,11 +367,18 @@ function SessionDetailPage() {
       const line = await localRepo.db.sessionItems.get(target.lineId)
       if (!line) return
       const next = line.qty - target.addedQty
-      if (next > 0) await localRepo.setLineQty(target.lineId, next)
-      else await localRepo.removeLine(target.lineId)
-      toast('info', 'Scan terakhir dibatalkan.')
+      if (next > 0) {
+        await localRepo.setLineQty(target.lineId, next)
+        if (target.clearPickedOnUndo) await localRepo.setLinePickedManually(target.lineId, false)
+      } else {
+        // The whole line goes, and the flag goes with it. No second write needed.
+        await localRepo.removeLine(target.lineId)
+      }
+      // "Penambahan", not "Scan": one undo serves both paths now, and on the picker path there was
+      // no scan to speak of.
+      toast('info', 'Penambahan terakhir dibatalkan.')
     } catch {
-      toast('danger', 'Gagal membatalkan scan terakhir.')
+      toast('danger', 'Gagal membatalkan penambahan terakhir.')
     } finally {
       scanRef.current?.focus()
     }
@@ -330,6 +425,88 @@ function SessionDetailPage() {
     // error handling itself throw (e.g. in the feedback), so later scans are never dropped.
     scanQueueRef.current = scanQueueRef.current
       .then(() => processScan(code, qtyText))
+      .catch(() => undefined)
+  }
+
+  /**
+   * Writes one picked line. Deliberately shaped like `processScan`: same resolution type, same
+   * card, same sound, same return of focus to the barcode field.
+   *
+   * The failure branch does NOT show the NOT_FOUND card. That card is about a barcode, and this
+   * path never had one — `addPickedItem`'s two failures are both "the device's data is incomplete",
+   * which is a sentence, not a card. They are also not reachable through the picker's UI, which
+   * disables a row whose master row is missing.
+   */
+  const processPick = async (purchaseItemId: string, pickedQty: number) => {
+    try {
+      /**
+       * Read from the DATABASE, here inside the queued task, immediately before the write — never
+       * from the `pickerItems` snapshot the operator tapped.
+       *
+       * `clearPickedOnUndo` is `!pickedBefore`, so a stale `false` does not fail safe: it would make
+       * undo CLEAR a flag an earlier pick had legitimately raised, leaving a line whose remaining qty
+       * never saw a barcode without the badge that says so. The opposite staleness cannot happen —
+       * only `handleUndo` ever lowers the flag, and it empties `lastScanRef` first. Inside the serial
+       * queue this read is also ordered after every addition already in flight.
+       */
+      const existing = await localRepo.findSessionLine(session.sessionId, purchaseItemId)
+      const pickedBefore = existing?.pickedManually ?? false
+      const result = await addPickedItem(
+        localRepo,
+        session.sessionId,
+        session.purchaseId,
+        purchaseItemId,
+        pickedQty,
+      )
+      const item = result.resolution.item
+      const purchaseItem = result.resolution.purchaseItem
+      if (result.ok && result.line && purchaseItem && item) {
+        const line = result.line
+        const hero = addedHero(
+          item.name,
+          item.code,
+          pickedQty,
+          line,
+          Number(purchaseItem.qty ?? 0),
+          Number(purchaseItem.receivedQty ?? 0),
+        )
+        // Undo lowers the flag again only when THIS addition is what raised it.
+        lastScanRef.current = {
+          lineId: line.lineId,
+          addedQty: pickedQty,
+          clearPickedOnUndo: !pickedBefore,
+        }
+        setHeroState(hero)
+        playFeedback(hero.kind === 'OVER' ? 'over' : 'success')
+      } else {
+        lastScanRef.current = null
+        toast('danger', result.message)
+        playFeedback('danger')
+      }
+    } catch (error) {
+      lastScanRef.current = null
+      toast('danger', error instanceof Error ? error.message : 'Gagal menyimpan item.')
+      playFeedback('danger')
+    } finally {
+      scanRef.current?.focus()
+    }
+  }
+
+  /**
+   * "Tambahkan ke sesi" in the picker.
+   *
+   * It goes through the SAME serial queue as `handleAdd`, so a pick cannot interleave with a burst
+   * the scanner already fired — `addOrIncrementLine` is transactional either way, but the card and
+   * `lastScanRef` would otherwise be able to describe a different addition than the last one.
+   *
+   * It deliberately carries NO state of its own into the queue — not even whether the line was
+   * already flagged as manual. `processPick` reads that from the database at the moment it writes;
+   * see the comment there for why a snapshot taken at tap time is the wrong source.
+   */
+  const handlePick = (purchaseItemId: string, pickedQty: number) => {
+    setPickerOpen(false)
+    scanQueueRef.current = scanQueueRef.current
+      .then(() => processPick(purchaseItemId, pickedQty))
       .catch(() => undefined)
   }
 
@@ -396,6 +573,8 @@ function SessionDetailPage() {
             onUndo={() => void handleUndo()}
             onDismiss={dismissHero}
             onOpenPurchase={(purchaseId) => void openPurchase(purchaseId)}
+            // Only the NOT_FOUND card uses this — see the prop's own comment in scan-hero.tsx.
+            onPickFromPo={manualPickEnabled ? () => setPickerOpen(true) : undefined}
           />
         ) : null}
 
@@ -434,7 +613,13 @@ function SessionDetailPage() {
                             </p>
                           ) : null}
                         </div>
-                        {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
+                        {/* Stacked, not side by side: a line can be both over-received and partly
+                            manual, and at 360px two badges in a row push the item name into a third
+                            line of wrapping. */}
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
+                          {line.pickedManually ? <Badge tone="neutral">Manual</Badge> : null}
+                        </div>
                       </div>
                     </button>
                   </li>
@@ -555,6 +740,9 @@ function SessionDetailPage() {
                   setQtyTouched(true)
                 }}
                 onAdd={() => void handleAdd()}
+                // `undefined` when the operator turned the feature off in Pengaturan: that is the
+                // whole switch, and ScanBar then renders exactly the old disabled "+".
+                onOpenPicker={manualPickEnabled ? () => setPickerOpen(true) : undefined}
                 // Escape clears a result that is WAITING for the operator. The success card is
                 // not waiting — it is replaced by the next scan — and clearing it would remove
                 // "Batalkan scan ini", the only route to the precise undo of the last increment.
@@ -572,6 +760,18 @@ function SessionDetailPage() {
             docsComplete={Boolean(session.invoiceNumber.trim() && session.doNumber.trim())}
           />
         </div>
+      ) : null}
+
+      {/* Rendered last and positioned `fixed`, so it covers the scan bar and the tab bar instead of
+          being clipped by them. Gated on `editable`, so a colleague's document and a finalised one
+          have no way in — the same gate every other control that writes to the session uses. */}
+      {editable && pickerOpen ? (
+        <ItemPicker
+          purchaseLabel={session.purchaseNumber ?? session.purchaseId}
+          items={pickerItems}
+          onPick={handlePick}
+          onClose={() => setPickerOpen(false)}
+        />
       ) : null}
 
       {editable && editingLine && editingItem ? (

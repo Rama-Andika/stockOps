@@ -37,12 +37,24 @@ export function ScanHero({
   onUndo,
   onDismiss,
   onOpenPurchase,
+  onPickFromPo,
 }: {
   state: ScanHeroState
   onUndo: () => void
   onDismiss: () => void
   /** Open another PO. A callback, not a <Link>, on purpose — see the note in F5c-3b. */
   onOpenPurchase: (purchaseId: string) => void
+  /**
+   * Opens the PO item picker from the NOT_FOUND card, and ONLY from there. Optional, so the whole
+   * action disappears when the operator turned the feature off in Pengaturan.
+   *
+   * Deliberately not offered on NOT_IN_PO. There, the barcode WAS recognised and the answer is
+   * definite: the item is not part of this PO. The picker only ever lists this PO's own lines, so
+   * the item is guaranteed not to be in it — the action would send the operator looking for
+   * something that cannot be there. That card already has the right way out ("Buka PO itu"), and a
+   * third button would leave all three about 104px wide at 360px, too narrow for its label.
+   */
+  onPickFromPo?: () => void
 }) {
   if (state.kind === 'IDLE') {
     return (
@@ -115,13 +127,35 @@ export function ScanHero({
           ditambahkan. Laporkan ke admin, atau unduh ulang data master lewat Pengaturan bila perangkat
           sedang online.
         </p>
-        <button
-          type="button"
-          className="touch-target mt-3 w-full rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off"
-          onClick={onDismiss}
-        >
-          Mengerti, lanjut scan
-        </button>
+        {/* Two buttons side by side when the picker is available, one full-width button when it is
+            not: the row keeps the same height either way (`touch-target` on both), and this card is
+            the tallest of the four, so it has no vertical room to spare. */}
+        {onPickFromPo ? (
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className="touch-target flex-1 rounded-lg bg-brand px-2 font-semibold text-on-brand transition hover:bg-brand-bright"
+              onClick={onPickFromPo}
+            >
+              Pilih dari PO
+            </button>
+            <button
+              type="button"
+              className="touch-target flex-1 rounded-lg bg-control px-2 font-semibold text-fg transition hover:bg-control-off"
+              onClick={onDismiss}
+            >
+              Lanjut scan
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="touch-target mt-3 w-full rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off"
+            onClick={onDismiss}
+          >
+            Mengerti, lanjut scan
+          </button>
+        )}
       </section>
     )
   }

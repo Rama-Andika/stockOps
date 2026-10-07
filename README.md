@@ -153,6 +153,17 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
   pengiriman, BR-4) dan **hanya sesi milik sendiri** (sesi rekan untuk PO yang sama tetap boleh
   didampingi sesi baru, dengan peringatan yang menyebut pemiliknya). Membuat dokumen kedua **tetap
   diizinkan** tanpa syarat tambahan dan tanpa jejak khusus.
+- **Pilih item dari daftar PO (jalan masuk tanpa scan):** barang tanpa barcode, berlabel rusak, atau
+  curah bisa ditambahkan dengan memilih barisnya langsung dari daftar item PO, lalu mengisi qty.
+  Pintu masuknya ada di slot kanan bilah scan selama kolom barcode kosong, dan di kartu hasil scan
+  "Tidak dikenal"; bisa dimatikan per perangkat lewat Pengaturan (default menyala). Qty yang diisi
+  **ditambahkan** ke qty yang sudah ada di sesi, sama seperti scan — satu PO item selalu satu baris
+  (index `[sessionId+purchaseItemId]`). Konversi satuan, penilaian over-receive, dan bentuk baris
+  yang dikirim ke server **identik** dengan jalur scan. Baris yang pernah menerima qty tanpa scan
+  ditandai `pickedManually` di perangkat (sticky: artinya "sebagian qty baris ini tidak pernah
+  diverifikasi barcode"), tampil sebagai penanda "Manual" di daftar item sesi dan di layar review,
+  dan **tidak dikirim ke server** — `pos_receive_item.memo` tetap hanya memuat `PDT|OVER`. Penanda
+  itu hanya turun kembali bila penambahan yang menyalakannya dibatalkan lewat tombol undo.
 
 ### 3.3 Keputusan untuk celah yang ada di PRD (didokumentasikan, bukan disembunyikan)
 
@@ -364,5 +375,14 @@ pekerjaan terpisah yang belum dijadwalkan.
   diperiksa admin, bukan data yang hilang. Penanganan balapan juga hanya sebatas tombol yang mati
   selama proses (`busy`), bukan transaksi atomik, sehingga ketukan ganda dalam hitungan milidetik
   pada perangkat yang sangat lambat secara teoretis masih bisa lolos.
+- **Penanda "Manual" berhenti di perangkat.** Jalur "pilih item dari daftar PO" menghapus
+  satu-satunya verifikasi fisik yang dimiliki alur ini — barcode yang cocok dengan barang di tangan —
+  dan mitigasinya (flag sticky, penanda di layar review, saklar di Pengaturan) seluruhnya berjalan di
+  PDT. Server tidak tahu bedanya, jadi pertanyaan seperti "berapa persen baris penerimaan yang tidak
+  pernah discan?" **tidak bisa dijawab** dari data pusat. Menambahkannya nanti berarti menitipkan
+  penanda di `pos_receive_item.memo` (mis. `PDT|PICK` di samping `PDT|OVER`); itu bisa dilakukan
+  tanpa membatalkan apa pun, tapi data historis sebelum perubahan itu hilang untuk selamanya.
+  Saklarnya juga per perangkat dan bisa dibalik operator mana pun — pencegah kekeliruan, bukan
+  kontrol akses.
 - Percobaan login online belum dibatasi (tanpa rate limit/lockout) dan password `sysuser` bersifat
   plaintext (legacy sistem admin).

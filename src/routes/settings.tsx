@@ -23,6 +23,7 @@ import {
   Database,
   Download,
   HardDrive,
+  ListChecks,
   RefreshCw,
   ShieldCheck,
   Smartphone,
@@ -374,6 +375,35 @@ function SettingsPage() {
               updatePreferences({ feedbackVibrate: checked })
             }
           />
+        </div>
+      </Card>
+
+      {/* 3b. Cara Input Barang */}
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <ListChecks
+              className="h-5 w-5 text-brand-bright"
+              aria-hidden="true"
+            />
+            <span>Cara Input Barang</span>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-2.5">
+          <SettingRow
+            icon={ListChecks}
+            title="Pilih Item dari Daftar PO"
+            description="Izinkan menambah item tanpa scan, dipilih langsung dari daftar item PO. Untuk barang tanpa barcode atau label rusak."
+            checked={preferences.manualPick}
+            onChange={(checked) => updatePreferences({ manualPick: checked })}
+          />
+          <p className="text-xs text-fg-subtle px-1">
+            Switch ini berlaku untuk perangkat ini saja dan bisa diubah operator mana
+            pun — pencegah kekeliruan, bukan kontrol akses. Dokumen yang sudah
+            terkirim tidak terpengaruh, dan penanda "Manual" tidak dikirim ke
+            server.
+          </p>
         </div>
       </Card>
 

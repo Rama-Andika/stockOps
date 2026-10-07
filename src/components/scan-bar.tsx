@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import { Plus } from 'lucide-react'
+import { ListChecks, Plus } from 'lucide-react'
 import { NumericPad } from './numeric-pad'
 import { inputClass } from './ui'
 
@@ -20,6 +20,7 @@ export function ScanBar({
   onQtyChange,
   onAdd,
   onEscape,
+  onOpenPicker,
 }: {
   scan: string
   qty: string
@@ -32,6 +33,13 @@ export function ScanBar({
   onAdd: () => void
   /** Escape with the keypad already closed. The session screen clears the scan result with it. */
   onEscape?: () => void
+  /**
+   * Opens the PO item picker. Optional, and that is how the feature is switched off: the cockpit
+   * passes `undefined` when the operator turned it off in Pengaturan, and the right-hand slot then
+   * falls back to exactly the old disabled "+" button. One source of truth for the toggle, with no
+   * second boolean prop that could disagree with it.
+   */
+  onOpenPicker?: () => void
 }) {
 
   return (
@@ -135,16 +143,40 @@ export function ScanBar({
         >
           123
         </button>
-        <button
-          type="button"
-          aria-label="Tambah ke sesi"
-          className="touch-target w-14 shrink-0 rounded-lg bg-brand text-on-brand transition hover:bg-brand-bright disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft"
-          disabled={!scan.trim()}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onAdd}
-        >
-          <Plus className="mx-auto h-6 w-6" aria-hidden="true" />
-        </button>
+        {/* One slot, two jobs.
+
+            With something in the barcode field this is "add". With the field EMPTY, "add" can do
+            nothing at all — it was a dead, disabled square — so the same slot offers the other way
+            into a line instead. There is no fifth button on purpose: at 360px the four controls
+            beside the barcode field already leave it 144px
+            (360 − 24 padding − 24 gaps − 168 for three w-14 squares), and another 56px square would
+            cut that to 80px, too narrow to read a code being typed.
+
+            The trade-off, accepted: while the barcode field has content the picker is not reachable
+            from this bar. Clearing the field brings it back, and the case that matters most —
+            a barcode that is not recognised — has its own door on the NOT_FOUND card. */}
+        {onOpenPicker && !scan.trim() ? (
+          <button
+            type="button"
+            aria-label="Pilih item dari daftar PO"
+            className="touch-target w-14 shrink-0 rounded-lg bg-control text-fg transition hover:bg-control-off"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onOpenPicker}
+          >
+            <ListChecks className="mx-auto h-6 w-6" aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Tambah ke sesi"
+            className="touch-target w-14 shrink-0 rounded-lg bg-brand text-on-brand transition hover:bg-brand-bright disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft"
+            disabled={!scan.trim()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onAdd}
+          >
+            <Plus className="mx-auto h-6 w-6" aria-hidden="true" />
+          </button>
+        )}
       </div>
     </div>
   )

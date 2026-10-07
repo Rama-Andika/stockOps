@@ -85,6 +85,7 @@ describe('preferensi perangkat', () => {
       feedbackBeep: true,
       feedbackVibrate: true,
       highContrast: false,
+      manualPick: true,
     })
   })
 
@@ -93,11 +94,13 @@ describe('preferensi perangkat', () => {
       feedbackBeep: false,
       feedbackVibrate: true,
       highContrast: true,
+      manualPick: true,
     })
     expect(loadPreferences()).toEqual({
       feedbackBeep: false,
       feedbackVibrate: true,
       highContrast: true,
+      manualPick: true,
     })
   })
 
@@ -113,6 +116,7 @@ describe('preferensi perangkat', () => {
       feedbackBeep: true,
       feedbackVibrate: false,
       highContrast: false,
+      manualPick: true,
     })
   })
 })
@@ -317,6 +321,110 @@ describe('ScanBar', () => {
     // aria-invalid state would become unreachable — with no other test failing.
     fireEvent.change(qtyInput, { target: { value: '' } })
     expect(onQtyChange).toHaveBeenLastCalledWith('')
+  })
+})
+
+describe('ScanBar — slot kanan: picker vs tambah', () => {
+  // A harness of its own, with `scan` as a parameter: the one above hard-codes an empty barcode
+  // field, which is exactly the state these tests have to vary.
+  function SlotHarness({ scan, onOpenPicker }: { scan: string; onOpenPicker?: () => void }) {
+    const scanRef = useRef<HTMLInputElement>(null)
+    return (
+      <ScanBar
+        scan={scan}
+        qty="1"
+        qtyTouched={false}
+        scanRef={scanRef}
+        padOpen={false}
+        onPadOpenChange={() => undefined}
+        onScanChange={() => undefined}
+        onQtyChange={() => undefined}
+        onAdd={() => undefined}
+        onOpenPicker={onOpenPicker}
+      />
+    )
+  }
+
+  it('field barcode kosong menampilkan tombol picker, bukan tombol tambah', () => {
+    const onOpenPicker = vi.fn()
+    render(<SlotHarness scan="" onOpenPicker={onOpenPicker} />)
+
+    fireEvent.click(screen.getByLabelText('Pilih item dari daftar PO'))
+    expect(onOpenPicker).toHaveBeenCalledTimes(1)
+    // Satu slot, dua fungsi — tidak ada tombol kelima di baris ini.
+    expect(screen.queryByLabelText('Tambah ke sesi')).toBeNull()
+  })
+
+  it('field barcode berisi menampilkan tombol tambah yang aktif', () => {
+    render(<SlotHarness scan="8991002103458" onOpenPicker={() => undefined} />)
+
+    expect(screen.getByLabelText('Tambah ke sesi')).toBeEnabled()
+    expect(screen.queryByLabelText('Pilih item dari daftar PO')).toBeNull()
+  })
+
+  it('tanpa onOpenPicker, slot itu berperilaku persis seperti sebelum fitur ini ada', () => {
+    render(<SlotHarness scan="" />)
+
+    expect(screen.queryByLabelText('Pilih item dari daftar PO')).toBeNull()
+    expect(screen.getByLabelText('Tambah ke sesi')).toBeDisabled()
+  })
+})
+
+describe('ScanHero — pintu picker pada kartu tidak dikenal', () => {
+  it('kartu tidak dikenal menawarkan pilih dari PO dan lanjut scan', () => {
+    const onPickFromPo = vi.fn()
+    const onDismiss = vi.fn()
+    render(
+      <ScanHero
+        state={{ kind: 'NOT_FOUND', scannedCode: '8991002103458' }}
+        onUndo={vi.fn()}
+        onDismiss={onDismiss}
+        onOpenPurchase={vi.fn()}
+        onPickFromPo={onPickFromPo}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pilih dari PO' }))
+    expect(onPickFromPo).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut scan' }))
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('tanpa onPickFromPo, kartu tidak dikenal kembali ke satu tombol', () => {
+    render(
+      <ScanHero
+        state={{ kind: 'NOT_FOUND', scannedCode: '8991002103458' }}
+        onUndo={vi.fn()}
+        onDismiss={vi.fn()}
+        onOpenPurchase={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Pilih dari PO' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Mengerti, lanjut scan' })).toBeInTheDocument()
+  })
+
+  it('kartu BUKAN ITEM PO INI tidak pernah menawarkan picker, meski prop-nya diberikan', () => {
+    render(
+      <ScanHero
+        state={{
+          kind: 'NOT_IN_PO',
+          itemName: 'KECAP MANIS 600ML',
+          otherPurchase: null,
+          otherCount: 0,
+        }}
+        onUndo={vi.fn()}
+        onDismiss={vi.fn()}
+        onOpenPurchase={vi.fn()}
+        onPickFromPo={vi.fn()}
+      />,
+    )
+
+    // Barcode-nya SUDAH dikenali dan barangnya memang bukan bagian dari PO ini, jadi picker — yang
+    // hanya memuat baris PO ini — dijamin tidak memuatnya. Test ini yang menjaga keputusan itu.
+    expect(screen.queryByRole('button', { name: 'Pilih dari PO' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Mengerti, lanjut scan' })).toBeInTheDocument()
   })
 })
 

@@ -90,7 +90,7 @@ describe('migrasi Dexie v1 -> v2: nama pemilik sesi', () => {
 
     db = new StockOpsDb(name)
     await db.open()
-    expect(db.verno).toBe(2)
+    expect(db.verno).toBeGreaterThanOrEqual(2)
 
     const resolved = (await db.sessions.get('S1')) as LocalSession
     expect(resolved.userFullName).toBe('Budi Santoso')

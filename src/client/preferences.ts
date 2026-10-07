@@ -7,6 +7,14 @@ export interface Preferences {
   feedbackVibrate: boolean
   /** Solid surfaces + stronger borders, for a bright loading dock. */
   highContrast: boolean
+  /**
+   * Allow adding a session line by picking it from the PO item list instead of scanning it.
+   *
+   * Default ON: it is the only way to record goods whose barcode cannot be scanned. Per device, and
+   * flippable by whoever holds the PDT — a mistake guard, not access control, like every other rule
+   * in this app that runs on the device.
+   */
+  manualPick: boolean
 }
 
 const STORAGE_KEY = 'stockops.preferences'
@@ -15,6 +23,7 @@ const DEFAULTS: Preferences = {
   feedbackBeep: true,
   feedbackVibrate: true,
   highContrast: false,
+  manualPick: true,
 }
 
 /** Read preferences from localStorage. Safe to call during prerender (without `window`). */
@@ -37,6 +46,9 @@ export function loadPreferences(): Preferences {
         typeof value.feedbackVibrate === 'boolean' ? value.feedbackVibrate : DEFAULTS.feedbackVibrate,
       highContrast:
         typeof value.highContrast === 'boolean' ? value.highContrast : DEFAULTS.highContrast,
+      // A device that was set up before this key existed reads as the default, ON — the same
+      // treatment every other key here gets, and the one that leaves the feature discoverable.
+      manualPick: typeof value.manualPick === 'boolean' ? value.manualPick : DEFAULTS.manualPick,
     }
   } catch {
     return { ...DEFAULTS }

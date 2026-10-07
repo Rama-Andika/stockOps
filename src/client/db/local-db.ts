@@ -124,6 +124,18 @@ export interface LocalSessionItem {
   uomId: string
   convQty: number
   convFound: boolean
+  /**
+   * True when any part of this line's qty was added WITHOUT a scan, from the PO item list.
+   *
+   * Sticky on purpose, and it means "part of this qty was never verified against a barcode", NOT
+   * "the current qty is manual": `addOrIncrementLine` merges a scan and a pick for the same PO item
+   * into ONE row (unique index `[sessionId+purchaseItemId]`), so a single row can hold qty from both
+   * paths. It is only ever lowered again by undoing the very addition that raised it.
+   *
+   * LOCAL ONLY. `buildSessionPayload` maps session line fields one by one, so this never reaches
+   * the server, and `pos_receive_item.memo` keeps carrying only `PDT|OVER`.
+   */
+  pickedManually: boolean
   createdAt: string
 }
 
@@ -197,6 +209,33 @@ export class StockOpsDb extends Dexie {
             // same — but a stored null says the migration DID look.
             session.userFullName = credential?.fullName ?? null
             session.userLoginId = credential?.loginId ?? null
+          })
+      })
+
+    // v3 adds ONE non-indexed field to `sessionItems` (pickedManually). Like v2, the store line
+    // below is deliberately identical to the one above it: this version exists for the backfill,
+    // not for a schema change. It is restated rather than omitted so the newest version's schema
+    // stays readable in one place.
+    //
+    // No index on `pickedManually` on purpose: nothing queries by it. Both readers (the item tab
+    // and the review recap) already hold the session's lines in memory, and an index nothing
+    // queries would only cost write time on every single scan.
+    this.version(3)
+      .stores({
+        sessionItems: 'lineId, sessionId, purchaseItemId, [sessionId+purchaseItemId]',
+      })
+      .upgrade(async (tx) => {
+        // Runs ONLY when an existing v1/v2 database is opened. A fresh install (and every
+        // `new StockOpsDb(...)` in the tests) is created at v3 directly and never calls this.
+        //
+        // Explicit `false`, never left undefined: every line written before this feature existed
+        // came from a scan, and the type declares the field as required, so the UI may read it
+        // without a fallback.
+        await tx
+          .table<LocalSessionItem>('sessionItems')
+          .toCollection()
+          .modify((line) => {
+            line.pickedManually = false
           })
       })
   }
