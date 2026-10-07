@@ -101,3 +101,38 @@ export function splitByOwner<T extends Pick<SessionOwnerInput, 'userId'>>(
   }
   return { mine, others }
 }
+
+/**
+ * The operator's OWN still-running session for one PO, or `undefined` when they have none.
+ *
+ * This is the whole "dedupe sesi per PO" rule, and it lives here for the same reason the rest of
+ * this file does: more than one caller asks it — the PO detail screen before it creates a session,
+ * the cockpit's "Buka PO itu" shortcut, and the tests that lock both — and the same `.find()`
+ * written in each place is a standing invitation for them to disagree about two things: whether a
+ * colleague's session counts (it does not) and which session wins when there is more than one.
+ *
+ * Status is NOT re-checked here. Callers pass `runningSessions()`, which is RUNNING-only, and
+ * requiring a `status` field in the input type would buy nothing. That RUNNING-only scope is a
+ * product decision, not an oversight: a PENDING, SYNCING or FAILED document for the same PO is a
+ * finished document, and one PO may legitimately be received in several deliveries (BR-4). The
+ * duplicate worth stopping is the one nobody meant to create.
+ *
+ * Order is the caller's: `runningSessions()` is newest first, so the newest session wins. Data
+ * written before this feature existed can hold more than one running session for a PO, and that is
+ * deliberately not cleaned up — the others stay reachable from the receiving list.
+ *
+ * The no-user case is delegated to `isOwnedBy` rather than short-circuited here, so "nobody owns
+ * anything while nobody is logged in" keeps exactly one definition in this file.
+ */
+export function findRunningSessionForPurchase<
+  T extends Pick<SessionOwnerInput, 'userId'> & { purchaseId: string },
+>(
+  sessions: readonly T[],
+  purchaseId: string,
+  currentUserId: string | null | undefined,
+): T | undefined {
+  return sessions.find(
+    (session) => session.purchaseId === purchaseId && isOwnedBy(session, currentUserId),
+  )
+}
+

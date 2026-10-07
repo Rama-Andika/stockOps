@@ -144,6 +144,15 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
   lain **tetap** boleh diterima lewat sesi baru (dengan peringatan yang menyebut pemiliknya), dan
   **pengiriman tidak dibatasi**: tombol Kirim mendorong seluruh outbox termasuk dokumen operator
   lain, supaya dokumen final tidak tertahan menunggu pemiliknya login.
+- **Dedupe sesi per PO:** sebelum membuat sesi, layar detail PO memeriksa apakah operator yang
+  sedang login **sudah** punya sesi **berjalan** untuk PO itu (`findRunningSessionForPurchase` di
+  `src/shared/session-owner.ts`). Bila ada, muncul lembar konfirmasi dengan dua pilihan:
+  melanjutkan sesi itu, atau membuat dokumen baru. Tujuannya mencegah satu kiriman tercatat pada
+  dua dokumen. Cakupannya sengaja sempit: **hanya sesi `RUNNING`** (dokumen yang sudah difinalisasi,
+  sedang dikirim, atau gagal kirim adalah dokumen selesai — satu PO boleh diterima dalam beberapa
+  pengiriman, BR-4) dan **hanya sesi milik sendiri** (sesi rekan untuk PO yang sama tetap boleh
+  didampingi sesi baru, dengan peringatan yang menyebut pemiliknya). Membuat dokumen kedua **tetap
+  diizinkan** tanpa syarat tambahan dan tanpa jejak khusus.
 
 ### 3.3 Keputusan untuk celah yang ada di PRD (didokumentasikan, bukan disembunyikan)
 
@@ -347,5 +356,13 @@ pekerjaan terpisah yang belum dijadwalkan.
   dilanjutkan, diambil alih, atau dihapus oleh operator lain. Sesi itu menetap di perangkat, dan
   qty-nya tetap ikut dihitung pada progres PO lokal — PO-nya masih bisa diterima lewat sesi baru,
   dan layar detail PO menyebutkan asal angkanya. Fitur ambil-alih/purge belum dijadwalkan.
+- **Dedupe sesi per PO hanya berlaku di satu perangkat dan hanya untuk sesi `RUNNING`.** Server
+  tidak memeriksa apa pun saat `syncPush`, jadi dua PDT berbeda tetap bisa membuat dua dokumen untuk
+  satu kiriman yang sama. Begitu pula satu PDT yang masih memegang dokumen `Gagal kirim` untuk PO
+  itu: sesi baru tidak ditahan. Efek terburuknya tertangkap di tempat lain — server menghitung total
+  lintas semua dokumen dan menandai over-receive (BR-5) — jadi yang terjadi adalah flag yang harus
+  diperiksa admin, bukan data yang hilang. Penanganan balapan juga hanya sebatas tombol yang mati
+  selama proses (`busy`), bukan transaksi atomik, sehingga ketukan ganda dalam hitungan milidetik
+  pada perangkat yang sangat lambat secara teoretis masih bisa lolos.
 - Percobaan login online belum dibatasi (tanpa rate limit/lockout) dan password `sysuser` bersifat
   plaintext (legacy sistem admin).

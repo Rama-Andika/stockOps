@@ -18,7 +18,12 @@ import { VendorDocCard } from '~/components/vendor-doc-card'
 import { Badge, Button, Card, EmptyState, Loading, Notice, inputClass } from '~/components/ui'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
-import { canEditSession, isOwnedBy, ownerName } from '~/shared/session-owner'
+import {
+  canEditSession,
+  findRunningSessionForPurchase,
+  isOwnedBy,
+  ownerName,
+} from '~/shared/session-owner'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
   component: SessionDetailPage,
@@ -286,23 +291,26 @@ function SessionDetailPage() {
 
   /**
    * "Buka PO itu" on the NOT_IN_PO card. When this operator already has a RUNNING session of their
-   * OWN for that PO, go straight to it instead of to the PO detail screen: that screen carries no
-   * "Lanjutkan sesi berjalan" banner — that one lives on the PO LIST (routes/pos/index.tsx) — and
-   * its "Mulai Penerimaan" button calls `createSession` unconditionally, which has no dedupe. So
-   * landing there would let the operator start a SECOND session for a PO they are already
-   * receiving and record the same delivery twice.
+   * OWN for that PO, go straight to it instead of to the PO detail screen.
    *
-   * `isOwnedBy` is what keeps the shortcut useful. A colleague's RUNNING session for that PO is
-   * not something this operator may continue, so jumping into it would strand them on the
-   * ownership gate, whose only exits are "look" and "back to the list" — never the PO screen,
-   * which is exactly where they ARE allowed to start a session of their own (with the warning
-   * that names the other operator). Either way the session being left stays RUNNING in Dexie and
-   * is reachable from the session list.
+   * Since "dedupe sesi per PO" the PO screen would catch the duplicate too — it asks
+   * `findRunningSessionForPurchase` before creating anything and opens `DuplicateSessionSheet`. So
+   * this is no longer the only guard against recording one delivery twice; it is the shorter road.
+   * Keep it: dropping it turns one tap into three, and it lands the operator back in the session
+   * they were already filling instead of in a sheet asking about it.
+   *
+   * The owner filter inside the helper is what keeps the shortcut useful: a colleague's RUNNING
+   * session for that PO is not something this operator may continue, so jumping into it would
+   * strand them on the ownership gate, whose only exits are "look" and "back to the list" — never
+   * the PO screen, which is exactly where they ARE allowed to start a session of their own (with
+   * the warning that names the other operator). Either way the session being left stays RUNNING in
+   * Dexie and is reachable from the session list.
    */
   const openPurchase = async (purchaseId: string) => {
-    const running = await localRepo.runningSessions()
-    const existing = running.find(
-      (row) => row.purchaseId === purchaseId && isOwnedBy(row, currentUserId),
+    const existing = findRunningSessionForPurchase(
+      await localRepo.runningSessions(),
+      purchaseId,
+      currentUserId,
     )
     if (existing) {
       void navigate({ to: '/sessions/$sessionId', params: { sessionId: existing.sessionId } })

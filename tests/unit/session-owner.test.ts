@@ -4,6 +4,7 @@ import {
   SELF_OWNER_LABEL,
   UNKNOWN_OWNER_LABEL,
   canEditSession,
+  findRunningSessionForPurchase,
   isOwnedBy,
   ownerLabel,
   ownerName,
@@ -99,5 +100,51 @@ describe('splitByOwner', () => {
     const { mine, others } = splitByOwner([{ userId: 'U1' }, { userId: 'U9' }], null)
     expect(mine).toHaveLength(0)
     expect(others).toHaveLength(2)
+  })
+})
+
+describe('findRunningSessionForPurchase', () => {
+  // Berbentuk seperti keluaran `runningSessions()`: hanya RUNNING, terbaru di atas.
+  const sesiSaya = { sessionId: 'S1', purchaseId: 'P1', userId: 'U1' }
+  const sesiSayaLebihLama = { sessionId: 'S0', purchaseId: 'P1', userId: 'U1' }
+  const sesiRekan = { sessionId: 'S2', purchaseId: 'P1', userId: 'U9' }
+  const sesiSayaPoLain = { sessionId: 'S3', purchaseId: 'P2', userId: 'U1' }
+
+  it('menemukan sesi berjalan milik sendiri untuk PO itu', () => {
+    expect(findRunningSessionForPurchase([sesiSaya], 'P1', 'U1')?.sessionId).toBe('S1')
+  })
+
+  it('sesi rekan untuk PO yang sama BUKAN duplikat', () => {
+    // Keputusan produk, bukan kelalaian: satu PO boleh diterima dua operator di perangkat yang
+    // sama. Kalau arah ini dibalik, operator kedua kehilangan satu-satunya jalan untuk memulai
+    // sesinya sendiri — dan akan terjebak di gerbang kepemilikan sesi rekannya.
+    expect(findRunningSessionForPurchase([sesiRekan], 'P1', 'U1')).toBeUndefined()
+  })
+
+  it('sesi sendiri untuk PO lain bukan duplikat', () => {
+    expect(findRunningSessionForPurchase([sesiSayaPoLain], 'P1', 'U1')).toBeUndefined()
+  })
+
+  it('melewati sesi rekan dan tetap menemukan sesi sendiri di belakangnya', () => {
+    expect(findRunningSessionForPurchase([sesiRekan, sesiSaya], 'P1', 'U1')?.sessionId).toBe('S1')
+  })
+
+  it('bila ada beberapa sesi sendiri, yang pertama pada urutan masukan menang', () => {
+    // `runningSessions()` mengurutkan terbaru di atas, jadi "pertama" berarti "terbaru". Data yang
+    // ditulis sebelum fitur ini bisa punya lebih dari satu sesi berjalan untuk satu PO, dan itu
+    // sengaja tidak dibersihkan — jadi arah pemilihannya dipaku di sini.
+    expect(
+      findRunningSessionForPurchase([sesiSaya, sesiSayaLebihLama], 'P1', 'U1')?.sessionId,
+    ).toBe('S1')
+  })
+
+  it('tanpa user login, tidak ada yang dianggap duplikat', () => {
+    expect(findRunningSessionForPurchase([sesiSaya], 'P1', null)).toBeUndefined()
+    expect(findRunningSessionForPurchase([sesiSaya], 'P1', undefined)).toBeUndefined()
+  })
+
+  it('daftar kosong aman', () => {
+    const kosong: (typeof sesiSaya)[] = []
+    expect(findRunningSessionForPurchase(kosong, 'P1', 'U1')).toBeUndefined()
   })
 })
