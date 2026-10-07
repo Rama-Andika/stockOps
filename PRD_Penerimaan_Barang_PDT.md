@@ -446,6 +446,18 @@ Setiap kebutuhan fungsional diberi ID `FR-<fitur>.<nomor>` dan ditulis dalam ben
 - Aplikasi menampilkan perkiraan pemakaian penyimpanan lokal (opsional).
 - Data sesi yang sudah tersinkron dapat dibersihkan dari device (dengan konfirmasi), sedangkan data master tetap dipertahankan.
 
+#### FR-8.3 — Layar diagnostik & ekspor log
+**Cerita pengguna:** Sebagai tim IT, saya ingin melihat riwayat teknis sebuah device dan menerima salinannya, sehingga saya bisa menjawab "kenapa dokumen ini tidak muncul di admin?" tanpa menebak.
+
+**Kriteria penerimaan:**
+- Tersedia layar diagnostik yang dapat dibuka dari Pengaturan (bagian **Info**), berisi: jumlah sesi per status, waktu kirim terakhir, waktu unduh terakhir, penanda daftar PO perlu disegarkan, dan daftar log terbaru.
+- Log mencatat kejadian **jaringan** (sinkronisasi & unduh data) dan **teknis** (error aplikasi, versi baru PWA siap). Jejak login/kredensial dan jejak aksi operator (scan, qty) **tidak** dicatat.
+- Daftar log diurutkan terbaru lebih dulu dan dapat disaring menjadi hanya entri `warn` & `error`.
+- Log dapat diekspor menjadi **satu berkas CSV** yang berisi potret perangkat, daftar sesi, dan isi log; berkas dibuat **sepenuhnya di device** dan tidak dikirim ke server mana pun.
+- Jika perangkat tidak mendukung unduhan berkas, aplikasi menyalin ringkasan ke clipboard dan mengatakannya kepada operator — bukan gagal tanpa pesan.
+- Log dibatasi **2000 entri terbaru** agar tidak memenuhi penyimpanan device, bertahan setelah logout, dan dapat dihapus manual dengan konfirmasi.
+- Isi log tidak memuat barcode barang.
+
 ---
 
 ## 10. Aturan Bisnis (Business Rules)
@@ -717,6 +729,7 @@ Produk dianggap selesai bila semua terpenuhi:
 | 1.0 | 26 September 2026 | Versi awal — mencakup seluruh keputusan desain hasil diskusi (multi-device, over-receive + approval, generasi ID/nomor di server, login offline 7 hari, pemetaan skema & UOM). |
 | 1.1 | 26 September 2026 | Menambahkan FR-1.6 & BR-19: pencabutan kredensial otomatis saat `login_id`/`password` berubah di `sysuser` (deteksi sisi server via fingerprint, berlaku untuk semua user ter-cache, pada sinkronisasi berikutnya). |
 | 1.2 | 26 September 2026 | Menetralkan sebutan perangkat target (dari model spesifik menjadi "perangkat PDT") dan menghapus referensi alat scanner vendor-specific, agar aplikasi tidak terikat pada satu model perangkat. |
+| 1.3 | 7 Oktober 2026 | Menambahkan FR-8.3: layar diagnostik + ekspor CSV lokal, dengan ring buffer 2000 entri. Cakupan log dibatasi pada kejadian jaringan dan teknis; jejak kredensial dan aksi operator sengaja tidak dicatat, dan barcode tidak pernah masuk ke log. |
 
 
 ---
@@ -736,7 +749,7 @@ Konvensinya ada di `CLAUDE.md`, bagian "What this is".
 | FR-5.x — Sinkronisasi (FIFO, idempotensi, penomoran, kegagalan, transaksi) | `src/client/sync/engine.ts` (`syncOutbox`), `src/server/services/sync-service.ts`, `src/shared/memo.ts`, `src/shared/doc-number.ts`, `src/shared/ids.ts` |
 | FR-6.x — Over-receive: hitung, tandai, tampilkan, worklist admin | `src/shared/over-receive.ts`, `src/shared/memo.ts`, `src/server/services/sync-service.ts` (`overReceiveWorklist`), `src/routes/over-receive.tsx` |
 | FR-7.x — Indikator koneksi, antrian, status sesi | `src/components/sync-status.tsx`, `src/components/session-status-row.tsx`, `src/client/sync/engine.ts` (`countPendingSessions`), `src/shared/constants.ts` (`SESSION_STATUS`) |
-| FR-8.x — Pemeliharaan: unduh ulang, kapasitas penyimpanan | `src/routes/settings.tsx`, `src/client/db/local-repo.ts` (`deleteSyncedSessions`) |
+| FR-8.x — Pemeliharaan: unduh ulang, kapasitas penyimpanan, diagnostik & ekspor log | `src/routes/settings.tsx`, `src/routes/diagnostics.tsx`, `src/client/db/local-repo.ts` (`deleteSyncedSessions`, `logEvent`, `pruneSyncLog`), `src/client/diagnostics/` (`events`, `trail`, `error-trap`, `read`, `csv`, `download`) |
 | NF-1, NF-9 — Offline penuh & pulih setelah aplikasi ditutup | `public/sw.js`, `src/client/db/local-db.ts`, `src/client/db/local-repo.ts` (sesi tersimpan sejak scan pertama) |
 | NF-4 — Performa dengan ±50 rb master barang | `src/shared/constants.ts` (`DEFAULT_PULL_CHUNK_SIZE`), `src/client/sync/engine.ts` (chunking + progress), indeks Dexie di `src/client/db/local-db.ts` |
 | NF-5 — Keamanan kredensial di device | `src/client/auth/offline-auth.ts` (PBKDF2 + salt), `src/server/auth/credentials.ts` (HMAC fingerprint), `src/client/secure-context.ts` |

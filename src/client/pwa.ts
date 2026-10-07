@@ -18,6 +18,10 @@
  * Full offline behaviour must be verified on a build (`npm run build && npm start`).
  */
 
+import { APP_VERSION } from '~/shared/app-version'
+import { DIAG_EVENT } from '~/client/diagnostics/events'
+import { recordDiag } from '~/client/diagnostics/trail'
+
 let registration: ServiceWorkerRegistration | null = null
 /** Guards the reload: `controllerchange` and the timeout fallback must never both fire it. */
 let reloading = false
@@ -34,7 +38,16 @@ export function registerServiceWorker(onUpdateReady?: () => void): void {
   const notifyIfUpdate = () => {
     // No controller means this is the first install on this device, not a new version. Without
     // this guard a brand-new operator would be asked to reload an app that is already current.
-    if (navigator.serviceWorker.controller) onUpdateReady?.()
+    if (!navigator.serviceWorker.controller) return
+    // Logged where the decision is made, not in the banner: this fires once per detected update,
+    // while the banner can be re-rendered, snoozed and shown again for the same worker.
+    recordDiag({
+      level: 'info',
+      category: 'pwa',
+      event: DIAG_EVENT.SW_UPDATE_READY,
+      message: `Versi baru siap dipasang (terpasang saat ini: ${APP_VERSION}).`,
+    })
+    onUpdateReady?.()
   }
 
   // Register immediately (without waiting for the `load` event) so the SW is guaranteed to register

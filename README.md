@@ -350,6 +350,38 @@ Ini **bukan** tema terang. Warna aplikasi ditulis sebagai kelas Tailwind `slate-
 seluruh komponen, sehingga tema terang penuh menuntut migrasi kelas-kelas itu menjadi kelas semantik —
 pekerjaan terpisah yang belum dijadwalkan.
 
+### 6.3 Diagnostik & ekspor log
+
+Pintu masuknya **Pengaturan → Info → Diagnostik & Log** (route `/diagnostics`). Layar itu untuk tim
+IT, bukan untuk operator: ia menampilkan jumlah sesi per status, waktu kirim & unduh terakhir,
+penanda daftar PO perlu disegarkan, dan daftar log terbaru yang bisa disaring jadi hanya `warn` dan
+`error`.
+
+Yang dicatat: kejadian **jaringan** (push per run, kegagalan per dokumen, unduh data, refresh PO)
+dan kejadian **teknis** (error JavaScript yang tak tertangani, versi PWA baru siap). Yang **tidak**
+dicatat, dengan sengaja: jejak login/kredensial, aksi operator (scan, qty, over-receive per scan),
+dan **barcode** — sebuah berkas diagnostik beredar lewat aplikasi chat, dan `purchaseItemId` sudah
+cukup untuk menelusuri baris yang bermasalah.
+
+Beberapa keputusan yang penting dipahami sebelum mengubahnya:
+
+- **Sukses per dokumen tidak dicatat.** Satu push membawa sampai 200 dokumen, jadi satu entri per
+  dokumen yang berhasil akan mengisi seluruh ring buffer dengan baris yang tidak pernah dibaca dan
+  menggusur kegagalan — satu-satunya alasan log ini ada. Yang dicatat: satu ringkasan per run
+  (`PUSH_RUN`), ditambah satu entri untuk setiap dokumen yang **tidak** diterima, dan satu entri
+  untuk dokumen yang diterima **dengan kelebihan terima**.
+- **Urutan memakai `id`, bukan jam perangkat.** Jam PDT bisa salah; `id` (auto-increment) tidak.
+- **Maksimal 2000 entri**, dipangkas berkala (tiap 100 penulisan, plus sekali di akhir tiap
+  sinkronisasi). Log bertahan setelah logout — justru supaya masalah shift sebelumnya masih bisa
+  ditanyakan — dan hanya hilang lewat tombol "Hapus Log".
+- **Ekspor sepenuhnya lokal.** Berkas CSV dibuat di device; tidak ada data log yang dikirim ke
+  server. Pemisahnya `;` dengan BOM UTF-8 supaya langsung terbuka benar di Excel berlokal
+  Indonesia, dan isinya satu tabel berkolom `tipe` (`META` / `SESSION` / `LOG`) sehingga satu
+  berkas membawa konteksnya sendiri.
+- **Unduhan bisa ditelan WebView.** Sebagian WebView Android tanpa `DownloadListener` mengabaikan
+  unduhan Blob tanpa pesan. Karena itu ekspor jatuh ke clipboard (ringkasan, bukan seluruh CSV —
+  2000 baris tidak akan lolos sebagai satu pesan chat) dan mengatakannya kepada operator.
+
 ## 7. Keterbatasan yang Disadari
 
 - Target perangkat (varian GMS/non-GMS, versi Android) masih perlu dikonfirmasi.

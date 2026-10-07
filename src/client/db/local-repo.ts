@@ -6,6 +6,7 @@ import {
   type LocalPurchaseItem,
   type LocalSession,
   type LocalSessionItem,
+  type LocalSyncLogEntry,
   type LocalUnit,
   type LocalVendor,
   type LocalVendorItem,
@@ -14,6 +15,13 @@ import {
 import { newUuid } from '~/shared/uuid'
 import { toLocalDateTime } from '~/shared/receive-date'
 import { SESSION_STATUS, type SessionStatus } from '~/shared/constants'
+import {
+  DIAG_LOG_MAX,
+  DIAG_MESSAGE_MAX,
+  DIAG_PROBLEM_LEVELS,
+  DIAG_PRUNE_EVERY,
+  type DiagEntryInput,
+} from '~/client/diagnostics/events'
 import { dec2 } from '~/shared/num'
 import { progressOf } from '~/shared/over-receive'
 import type { ProgressStatus } from '~/shared/constants'
@@ -117,6 +125,16 @@ export interface MasterDataSnapshot {
   }>
 }
 
+/**
+ * Writes since the ring buffer was last trimmed. Module level, not per instance: the trim must
+ * happen at most once per DIAG_PRUNE_EVERY writes across the whole app, and more than one
+ * `LocalRepository` can exist (the sync tests build their own). The trim itself always runs on
+ * the database of whichever instance is writing, so sharing the counter is harmless — but it
+ * does make pruning non-deterministic in tests, which is why the tests call `pruneSyncLog()`
+ * directly instead of writing a hundred entries.
+ */
+let logWritesSincePrune = 0
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -164,8 +182,104 @@ export class LocalRepository {
     return deviceId
   }
 
-  async log(level: 'info' | 'error', message: string, sessionId?: string): Promise<void> {
-    await this.db.syncLog.add({ at: nowIso(), level, message, sessionId })
+  /**
+   * The ONE way an entry enters the diagnostics trail.
+   *
+   * Everything funnels through here so that truncation and the ring buffer cannot be bypassed by
+   * a new call site. It must never throw at its callers: writing the trail is diagnostics, and a
+   * failed write may not change the outcome of a receiving session — `safeLog` in the sync engine
+   * and `recordDiag` in the trail module both swallow, and `syncOutbox` relies on it.
+   */
+  async logEvent(entry: DiagEntryInput): Promise<void> {
+    logWritesSincePrune += 1
+    await this.db.syncLog.add({
+      at: nowIso(),
+      level: entry.level,
+      message: entry.message.slice(0, DIAG_MESSAGE_MAX),
+      sessionId: entry.sessionId,
+      category: entry.category,
+      event: entry.event,
+      detail: entry.detail,
+    })
+    if (logWritesSincePrune < DIAG_PRUNE_EVERY) return
+    logWritesSincePrune = 0
+    try {
+      await this.pruneSyncLog()
+    } catch {
+      // The entry is already stored; a failed trim must not turn a successful write into an error.
+    }
+  }
+
+  /**
+   * Ring buffer: keeps the newest `max` entries and deletes the rest.
+   *
+   * Ordering is by primary key, never by `at`. `++id` is monotonic; `at` comes from the device
+   * clock, which on a PDT can be wrong or jump, so trimming by `at` would delete the wrong rows
+   * on exactly the day someone needs the log. `Table.limit()` walks the primary key ascending, so
+   * the first `count - max` keys ARE the oldest entries, and `primaryKeys()` reads keys only.
+   */
+  async pruneSyncLog(max: number = DIAG_LOG_MAX): Promise<number> {
+    const count = await this.db.syncLog.count()
+    if (count <= max) return 0
+    const oldest = await this.db.syncLog.limit(count - max).primaryKeys()
+    await this.db.syncLog.bulkDelete(oldest)
+    return oldest.length
+  }
+
+  async countLogEntries(): Promise<number> {
+    return this.db.syncLog.count()
+  }
+
+  /** How many entries are warn or error — the figure the diagnostics screen leads with. */
+  async countProblemLogEntries(): Promise<number> {
+    return this.db.syncLog
+      .where('level')
+      .anyOf([...DIAG_PROBLEM_LEVELS])
+      .count()
+  }
+
+  /**
+   * Newest entries first, at most `limit` of them.
+   *
+   * Both branches walk the PRIMARY KEY backwards, which is already newest-first, and let Dexie
+   * stop once `limit` rows have been produced. The problem-only branch must NOT use
+   * `where('level')`: that walks the LEVEL index, so the order would be by level rather than by
+   * time, and an earlier version therefore read every matching row and sorted in memory — up to
+   * 2000 rows (stack traces included) materialised and 90% discarded on every re-run of the live
+   * query, which fires on every Dexie commit while the screen is open.
+   *
+   * `filter` is applied before `limit` counts a row, so the limit caps RESULTS, not the scan
+   * (locked by the "saringan masalah" case in tests/client/diag-log.test.ts, where the newest rows
+   * are all `info`). The predicate asks DIAG_PROBLEM_LEVELS instead of testing `!== 'info'` so
+   * that this list and `countProblemLogEntries` can never disagree about what "a problem" is.
+   */
+  async recentLogEntries(limit: number, onlyProblems = false): Promise<LocalSyncLogEntry[]> {
+    const newestFirst = this.db.syncLog.reverse()
+    if (!onlyProblems) return newestFirst.limit(limit).toArray()
+    return newestFirst
+      .filter((row) => DIAG_PROBLEM_LEVELS.includes(row.level))
+      .limit(limit)
+      .toArray()
+  }
+
+  /** Empties the trail and reports how many entries went. Touches no session and no master data. */
+  async clearSyncLog(): Promise<number> {
+    const removed = await this.db.syncLog.count()
+    await this.db.syncLog.clear()
+    return removed
+  }
+
+  /**
+   * One count per session status, for the diagnostics snapshot. Six index counts rather than one
+   * pass over the table: `status` is indexed, so each count is answered by the index alone and the
+   * rows themselves are never read.
+   */
+  async sessionStatusCounts(): Promise<Record<SessionStatus, number>> {
+    const counts = {} as Record<SessionStatus, number>
+    for (const status of Object.values(SESSION_STATUS)) {
+      counts[status] = await this.db.sessions.where('status').equals(status).count()
+    }
+    return counts
   }
 
   /* -------------------------- Data master ------------------------- */

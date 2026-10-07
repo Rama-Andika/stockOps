@@ -19,7 +19,7 @@ type AppBarProps = {
 } & (
   | {
       /** A static destination, rendered as a router <Link>. */
-      backTo: '/pos' | '/sessions'
+      backTo: '/pos' | '/sessions' | '/settings'
       onBack?: never
     }
   | {

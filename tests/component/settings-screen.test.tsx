@@ -7,6 +7,18 @@ import type { AppState } from '~/client/state/store/types'
 import { Route } from '~/routes/settings'
 import { getToasts } from '~/client/toast'
 
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return {
+    ...actual,
+    Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) => (
+      <a href={to} {...props}>
+        {children}
+      </a>
+    ),
+  }
+})
+
 const SettingsPage = Route.options.component as React.ComponentType
 
 const baseState = {
@@ -144,13 +156,10 @@ describe('SettingsPage UI & UX', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
 
-  it('menyebutkan bahwa penanda manual tidak dikirim ke server', () => {
-    renderSettings()
-
-    // Copy-nya load-bearing: saklar ini pencegah kekeliruan, bukan kontrol akses, dan tidak boleh
-    // terbaca seolah admin akan melihat sesuatu.
-    expect(screen.getByText(/tidak dikirim ke\s+server/)).toBeInTheDocument()
-  })
+  // Paragraf penjelas di bawah saklar "Pilih Item dari Daftar PO" sengaja dihapus dari layar, jadi
+  // test yang mengunci copy-nya ikut dihapus — bukan dilonggarkan. Aturannya sendiri tidak
+  // bergantung pada copy itu: `pickedManually` tidak pernah meninggalkan perangkat karena
+  // `buildSessionPayload` memetakan field baris satu per satu, dan itulah yang dipagari tes sync.
 
   /**
    * Kedua arah dari satu aturan: app bar hanya punya SATU baris status, dan `SyncStatus`

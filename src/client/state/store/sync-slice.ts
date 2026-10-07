@@ -4,6 +4,7 @@ import { isCredentialExpired, remainingDays } from '../../auth/offline-auth'
 import { serverTransport } from '../../sync/transport'
 import { countPendingSessions, pullAllData, refreshPurchases, syncOutbox } from '../../sync/engine'
 import { PURCHASES_STALE_META_KEY } from '~/shared/constants'
+import { DIAG_EVENT } from '~/client/diagnostics/events'
 import { CURRENT_USER_KEY, isBrowser } from './helpers'
 import type { ActionResult, AppState, CurrentUser, SyncState } from './types'
 
@@ -50,7 +51,12 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Gagal memperbarui PO.'
       try {
-        await localRepo.log('error', `Refresh PO gagal, akan dicoba lagi: ${reason}`)
+        await localRepo.logEvent({
+          level: 'warn',
+          category: 'sync',
+          event: DIAG_EVENT.REFRESH_PO_RETRY_PENDING,
+          message: `Refresh PO gagal, akan dicoba lagi: ${reason}`,
+        })
       } catch {
         // Bookkeeping must not turn a sync result into an error.
       }
@@ -212,7 +218,21 @@ export const createSyncSlice: StateCreator<AppState, [], [], SyncState> = (set, 
           }
           return { ok: true, message: `Daftar PO disegarkan. ${result.purchases} PO aktif (CHECKED).` }
         } catch (error) {
-          return { ok: false, message: error instanceof Error ? error.message : 'Gagal memperbarui PO.' }
+          const reason = error instanceof Error ? error.message : 'Gagal memperbarui PO.'
+          // The manual button's own failure path. Without this, the only refresh failure with a
+          // trace would be the automatic one after a sync — and "saya sudah tekan Refresh PO tapi
+          // PO-nya tidak berubah" would stay unanswerable.
+          try {
+            await localRepo.logEvent({
+              level: 'warn',
+              category: 'pull',
+              event: DIAG_EVENT.REFRESH_PO_FAILED,
+              message: `Refresh PO gagal: ${reason}`,
+            })
+          } catch {
+            // Bookkeeping must not turn a refresh result into something else.
+          }
+          return { ok: false, message: reason }
         } finally {
           refreshInFlight = null
         }

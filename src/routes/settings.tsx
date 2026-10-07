@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { localRepo } from "~/client/db/local-repo";
 import { useAppStore } from "~/client/state/store/app-store";
@@ -20,6 +20,7 @@ import { checkForUpdate } from "~/client/pwa";
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   Clock,
   Contrast,
   Copy,
@@ -30,6 +31,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  Stethoscope,
   User,
   Vibrate,
   Volume2,
@@ -431,12 +433,6 @@ function SettingsPage() {
             checked={preferences.manualPick}
             onChange={(checked) => updatePreferences({ manualPick: checked })}
           />
-          <p className="text-xs text-fg-subtle px-1">
-            Switch ini berlaku untuk perangkat ini saja dan bisa diubah operator
-            mana pun — pencegah kekeliruan, bukan kontrol akses. Dokumen yang
-            sudah terkirim tidak terpengaruh, dan penanda "Manual" tidak dikirim
-            ke server.
-          </p>
         </div>
       </Card>
 
@@ -478,39 +474,6 @@ function SettingsPage() {
         </div>
       </Card>
 
-      {/* 4b. Versi Aplikasi */}
-      <Card
-        title={
-          <div className="flex items-center gap-2">
-            <ShieldCheck
-              className="h-5 w-5 text-brand-bright"
-              aria-hidden="true"
-            />
-            <span>Versi Aplikasi</span>
-          </div>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface/40 p-2.5">
-            <span className="text-xs text-fg-subtle">Versi terpasang</span>
-            <span className="font-mono text-sm font-bold text-fg">
-              {formatAppVersion()}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Button
-              variant="secondary"
-              className="flex w-full items-center justify-center gap-2 font-semibold"
-              disabled={!online}
-              onClick={() => void handleCheckUpdate()}
-            >
-              <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>Cek Pembaruan</span>
-            </Button>
-          </div>
-        </div>
-      </Card>
-
       {/* 5. Info & Diagnostik (Tim IT) */}
       <details className="group rounded-xl border border-line bg-surface/60 p-4 transition">
         <summary className="flex cursor-pointer items-center justify-between gap-2 text-base font-bold text-fg select-none">
@@ -528,6 +491,34 @@ function SettingsPage() {
         </summary>
 
         <div className="mt-4 flex flex-col gap-4 border-t border-line-soft pt-3">
+          {/* The only door to /diagnostics. It sits inside this collapsed "Info" block on
+              purpose: the IT team is talked through it over the phone ("Pengaturan → Info →
+              Diagnostik"), while an operator scanning all day never trips over it. A hidden
+              gesture was considered and rejected — it cannot be given over a phone call. */}
+          <Link
+            to="/diagnostics"
+            className="touch-target flex items-center justify-between gap-3 rounded-xl border border-line bg-surface/40 p-3 transition hover:border-line-hover hover:bg-surface/80"
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <Stethoscope
+                className="h-5 w-5 shrink-0 text-brand-bright"
+                aria-hidden="true"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-fg">
+                  Diagnostik &amp; Log
+                </span>
+                <span className="block text-xs text-fg-subtle">
+                  Riwayat sinkronisasi, antrean dokumen, dan ekspor CSV untuk
+                  tim IT.
+                </span>
+              </span>
+            </span>
+            <ChevronRight
+              className="h-5 w-5 shrink-0 text-fg-subtle"
+              aria-hidden="true"
+            />
+          </Link>
           {/* Data Master Terperinci */}
           <div>
             <p className="mb-1.5 text-sm font-semibold text-fg-muted">
@@ -571,6 +562,39 @@ function SettingsPage() {
         </div>
       </details>
 
+      {/* 4b. Versi Aplikasi */}
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <ShieldCheck
+              className="h-5 w-5 text-brand-bright"
+              aria-hidden="true"
+            />
+            <span>Versi Aplikasi</span>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-line-soft bg-surface/40 p-2.5">
+            <span className="text-xs text-fg-subtle">Versi terpasang</span>
+            <span className="font-mono text-sm font-bold text-fg">
+              {formatAppVersion()}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="secondary"
+              className="flex w-full items-center justify-center gap-2 font-semibold"
+              disabled={!online}
+              onClick={() => void handleCheckUpdate()}
+            >
+              <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Cek Pembaruan</span>
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       {/* 1. Akun & Sesi Operator */}
       <Card>
         <div className="flex flex-col gap-3">
@@ -602,10 +626,9 @@ function SettingsPage() {
               <button
                 type="button"
                 onClick={() => void handleCopyDeviceId()}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs w-full! text-fg-subtle transition hover:bg-raised hover:text-fg"
+                className="flex items-start gap-1 rounded-md  py-1 text-xs w-full! text-fg-subtle transition hover:bg-raised hover:text-fg"
                 title="Klik untuk menyalin Device ID"
               >
-                <Smartphone className="h-5 w-5" aria-hidden="true" />
                 <span className="font-mono">{deviceId}</span>
                 {copied ? (
                   <Check

@@ -131,6 +131,24 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
   leave that field 80px at 360px — and it is offered on the `NOT_FOUND` card but deliberately NOT on
   `NOT_IN_PO`, where the item is known to be absent from this PO and the picker lists only this PO.
 
+- **Diagnostics trail (plans/implementation-plan-diagnostik-log-ekspor.md):** `syncLog` is written
+  through ONE door, `LocalRepository.logEvent`, which is also where truncation and the 2000-entry
+  ring buffer live — a second `add()` into that table bypasses both. Entries are ordered by the
+  primary key `id`, never by `at`: a PDT clock can be wrong or jump, and `at` is read, not trusted.
+  `category`, `event` and `detail` are deliberately NOT indexed and therefore added without a new
+  Dexie version (the schema needs declarations for indexes, not for stored fields); the screen's
+  level filter rides the existing `level` index and its category filter runs in memory. An `event`
+  code travels out of the device as a CSV column, so add codes rather than renaming them. Writing
+  the trail may never throw at its caller — `safeLog` (engine, uses the INJECTED repo so the sync
+  tests hit their own database) and `recordDiag` (`src/client/diagnostics/trail.ts`, singleton,
+  fire-and-forget, self-disables after 3 consecutive write failures so a failing write cannot feed
+  the global error listener back into itself). Per-session SUCCESS is deliberately not logged —
+  one push carries up to 200 documents and would evict the failures the trail exists for; the
+  per-run `PUSH_RUN` summary carries the totals, and over-receive keeps its own `warn` entry.
+  Export is local-only: nothing is ever sent to the server, the CSV is `;`-separated with a UTF-8
+  BOM for Excel, and `downloadTextFile` returns a boolean because some Android WebViews swallow a
+  Blob download silently — the clipboard fallback is the only reason that failure is visible.
+
 ## Repo conventions
 
 - `/plans/` (gitignored) holds internal implementation plans in Indonesian; existing ones show how past features were scoped.

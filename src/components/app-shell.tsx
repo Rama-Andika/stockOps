@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAppStore } from "~/client/state/store/app-store";
 import { checkForUpdate, registerServiceWorker } from "~/client/pwa";
+import { installErrorTrap } from "~/client/diagnostics/error-trap";
 import { applyContrastPreference } from "~/client/theme";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
@@ -121,6 +122,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isLogin = location.pathname === "/login";
 
   useEffect(() => {
+    // First in this effect on purpose: everything after it may throw, and the trap is what turns
+    // such a throw into something IT can read later instead of a blank screen nobody can explain.
+    installErrorTrap();
     registerServiceWorker(markUpdateReady);
     applyContrastPreference();
     // `markUpdateReady` is a zustand action and therefore a stable reference, so this effect still

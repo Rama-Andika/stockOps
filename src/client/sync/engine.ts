@@ -9,6 +9,11 @@ import {
   PURCHASES_STALE_META_KEY,
   SESSION_STATUS,
 } from '~/shared/constants'
+import {
+  DIAG_EVENT,
+  DIAG_LAST_PUSH_META_KEY,
+  type DiagEntryInput,
+} from '~/client/diagnostics/events'
 import type {
   CredentialFingerprint,
   PullKind,
@@ -44,17 +49,24 @@ function withTimeout<T>(
 }
 
 /** Logging is diagnostics only: a failing log write must never change the outcome of a session. */
-async function safeLog(
-  repo: LocalRepository,
-  level: 'info' | 'error',
-  message: string,
-  sessionId?: string,
-): Promise<void> {
+async function safeLog(repo: LocalRepository, entry: DiagEntryInput): Promise<void> {
   try {
-    await repo.log(level, message, sessionId)
+    await repo.logEvent(entry)
   } catch {
     // Ignore: see above.
   }
+}
+
+/**
+ * Total qty a session carried, as the SERVER counted it.
+ *
+ * Logged with a rejection or a temporary failure because it is the first thing asked after "which
+ * document?" — and because it comes from the server's own answer, it also shows when the device
+ * and the server disagree. Per-line figures stay out: `purchaseItemId` already identifies a line,
+ * and nothing here carries a barcode, because a diagnostics file travels through chat apps.
+ */
+function sessionQtyTotal(result: SyncSessionResult): number {
+  return result.lines.reduce((total, line) => total + line.sessionQty, 0)
 }
 
 /** Credentials of every user cached on this device; the server uses them to authenticate the device. */
@@ -142,30 +154,58 @@ export async function pullAllData(
 
   const collected = {} as Record<PullKind, PullRows>
   const counts: Record<string, number> = {}
-  for (const kind of PULL_KIND_ORDER) {
-    const { rows, total } = await fetchAllChunks(
-      transport,
-      kind,
-      chunkSize,
-      credentials,
-      timeoutMs,
-      options.onProgress,
-    )
-    collected[kind] = rows
-    counts[kind] = rows.length || total
+  // Which half of the download is running. The two halves fail for entirely different reasons — a
+  // weak warehouse connection versus a storage quota that cannot hold the swap, which is the
+  // typical failure on a PDT — and this is what tells them apart in the exported CSV without
+  // anyone having to read the message text. The swap MUST be inside the try: it is the one step
+  // that writes ~50k rows, so it is the likeliest to fail, and it used to fail with no trace at all.
+  let phase: 'fetch' | 'swap' = 'fetch'
+  try {
+    for (const kind of PULL_KIND_ORDER) {
+      const { rows, total } = await fetchAllChunks(
+        transport,
+        kind,
+        chunkSize,
+        credentials,
+        timeoutMs,
+        options.onProgress,
+      )
+      collected[kind] = rows
+      counts[kind] = rows.length || total
+    }
+
+    phase = 'swap'
+    await repo.replaceMasterData({
+      purchases: collected.purchases as never,
+      purchaseItems: collected.purchaseItems as never,
+      items: collected.items as never,
+      units: collected.units as never,
+      vendors: collected.vendors as never,
+      vendorItems: collected.vendorItems as never,
+    })
+
+    await repo.setMeta(PURCHASES_STALE_META_KEY, '0')
+    await repo.setMeta('lastPullAt', new Date().toISOString())
+  } catch (error) {
+    // Logged here and rethrown unchanged: the caller still decides what the operator is told, but
+    // a download that died halfway now leaves a trace even when the operator simply taps again.
+    await safeLog(repo, {
+      level: 'error',
+      category: 'pull',
+      event: DIAG_EVENT.PULL_FAILED,
+      message: `Unduh data gagal: ${error instanceof Error ? error.message : 'penyebab tidak diketahui'}`,
+      detail: { phase, completedKinds: Object.keys(counts).length },
+    })
+    throw error
   }
 
-  await repo.replaceMasterData({
-    purchases: collected.purchases as never,
-    purchaseItems: collected.purchaseItems as never,
-    items: collected.items as never,
-    units: collected.units as never,
-    vendors: collected.vendors as never,
-    vendorItems: collected.vendorItems as never,
+  await safeLog(repo, {
+    level: 'info',
+    category: 'pull',
+    event: DIAG_EVENT.PULL_RUN,
+    message: `Unduh data selesai: ${counts.purchases ?? 0} PO, ${counts.items ?? 0} barang.`,
+    detail: { ...counts },
   })
-
-  await repo.setMeta(PURCHASES_STALE_META_KEY, '0')
-  await repo.setMeta('lastPullAt', new Date().toISOString())
   return { counts, pulledAt: new Date().toISOString() }
 }
 
@@ -210,6 +250,17 @@ export async function refreshPurchases(
   const after = await repo.listPurchases()
   const afterIds = new Set(after.map((purchase) => purchase.purchaseId))
   const removed = before.filter((purchase) => !afterIds.has(purchase.purchaseId))
+  await safeLog(repo, {
+    level: 'info',
+    category: 'pull',
+    event: DIAG_EVENT.REFRESH_PO_RUN,
+    message: `Daftar PO disegarkan: ${purchases.rows.length} PO aktif, ${removed.length} dihapus.`,
+    detail: {
+      purchases: purchases.rows.length,
+      purchaseItems: purchaseItems.rows.length,
+      removed: removed.length,
+    },
+  })
   return {
     purchases: purchases.rows.length,
     purchaseItems: purchaseItems.rows.length,
@@ -321,6 +372,13 @@ export async function syncOutbox(
   }
 
   if (payloads.length === 0) {
+    await safeLog(repo, {
+      level: 'warn',
+      category: 'sync',
+      event: DIAG_EVENT.PUSH_NO_PAYLOAD,
+      message: `Tidak ada dokumen yang bisa dikirim; ${pending.length} sesi di antrean ditandai gagal.`,
+      detail: { pending: pending.length },
+    })
     return { ...emptyOutcome, attempted: pending.length, failed: pending.length }
   }
 
@@ -345,7 +403,13 @@ export async function syncOutbox(
     for (const payload of payloads) {
       await repo.markFailed(payload.sessionId, message)
     }
-    await safeLog(repo, 'error', `Sinkronisasi gagal: ${message}`)
+    await safeLog(repo, {
+      level: 'error',
+      category: 'sync',
+      event: DIAG_EVENT.PUSH_TRANSPORT_FAILED,
+      message: `Sinkronisasi gagal: ${message}`,
+      detail: { sessions: payloads.length },
+    })
     return {
       attempted: payloads.length,
       synced: 0,
@@ -367,11 +431,12 @@ export async function syncOutbox(
     // Only the first answer for a session that was really sent counts. An unknown id or a second
     // answer (a faulty server or an incompatible version) must not inflate synced/failed.
     if (!payloadIds.has(result.sessionId) || answered.has(result.sessionId)) {
-      await safeLog(
-        repo,
-        'error',
-        `Hasil sinkronisasi diabaikan (sesi tidak dikenal atau ganda): ${result.sessionId}`,
-      )
+      await safeLog(repo, {
+        level: 'warn',
+        category: 'sync',
+        event: DIAG_EVENT.PUSH_RESULT_IGNORED,
+        message: `Hasil sinkronisasi diabaikan (sesi tidak dikenal atau ganda): ${result.sessionId}`,
+      })
       continue
     }
     answered.add(result.sessionId)
@@ -386,23 +451,50 @@ export async function syncOutbox(
           replay: result.code === 'IDEMPOTENT_REPLAY',
         })
         synced += 1
-        await safeLog(
-          repo,
-          result.overReceive ? 'error' : 'info',
-          result.overReceive
-            ? `Sesi tersinkron dengan over-receive: ${result.message ?? ''}`
-            : `Sesi tersinkron: ${result.number ?? ''}`,
-          result.sessionId,
-        )
+        // Only the exception is logged, never every success. One push may carry 200 documents, so
+        // an entry per accepted document would fill the whole ring buffer with rows nobody reads
+        // and push out the failures the trail exists for; the per-run summary further down carries
+        // the totals instead. A document accepted WITH an over-receive keeps its own entry,
+        // because that is the one admin comes back about — as a warning, not an error, since
+        // over-receive is flagged, not refused.
+        if (result.overReceive) {
+          await safeLog(repo, {
+            level: 'warn',
+            category: 'sync',
+            event: DIAG_EVENT.PUSH_SESSION_OVER_RECEIVE,
+            message: `Dokumen ${result.number ?? '-'} masuk dengan kelebihan terima.`,
+            sessionId: result.sessionId,
+            detail: {
+              number: result.number ?? null,
+              excessTotal: result.excessTotal,
+              lines: result.lines.length,
+              overLines: result.lines.filter((line) => line.overReceive).length,
+            },
+          })
+        }
       } else {
         const code = result.code ?? ''
         const message = result.message ?? 'Gagal sinkronisasi.'
         if (PERMANENT_REJECT_CODES.includes(code)) {
           await repo.markRejected(result.sessionId, message, code)
-          await safeLog(repo, 'error', `Sesi ditolak server (${code}): ${message}`, result.sessionId)
+          await safeLog(repo, {
+            level: 'error',
+            category: 'sync',
+            event: DIAG_EVENT.PUSH_SESSION_REJECTED,
+            message: `Sesi ditolak server (${code}): ${message}`,
+            sessionId: result.sessionId,
+            detail: { code, lines: result.lines.length, qty: sessionQtyTotal(result) },
+          })
         } else {
           await repo.markFailed(result.sessionId, message, code)
-          await safeLog(repo, 'error', message, result.sessionId)
+          await safeLog(repo, {
+            level: 'warn',
+            category: 'sync',
+            event: DIAG_EVENT.PUSH_SESSION_FAILED,
+            message,
+            sessionId: result.sessionId,
+            detail: { code: code || null, lines: result.lines.length, qty: sessionQtyTotal(result) },
+          })
         }
         failed += 1
       }
@@ -424,6 +516,32 @@ export async function syncOutbox(
     await repo
       .markFailed(payload.sessionId, 'Server tidak mengembalikan hasil untuk sesi ini. Akan dicoba lagi.')
       .catch(() => undefined)
+  }
+
+  // One summary per run. With the per-session entries above covering everything that was NOT
+  // accepted, this is what makes a 2000-entry ring buffer last: a quiet day costs one row.
+  await safeLog(repo, {
+    level: failed > 0 ? 'warn' : 'info',
+    category: 'sync',
+    event: DIAG_EVENT.PUSH_RUN,
+    message: `Kirim selesai: ${synced} berhasil, ${failed} gagal dari ${payloads.length} dokumen.`,
+    detail: { attempted: payloads.length, synced, failed },
+  })
+  // Diagnostics only, shown on the screen as "Kirim terakhir". It records that a push RAN and got
+  // an answer — not that every document in it succeeded.
+  try {
+    await repo.setMeta(DIAG_LAST_PUSH_META_KEY, new Date().toISOString())
+  } catch {
+    // Bookkeeping must never fail a sync.
+  }
+  // A trim on every push run that got an ANSWER from the server, so a device that writes few log
+  // entries still gets trimmed without waiting for DIAG_PRUNE_EVERY. Deliberately not a guarantee
+  // for every call: the two early returns above (nothing to send, and a transport failure) skip
+  // it, so a device offline all day is still bounded by DIAG_PRUNE_EVERY alone.
+  try {
+    await repo.pruneSyncLog()
+  } catch {
+    // Same reason as above.
   }
 
   if (response.revoked.length > 0) {

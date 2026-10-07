@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type { SessionStatus } from '~/shared/constants'
+import type { DiagCategory, DiagDetail, DiagLevel } from '~/client/diagnostics/events'
 
 export interface LocalPurchase {
   purchaseId: string
@@ -150,9 +151,24 @@ export interface LocalMeta {
 export interface LocalSyncLogEntry {
   id?: number
   at: string
-  level: 'info' | 'error'
+  level: DiagLevel
   message: string
   sessionId?: string
+  /**
+   * Which part of the app wrote this entry. Optional because rows written before this existed
+   * have none, and because no Dexie version was added to backfill them: these three fields are
+   * NOT indexed, and Dexie needs declarations for indexes, not for stored fields.
+   */
+  category?: DiagCategory
+  /**
+   * Stable machine code for the kind of event (see DIAG_EVENT). Typed as a plain string rather
+   * than as DiagEvent on purpose: every WRITE goes through DiagEntryInput and is checked there,
+   * while what comes back OUT of IndexedDB is whatever some app version once wrote — including
+   * codes since dropped from the enum.
+   */
+  event?: string
+  /** Small flat payload; see DiagDetail for what may and may not go in it. */
+  detail?: DiagDetail
 }
 
 export class StockOpsDb extends Dexie {

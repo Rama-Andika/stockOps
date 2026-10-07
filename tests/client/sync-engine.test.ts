@@ -376,7 +376,7 @@ describe('sinkronisasi end-to-end (klien Dexie <-> server <-> MySQL)', () => {
 
     it('kegagalan menulis log tidak membalik sesi yang sudah tersinkron', async () => {
       const session = await finalizedSession('INV-L1')
-      vi.spyOn(repo, 'log').mockRejectedValue(new Error('log error'))
+      vi.spyOn(repo, 'logEvent').mockRejectedValue(new Error('log error'))
 
       const outcome = await syncOutbox(repo, directTransport)
 
