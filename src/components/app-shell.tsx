@@ -1,9 +1,10 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAppStore } from "~/client/state/store/app-store";
 import { checkForUpdate, registerServiceWorker } from "~/client/pwa";
 import { installErrorTrap } from "~/client/diagnostics/error-trap";
 import { applyThemePreference } from "~/client/theme";
+import { ScrollContainerProvider } from "./scroll-container";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Settings } from "lucide-react";
@@ -122,6 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const isLogin = location.pathname === "/login";
+  const mainRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     // First in this effect on purpose: everything after it may throw, and the trap is what turns
@@ -184,18 +186,27 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-viewport flex flex-col">
       <ToastHost />
       <TopBar />
+      {/* The ref is handed down so a long list inside the route can render only what is on screen
+          (see components/virtual-list.tsx). <main> is the scroller for every screen EXCEPT the two
+          session screens, where it is overflow-hidden and the route owns its own scroller: the
+          cockpit overrides this context with that scroller, and the review screen has no long
+          list. Provided in both branches anyway — the value is a ref, and an override is one
+          component away. */}
       <main
+        ref={mainRef}
         className={
           isSessionFlow
             ? "min-h-0 flex-1 overflow-hidden"
             : "min-h-0 flex-1 overflow-y-auto p-3"
         }
       >
-        {isSessionFlow ? (
-          children ?? <Outlet />
-        ) : (
-          <div className="mx-auto w-full max-w-3xl">{children ?? <Outlet />}</div>
-        )}
+        <ScrollContainerProvider value={mainRef}>
+          {isSessionFlow ? (
+            children ?? <Outlet />
+          ) : (
+            <div className="mx-auto w-full max-w-3xl">{children ?? <Outlet />}</div>
+          )}
+        </ScrollContainerProvider>
       </main>
       {isSessionFlow ? null : <BottomNav />}
     </div>

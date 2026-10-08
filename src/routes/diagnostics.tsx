@@ -18,7 +18,9 @@ import {
 } from "~/client/diagnostics/read";
 import { AppBar } from "~/components/app-bar";
 import { ConfirmButton } from "~/components/confirm-button";
+import { diagnosticsRowHeight } from "~/components/row-heights";
 import { Badge, Button, Card, EmptyState } from "~/components/ui";
+import { VirtualList } from "~/components/virtual-list";
 import { SESSION_STATUS, SESSION_STATUS_LABEL } from "~/shared/constants";
 import { formatDateTime } from "~/shared/format";
 
@@ -261,35 +263,50 @@ function DiagnosticsPage() {
               : "Belum ada entri log."}
           </EmptyState>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {entries.map((entry) => (
-              <li
-                key={entry.id ?? `${entry.at}-${entry.message}`}
-                className="rounded-lg border border-line-soft bg-surface/40 p-2"
-              >
+          /* Windowed: the ring buffer holds 2000 entries and "Muat 200 lagi" below can walk all the
+             way there. Every line of text carries an explicit `leading-*` because the row's height
+             is computed, not measured — see components/row-heights.ts. The message and the JSON
+             detail are clamped to two lines each; the CSV export carries both in full, and that is
+             the path the IT team actually reads. */
+          <VirtualList
+            as="ul"
+            rows={entries}
+            label="Entri log diagnostik"
+            getKey={(entry) => String(entry.id ?? `${entry.at}-${entry.message}`)}
+            rowHeight={(entry) =>
+              diagnosticsRowHeight({
+                hasSessionId: Boolean(entry.sessionId),
+                hasDetail: Boolean(entry.detail),
+              })
+            }
+            rowClassName="pb-2"
+            renderRow={(entry) => (
+              <div className="h-full overflow-hidden rounded-lg border border-line-soft bg-surface/40 p-2">
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone={LEVEL_TONE[entry.level]}>{entry.level}</Badge>
-                  <span className="font-mono text-[11px] text-fg-subtle">
+                  <span className="font-mono text-[11px] leading-4 text-fg-subtle">
                     {formatDateTime(entry.at)}
                   </span>
                 </div>
-                <p className="mt-1 text-xs font-semibold text-fg-muted">
+                <p className="mt-1 text-xs leading-4 font-semibold text-fg-muted">
                   {entry.category ?? "-"} / {entry.event ?? "-"}
                 </p>
-                <p className="mt-0.5 text-sm text-fg">{entry.message}</p>
+                <p className="mt-0.5 line-clamp-2 text-sm leading-5 text-fg">
+                  {entry.message}
+                </p>
                 {entry.sessionId ? (
-                  <p className="mt-0.5 font-mono text-[11px] text-fg-subtle">
+                  <p className="mt-0.5 truncate font-mono text-[11px] leading-4 text-fg-subtle">
                     sesi {entry.sessionId}
                   </p>
                 ) : null}
                 {entry.detail ? (
-                  <p className="mt-0.5 break-all font-mono text-[11px] text-fg-subtle">
+                  <p className="mt-0.5 line-clamp-2 break-all font-mono text-[11px] leading-4 text-fg-subtle">
                     {JSON.stringify(entry.detail)}
                   </p>
                 ) : null}
-              </li>
-            ))}
-          </ul>
+              </div>
+            )}
+          />
         )}
 
         {entries.length >= limit ? (
