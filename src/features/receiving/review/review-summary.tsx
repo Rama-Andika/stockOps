@@ -5,11 +5,13 @@ import { SegmentedProgress } from '~/ui/segmented-progress'
  * The head of the review screen: which PO, from whom, how much was counted — and, when some item
  * went past what was ordered, a callout that says so BEFORE the operator sends anything.
  *
- * `overItemCount` is passed in rather than read from the session because `session.overReceive`
- * and `session.excessTotal` are written only by `markSynced` (local-repo.ts), i.e. after the
- * server has answered. On a session that has not been sent yet they are always false and 0 —
- * exactly the moment the warning is worth showing. The caller derives the number from the
- * session lines against the PO (useSessionData's `excessByPurchaseItem`).
+ * `overItemCount` is passed in rather than read from the session because the session's own
+ * `overReceive`/`excessTotal` are written only by `markSynced` (local-repo.ts), i.e. after the
+ * server has answered, and this warning is worth showing BEFORE anything is sent. The caller
+ * passes `useSessionData`'s `excessByPurchaseItem`, which answers at both moments: the local
+ * comparison against the PO before the session is sent, and the server's own per-line figures
+ * after it — never the local formula on a sent session, which would count that session's qty
+ * twice.
  *
  * The callout states a COUNT of items, never a summed quantity: each item's excess is in that
  * item's own purchase unit, so a single total across items would mix KRT with DUS. The per-item

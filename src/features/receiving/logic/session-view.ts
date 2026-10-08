@@ -1,3 +1,4 @@
+import { SESSION_STATUS, type SessionStatus } from '~/core/contracts/constants'
 import { formatQty } from '~/core/format'
 
 /**
@@ -15,6 +16,11 @@ export interface SessionLineInput {
   lineId: string
   purchaseItemId: string
   qty: number
+  /**
+   * The server's own verdict for this line, present only once the session is SYNCED. Optional, so
+   * every existing caller and every existing test keeps compiling without it.
+   */
+  serverExcess?: number
 }
 
 /**
@@ -116,6 +122,56 @@ export function overReceivedLineIds(
   ordered: ReadonlyMap<string, OrderedItemInput>,
 ): Set<string> {
   const excess = excessByPurchaseItem(lines, ordered)
+  const ids = new Set<string>()
+  for (const line of lines) {
+    if (excess.has(line.purchaseItemId)) ids.add(line.lineId)
+  }
+  return ids
+}
+
+/**
+ * Excess per PO item for ONE session, from whichever source is authoritative at that moment.
+ *
+ * Before the session is sent, that is the local comparison: the server has not answered yet, so
+ * `receivedQty + scanned - ordered` is the only thing anyone can know, and it is correct.
+ *
+ * After the session is SYNCED it is the SERVER's own number, stored per line by `markSynced`. The
+ * local comparison must not be used then, and this is the whole point of this function:
+ * `markSynced` adds the session's qty into `purchaseItems.receivedQty` so the PO list's "Diterima"
+ * figure does not dip before the next pull. From that moment `receivedQty` already contains this
+ * session, so recomputing counts it twice — a delivery that exactly fills the order reports an
+ * excess equal to the whole delivery. The next pull does not heal it either: the server's own
+ * `receivedQty` contains the session too.
+ *
+ * A SYNCED session with no stored number anywhere (synced before the field existed, or a replay
+ * whose memo could not be parsed) yields an EMPTY map, not a local recomputation. Callers read that
+ * emptiness together with `session.overReceive` to fall back to the document-level figure.
+ */
+export function sessionExcessByPurchaseItem(
+  status: SessionStatus,
+  lines: ReadonlyArray<SessionLineInput>,
+  ordered: ReadonlyMap<string, OrderedItemInput>,
+): Map<string, number> {
+  if (status !== SESSION_STATUS.SYNCED) return excessByPurchaseItem(lines, ordered)
+  const excess = new Map<string, number>()
+  for (const line of lines) {
+    const stored = line.serverExcess
+    if (stored === undefined || stored <= 0) continue
+    excess.set(line.purchaseItemId, stored)
+  }
+  return excess
+}
+
+/**
+ * The lines of every over-received item for ONE session, from the same source as
+ * `sessionExcessByPurchaseItem`. The ITEM is what went over; these are the lines that make it up.
+ */
+export function sessionOverReceivedLineIds(
+  status: SessionStatus,
+  lines: ReadonlyArray<SessionLineInput>,
+  ordered: ReadonlyMap<string, OrderedItemInput>,
+): Set<string> {
+  const excess = sessionExcessByPurchaseItem(status, lines, ordered)
   const ids = new Set<string>()
   for (const line of lines) {
     if (excess.has(line.purchaseItemId)) ids.add(line.lineId)

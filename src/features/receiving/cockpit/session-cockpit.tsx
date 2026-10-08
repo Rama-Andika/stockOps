@@ -810,6 +810,23 @@ export function SessionCockpit({ sessionId }: { sessionId: string }) {
                 Tersinkron sebagai {session.number}. Dokumen bersifat baca-saja di perangkat.
               </Notice>
             ) : null}
+            {/* The server flagged this document, but its per-item figures are not on this device
+                (synced before `serverExcess` existed, or a replay whose memo could not be parsed),
+                so no line can carry a badge. Without this the operator would see nothing at all
+                here while the receiving list says the document is over — one document, two
+                answers. `overLineIds` is read rather than the excess map only because this screen
+                already holds it.
+
+                This screen and the receiving list are the ONLY two places that need it. The review
+                screen cannot: it returns early for any status other than RUNNING (so that a
+                finalized session cannot walk back in and send again), and `overReceive` is written
+                by `markSynced` together with status SYNCED — so a document that needs this message
+                can never reach that screen's body. */}
+            {session.overReceive && overLineIds.size === 0 ? (
+              <Notice tone="warn">
+                Kelebihan terima {formatQty(session.excessTotal)} — menunggu persetujuan admin.
+              </Notice>
+            ) : null}
           </div>
         ) : null}
       </div>

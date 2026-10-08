@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { SESSION_STATUS } from '~/core/contracts/constants'
 import {
   excessByPurchaseItem,
   overReceivedLineIds,
   rejectionReasonText,
+  sessionExcessByPurchaseItem,
+  sessionOverReceivedLineIds,
   summarizeQtyByUnit,
   type OrderedItemInput,
 } from '~/features/receiving/logic/session-view'
@@ -184,5 +187,55 @@ describe('overReceivedLineIds', () => {
 
   it('tanpa baris, mengembalikan Set kosong', () => {
     expect(overReceivedLineIds([], ordered([['PI1', '10', '0']])).size).toBe(0)
+  })
+})
+
+describe('sumber angka kelebihan terima per status sesi', () => {
+  // ordered = 3, receivedQty = 3: the state AFTER markSynced added this session's own 3.
+  const full = ordered([['PI1', '3', '3']])
+  const line = { lineId: 'L1', purchaseItemId: 'PI1', qty: 3 }
+
+  it('sesi SYNCED yang pas memenuhi pesanan TIDAK ditandai, walau receivedQty sudah memuatnya', () => {
+    // This is the bug: markSynced added this session's 3 into receivedQty, so the local formula
+    // would answer 3 + 3 - 3 = 3. The server said 0, and the server is right.
+    const lines = [{ ...line, serverExcess: 0 }]
+    expect(sessionExcessByPurchaseItem(SESSION_STATUS.SYNCED, lines, full).size).toBe(0)
+    expect(sessionOverReceivedLineIds(SESSION_STATUS.SYNCED, lines, full).size).toBe(0)
+  })
+
+  it('sesi SYNCED yang benar-benar lebih tetap ditandai, dengan angka server', () => {
+    const lines = [{ ...line, serverExcess: 2 }]
+    expect(sessionExcessByPurchaseItem(SESSION_STATUS.SYNCED, lines, full).get('PI1')).toBe(2)
+    expect([...sessionOverReceivedLineIds(SESSION_STATUS.SYNCED, lines, full)]).toEqual(['L1'])
+  })
+
+  it('sesi SYNCED tanpa angka server tidak menghitung ulang secara lokal', () => {
+    // A document synced before `serverExcess` existed. An empty map is what makes the screens fall
+    // back to the document-level figure instead of showing a number nobody can trust.
+    expect(sessionExcessByPurchaseItem(SESSION_STATUS.SYNCED, [line], full).size).toBe(0)
+  })
+
+  it('sesi yang belum dikirim tetap memakai perbandingan lokal', () => {
+    // Before sending, receivedQty does NOT contain this session, so the local formula is the only
+    // thing that can answer — and it is correct. Seeded here as 1 already received of 3 ordered.
+    const beforeSend = ordered([['PI1', '3', '1']])
+    const over = sessionExcessByPurchaseItem(
+      SESSION_STATUS.RUNNING,
+      [{ ...line, qty: 5 }],
+      beforeSend,
+    )
+    const within = sessionExcessByPurchaseItem(
+      SESSION_STATUS.RUNNING,
+      [{ ...line, qty: 1 }],
+      beforeSend,
+    )
+    expect(over.get('PI1')).toBe(3)
+    expect(within.size).toBe(0)
+  })
+
+  it('angka server diabaikan selama sesi belum SYNCED', () => {
+    // A stale `serverExcess` must not leak into a session that went back to the queue.
+    const lines = [{ ...line, serverExcess: 99 }]
+    expect(sessionExcessByPurchaseItem(SESSION_STATUS.PENDING, lines, full).get('PI1')).toBe(3)
   })
 })

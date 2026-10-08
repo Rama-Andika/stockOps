@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
+import { SESSION_STATUS } from '~/core/contracts/constants'
 import { localRepo } from '~/data/local-repo'
 import { useLive } from '~/data/use-live'
 import {
-  excessByPurchaseItem as excessByItem,
-  overReceivedLineIds,
+  sessionExcessByPurchaseItem,
+  sessionOverReceivedLineIds,
   summarizeQtyByUnit,
 } from '~/features/receiving/logic/session-view'
 
@@ -59,17 +60,28 @@ export function useSessionData(sessionId: string) {
   )
   const unitMap = useMemo(() => new Map(units.map((row) => [row.uomId, row.unit])), [units])
 
-  // Both derivations live in src/features/receiving/logic/session-view.ts so they can be unit-tested without a
-  // React renderer. The memo wrappers stay: `lines` and `purchaseItemMap` change once per scan,
-  // and the cockpit re-renders on every character the scanner types.
+  // Both derivations live in src/features/receiving/logic/session-view.ts so they can be
+  // unit-tested without a React renderer — including the rule that picks WHICH source is
+  // authoritative, which is why the status is passed in rather than branched on here. The memo
+  // wrappers stay: `lines` and `purchaseItemMap` change once per scan, and the cockpit re-renders
+  // on every character the scanner types.
+  //
+  // `session?.status` is undefined while the session is still loading, which falls to the
+  // pre-sync branch — correct, because `lines` is still empty at that point anyway.
   const overLineIds = useMemo(
-    () => overReceivedLineIds(lines, purchaseItemMap),
-    [lines, purchaseItemMap],
+    () =>
+      sessionOverReceivedLineIds(session?.status ?? SESSION_STATUS.RUNNING, lines, purchaseItemMap),
+    [session?.status, lines, purchaseItemMap],
   )
 
   const excessByPurchaseItem = useMemo(
-    () => excessByItem(lines, purchaseItemMap),
-    [lines, purchaseItemMap],
+    () =>
+      sessionExcessByPurchaseItem(
+        session?.status ?? SESSION_STATUS.RUNNING,
+        lines,
+        purchaseItemMap,
+      ),
+    [session?.status, lines, purchaseItemMap],
   )
 
   // The unit is resolved here, not inside the pure function: `unitMap` is Dexie data and

@@ -140,6 +140,23 @@ export interface LocalSessionItem {
    * the server, and `pos_receive_item.memo` keeps carrying only `PDT|OVER`.
    */
   pickedManually: boolean
+  /**
+   * This line's over-receive, exactly as the SERVER reported it, written by `markSynced` from
+   * `syncSessionResultSchema.lines[].excess`. Absent until the server has answered.
+   *
+   * It exists because the local formula cannot be used once a session is SYNCED: `markSynced` adds
+   * this session's qty into `purchaseItems.receivedQty` so the PO list's "Diterima" number does not
+   * dip before the next pull, after which `receivedQty + thisSession - ordered` counts the session
+   * twice and reports a receipt that exactly fills the order as an over-receive.
+   *
+   * `undefined` means "not known on this device" — a session synced before this field existed, or
+   * a replay whose memo could not be parsed. Callers must treat that as "no per-item detail", NOT
+   * as zero: the document-level `session.excessTotal` is what still answers in that case.
+   *
+   * Matched to the server's answer by `purchaseItemId`, never by `clientLineId` — see the note in
+   * `markSynced`.
+   */
+  serverExcess?: number
   createdAt: string
 }
 

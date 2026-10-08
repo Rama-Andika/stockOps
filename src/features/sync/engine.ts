@@ -452,6 +452,7 @@ export async function syncOutbox(
           number: result.number ?? '',
           overReceive: result.overReceive,
           excessTotal: result.excessTotal,
+          lines: result.lines,
           replay: result.code === 'IDEMPOTENT_REPLAY',
         })
         synced += 1

@@ -532,6 +532,66 @@ describe('LocalRepository (Dexie)', () => {
       expect(progress.items.get('PI1')?.serverReceivedQty).toBe(4)
     })
 
+    it('markSynced menyimpan excess per baris dari jawaban server', async () => {
+      const session = await repo.createSession({
+        purchaseId: 'P1',
+        userId: '1200001',
+        deviceId: 'D1',
+      })
+      const line = await repo.addOrIncrementLine(session.sessionId, {
+        purchaseItemId: 'PI2',
+        itemMasterId: 'I2',
+        barcode: null,
+        qty: 5,
+        uomPurchaseId: 'U-PCS',
+        uomId: 'U-PCS',
+        convQty: 1,
+        convFound: true,
+      })
+      // PI2: ordered 5, nothing received before, this session 5 — exactly full, so the server
+      // reports no excess. The local formula would answer 5 + 5 - 5 = 5 once the increment below
+      // lands, which is the bug this stores its way out of.
+      await repo.markSynced(session.sessionId, {
+        receiveId: '1',
+        number: 'IN1',
+        overReceive: false,
+        excessTotal: 0,
+        lines: [{ purchaseItemId: 'PI2', excess: 0 }],
+      })
+      const saved = await repo.db.sessionItems.get(line.lineId)
+      expect(saved?.serverExcess).toBe(0)
+      expect((await repo.getPurchaseProgress('P1')).items.get('PI2')?.serverReceivedQty).toBe(5)
+    })
+
+    it('markSynced untuk replay tetap menyimpan excess per baris', async () => {
+      const session = await repo.createSession({
+        purchaseId: 'P1',
+        userId: '1200001',
+        deviceId: 'D1',
+      })
+      const line = await repo.addOrIncrementLine(session.sessionId, {
+        purchaseItemId: 'PI1',
+        itemMasterId: 'I1',
+        barcode: null,
+        qty: 8,
+        uomPurchaseId: 'U-KRT',
+        uomId: 'U-PCS',
+        convQty: 12,
+        convFound: true,
+      })
+      await repo.markSynced(session.sessionId, {
+        receiveId: '1',
+        number: 'IN1',
+        overReceive: true,
+        excessTotal: 2,
+        lines: [{ purchaseItemId: 'PI1', excess: 2 }],
+        replay: true,
+      })
+      // The per-line figure IS stored on a replay; only the receivedQty increment is skipped.
+      expect((await repo.db.sessionItems.get(line.lineId))?.serverExcess).toBe(2)
+      expect((await repo.getPurchaseProgress('P1')).items.get('PI1')?.serverReceivedQty).toBe(4)
+    })
+
     it('sesi ditolak (REJECTED) tidak dihitung di "diterima"', async () => {
       const session = await repo.createSession({
         purchaseId: 'P1',

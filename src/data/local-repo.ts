@@ -921,6 +921,10 @@ export class LocalRepository {
    * Idempotent and atomic. A session that is already SYNCED is left untouched, because the
    * same answer arriving twice (a replay, a retried push) would otherwise count its qty into
    * the local received totals a second time.
+   *
+   * It writes THREE tables: the session row, every line of that session (`serverExcess`), and the
+   * PO items (`receivedQty`). The last of those is the one skipped on a replay; the per-line
+   * figures are not — see the two comments inside.
    */
   async markSynced(
     sessionId: string,
@@ -929,6 +933,12 @@ export class LocalRepository {
       number: string
       overReceive: boolean
       excessTotal: number
+      /**
+       * The server's per-line verdict, straight from `syncSessionResultSchema.lines`. Optional so
+       * that every existing caller — and every existing test — keeps working without it; a caller
+       * that omits it simply stores no per-item detail, which reads as "not known on this device".
+       */
+      lines?: ReadonlyArray<{ purchaseItemId: string; excess: number }>
       /** true when the server answered IDEMPOTENT_REPLAY (the document already existed). */
       replay?: boolean
     },
@@ -953,13 +963,38 @@ export class LocalRepository {
           updatedAt: nowIso(),
         })
 
+        const lines = await this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
+
+        // The server's per-line over-receive, stored so the screens stop recomputing it. From here
+        // on `purchaseItems.receivedQty` contains this session (see the next block), which makes
+        // the local formula count the session twice — a delivery that exactly fills the order
+        // would report the whole delivery as excess.
+        //
+        // Matched by `purchaseItemId`, never by `clientLineId`: on a replay the server builds
+        // `clientLineId` POSITIONALLY from the payload it was handed, so a different order would
+        // pair the numbers with the wrong rows and nothing would complain. `purchaseItemId` comes
+        // from the stored row itself on both paths, and `addOrIncrementLine`'s unique
+        // `[sessionId+purchaseItemId]` index makes it unique within a session locally.
+        //
+        // Written on a replay TOO, unlike the receivedQty increment below. A replayed answer is
+        // derived from the memo the server wrote when the document first landed, so its figures
+        // are real — and a replayed document has no other way of ever getting them.
+        if (result.lines) {
+          const serverExcess = new Map<string, number>()
+          for (const line of result.lines) serverExcess.set(line.purchaseItemId, line.excess)
+          for (const line of lines) {
+            const excess = serverExcess.get(line.purchaseItemId)
+            if (excess === undefined) continue
+            await this.db.sessionItems.put({ ...line, serverExcess: excess })
+          }
+        }
+
         // Fix for "Received" regression bug: once SYNCED, the session qty leaves
         // localPending, but the server snapshot (receivedQty) is not refreshed yet.
         // Add the qty locally so the "Received" number does not drop; the next pull
         // overwrites it. Skipped on replay: the document came from an earlier request
         // whose qty may already be in the snapshot, so sync() refreshes the PO list instead.
         if (result.replay) return
-        const lines = await this.db.sessionItems.where('sessionId').equals(sessionId).toArray()
         for (const line of lines) {
           const purchaseItem = await this.db.purchaseItems.get(line.purchaseItemId)
           if (!purchaseItem) continue
