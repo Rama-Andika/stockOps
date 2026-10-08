@@ -25,34 +25,39 @@ afterEach(() => {
 })
 
 describe('ThemeToggle', () => {
-  it('default gelap: menawarkan tema terang dan tidak memasang atribut apa pun', () => {
+  it('default terang: menawarkan tema gelap dan memasang atributnya', () => {
     render(<ThemeToggle />)
 
-    expect(screen.getByRole('button', { name: 'Ganti ke tema terang' })).toBeInTheDocument()
-    // Dark is the ABSENCE of the attribute, not data-theme="dark". That is what keeps the dark
-    // theme byte-for-byte what it was before the light theme existed.
-    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
+    // The icon shows the DESTINATION, so the default light theme offers the dark one.
+    expect(screen.getByRole('button', { name: 'Ganti ke tema gelap' })).toBeInTheDocument()
+    // Light is the default, so the attribute is already there — `applyThemePreference` in
+    // beforeEach puts it on <html> the same way the inline script in __root.tsx does before the
+    // first paint.
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
-  it('satu klik menyalakan tema terang di <html> dan menyimpannya', () => {
+  it('satu klik mematikan tema terang di <html> dan menyimpannya', () => {
     render(<ThemeToggle />)
 
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema gelap' }))
+
+    // Dark is the ABSENCE of the attribute, not data-theme="dark". That is what keeps the dark
+    // theme byte-for-byte what it was before the light theme existed, and it did not change when
+    // light became the default.
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
+    expect(loadPreferences().theme).toBe('dark')
+    // The label flips too: a dark theme offers the light one.
+    expect(screen.getByRole('button', { name: 'Ganti ke tema terang' })).toBeInTheDocument()
+  })
+
+  it('klik kedua kembali ke terang dan memasang atributnya lagi', () => {
+    render(<ThemeToggle />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema gelap' }))
     fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
 
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     expect(loadPreferences().theme).toBe('light')
-    // The label flips too: the icon shows the DESTINATION, so a light theme offers the dark one.
-    expect(screen.getByRole('button', { name: 'Ganti ke tema gelap' })).toBeInTheDocument()
-  })
-
-  it('klik kedua kembali ke gelap dan mencabut atributnya', () => {
-    render(<ThemeToggle />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema gelap' }))
-
-    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
-    expect(loadPreferences().theme).toBe('dark')
   })
 
   /**
@@ -67,7 +72,7 @@ describe('ThemeToggle', () => {
     setScanFocusHandler(handler)
     render(<ThemeToggle />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema gelap' }))
 
     expect(handler).toHaveBeenCalledTimes(1)
   })

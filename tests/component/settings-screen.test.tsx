@@ -133,13 +133,14 @@ describe('SettingsScreen UI & UX', () => {
     renderSettings()
 
     const themeSwitch = screen.getByRole('switch', { name: 'Tema Terang' })
-    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
+    // Light is the default theme, so this row starts ON.
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
 
     fireEvent.click(themeSwitch)
-    expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
     // The row writes through src/platform/theme.ts, so the DOCUMENT itself has to have changed, not
     // just the switch. Without this line the two could drift apart and no test would fail.
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
 
     const soundSwitch = screen.getByRole('switch', { name: 'Bunyi Scanner' })
     expect(soundSwitch).toHaveAttribute('aria-checked', 'true')
@@ -241,34 +242,35 @@ describe('SettingsScreen — sinkronisasi tema dengan ikon app bar', () => {
     )
   }
 
-  it('tema diganti dari ikon app bar: baris di Pengaturan ikut menyala', () => {
+  it('tema diganti dari ikon app bar: baris di Pengaturan ikut padam', () => {
     renderBoth()
 
     const themeSwitch = screen.getByRole('switch', { name: 'Tema Terang' })
-    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
-
-    // Tanpa langganan ke singleton-nya, baris ini tetap OFF — sakelar yang membantah layarnya
-    // sendiri, karena halamannya sudah terang.
+    // Terang adalah default, jadi barisnya mulai dari ON.
     expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema gelap' }))
+
+    // Tanpa langganan ke singleton-nya, baris ini tetap ON — sakelar yang membantah layarnya
+    // sendiri, karena halamannya sudah gelap.
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 
   it('mengubah preferensi LAIN setelah itu tidak menulis balik tema yang lama', () => {
     renderBoth()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
-    expect(loadPreferences().theme).toBe('light')
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema gelap' }))
+    expect(loadPreferences().theme).toBe('dark')
 
     // Patch ini tidak membawa kunci `theme` sama sekali, jadi `setTheme` tidak terpanggil. Kalau
     // `updatePreferences` menyusun objek simpanannya dari snapshot `preferences` saat mount, di
-    // sinilah 'dark' yang basi masuk ke localStorage — dan DOM-nya tetap terang, jadi tidak ada
+    // sinilah 'light' yang basi masuk ke localStorage — dan DOM-nya tetap gelap, jadi tidak ada
     // satu pun gejala sampai aplikasi dimuat ulang.
     fireEvent.click(screen.getByRole('switch', { name: 'Bunyi Scanner' }))
 
-    expect(loadPreferences().theme).toBe('light')
+    expect(loadPreferences().theme).toBe('dark')
     expect(loadPreferences().feedbackBeep).toBe(false)
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
   })
 })

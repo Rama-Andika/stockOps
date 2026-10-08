@@ -79,12 +79,12 @@ describe('preferensi perangkat', () => {
     window.localStorage.removeItem('stockops.preferences')
   })
 
-  it('memakai default bunyi, getar, dan tema gelap', () => {
+  it('memakai default bunyi, getar, dan tema terang', () => {
     window.localStorage.removeItem('stockops.preferences')
     expect(loadPreferences()).toEqual({
       feedbackBeep: true,
       feedbackVibrate: true,
-      theme: 'dark',
+      theme: 'light',
       manualPick: true,
     })
   })
@@ -122,16 +122,16 @@ describe('preferensi perangkat', () => {
     expect(loadPreferences()).toEqual({
       feedbackBeep: true,
       feedbackVibrate: false,
-      theme: 'dark',
+      theme: 'light',
       manualPick: true,
     })
   })
 
   // A stored theme that is neither 'dark' nor 'light' (hand-edited storage, or a value from a
   // future version) falls back to the default instead of reaching <html> as an unknown attribute.
-  it('nilai tema yang tidak dikenal jatuh ke default gelap', () => {
+  it('nilai tema yang tidak dikenal jatuh ke default terang', () => {
     window.localStorage.setItem('stockops.preferences', JSON.stringify({ theme: 'sepia' }))
-    expect(loadPreferences().theme).toBe('dark')
+    expect(loadPreferences().theme).toBe('light')
   })
 })
 

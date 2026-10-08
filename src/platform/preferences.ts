@@ -59,8 +59,10 @@ export function loadPreferences(): Preferences {
         typeof value.feedbackVibrate === 'boolean'
           ? value.feedbackVibrate
           : DEFAULTS.feedbackVibrate,
-      // A device set up before this key existed reads as 'dark' — the theme it is already showing,
-      // so an update never changes the screen under the operator's hands.
+      // A missing or unrecognised value reads as the default theme, which is LIGHT. A device set
+      // up before this key existed therefore moves to light on the next update — accepted
+      // knowingly: light is the bright-dock mode this app is built for, and an operator who wants
+      // dark has the switch in the app bar and in Pengaturan.
       theme: value.theme === 'light' || value.theme === 'dark' ? value.theme : DEFAULTS.theme,
       // Same treatment as every other key here: missing reads as the default, ON — the one that
       // leaves the feature discoverable.

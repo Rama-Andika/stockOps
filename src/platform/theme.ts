@@ -17,8 +17,9 @@ import { loadPreferences, savePreferences, type Theme } from '~/platform/prefere
 /**
  * Browser/OS chrome colour per theme, for the `theme-color` meta tag. These are hex, and
  * deliberately so: a meta tag cannot read var(), so they APPROXIMATE --color-ground in
- * src/styles/app.css and must be changed together with it. (The PWA manifest keeps its own, dark,
- * value: it is read at install time and cannot follow a runtime switch.)
+ * src/styles/app.css and must be changed together with it. (The PWA manifest keeps its own copy:
+ * it is read at install time and cannot follow a runtime switch, so it carries the DEFAULT theme's
+ * colour.)
  */
 const THEME_COLOR: Record<Theme, string> = {
   dark: '#0b1220',
@@ -41,8 +42,8 @@ function emit(): void {
 function apply(next: Theme): void {
   if (typeof document === 'undefined') return
   // Dark is the absence of the attribute, not `data-theme="dark"`. That keeps the dark theme
-  // exactly as it was — plain `:root` — and means the inline script in __root.tsx only ever has to
-  // ADD something, never undo one.
+  // exactly as it was — plain `:root`. Light being the DEFAULT does not change that: the inline
+  // script in __root.tsx sets the attribute up front and removes it only for a stored 'dark'.
   if (next === 'light') document.documentElement.setAttribute('data-theme', 'light')
   else document.documentElement.removeAttribute('data-theme')
   // Keeps the Android status bar in step with the page. `?.` because the tag is absent in tests
@@ -70,11 +71,12 @@ export function getTheme(): Theme {
 
 /**
  * Snapshot for useSyncExternalStore's server/prerender pass. A constant on purpose: prerender has
- * no localStorage, and dark is the default, so this can never disagree with the HTML that the
- * prerender produced.
+ * no localStorage, so `loadPreferences()` returns the defaults there — and this must name the SAME
+ * theme those defaults do, or the server snapshot disagrees with this module's own value and the
+ * app-bar button renders the wrong face on the first paint. It moves when DEFAULTS.theme moves.
  */
 export function getServerTheme(): Theme {
-  return 'dark'
+  return 'light'
 }
 
 export function subscribeTheme(listener: () => void): () => void {
