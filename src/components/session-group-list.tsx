@@ -1,5 +1,9 @@
+import { useMemo } from 'react'
+import { sessionStatusRowHeight } from './row-heights'
 import { SessionStatusRow, type SessionRowInput } from './session-status-row'
-import { splitByOwner } from '~/shared/session-owner'
+import { VirtualList } from './virtual-list'
+import { SESSION_STATUS } from '~/shared/constants'
+import { isOwnedBy, splitByOwner } from '~/shared/session-owner'
 
 /**
  * The receiving list, split into "my sessions" and "other operators'". One PDT is handed between
@@ -23,21 +27,50 @@ export function SessionGroupList({
   itemCounts: ReadonlyMap<string, number>
   currentUserId: string | null
 }) {
-  const { mine, others } = splitByOwner(sessions, currentUserId)
+  /**
+   * Memoised because `splitByOwner` returns two NEW arrays on every call, and VirtualList keys its
+   * size/key lookups off the identity of the array it is given.
+   */
+  const { mine, others } = useMemo(
+    () => splitByOwner(sessions, currentUserId),
+    [sessions, currentUserId],
+  )
 
-  const renderRows = (group: readonly SessionRowInput[]) =>
-    group.map((session) => (
-      <SessionStatusRow
-        key={session.sessionId}
-        session={session}
-        itemCount={itemCounts.get(session.sessionId) ?? 0}
-        currentUserId={currentUserId}
-      />
-    ))
+  /**
+   * One windowed list per group. Two lists rather than one flat list with heading rows, so the
+   * <section>/<h2> structure the groups are built on stays exactly as it was — and on a
+   * single-operator device both groups are far below the threshold anyway and render plainly.
+   *
+   * The height conditions are the same three the row's markup branches on
+   * (sessionStatusRowHeight). When a condition is added to one, it is added to the other.
+   */
+  const renderGroup = (group: readonly SessionRowInput[], label: string) => (
+    <VirtualList
+      rows={group}
+      label={label}
+      getKey={(session) => session.sessionId}
+      rowHeight={(session) =>
+        sessionStatusRowHeight({
+          hasForeignOwner: !isOwnedBy(session, currentUserId),
+          hasFailureText:
+            session.status === SESSION_STATUS.FAILED && Boolean(session.lastError),
+          hasOverReceive: session.overReceive,
+        })
+      }
+      rowClassName="pb-2"
+      renderRow={(session) => (
+        <SessionStatusRow
+          session={session}
+          itemCount={itemCounts.get(session.sessionId) ?? 0}
+          currentUserId={currentUserId}
+        />
+      )}
+    />
+  )
 
   // The common case on a single-operator device: exactly the list as it was before this feature.
   if (others.length === 0) {
-    return <div className="flex flex-col gap-2">{renderRows(mine)}</div>
+    return renderGroup(mine, 'Dokumen penerimaan')
   }
 
   return (
@@ -45,7 +78,7 @@ export function SessionGroupList({
       {mine.length > 0 ? (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-bold uppercase tracking-wide text-fg-muted">Sesi saya</h2>
-          {renderRows(mine)}
+          {renderGroup(mine, 'Sesi saya')}
         </section>
       ) : null}
       <section className="flex flex-col gap-2">
@@ -59,7 +92,7 @@ export function SessionGroupList({
           Hanya bisa dilihat. Dokumen yang sudah selesai tetap ikut terkirim saat kamu menekan
           Kirim.
         </p>
-        {renderRows(others)}
+        {renderGroup(others, 'Dokumen operator lain')}
       </section>
     </div>
   )

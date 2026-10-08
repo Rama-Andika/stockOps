@@ -81,41 +81,51 @@ export function SessionStatusRow({
   // screen where vertical space should pay for documents rather than for labels.
   const foreignOwner = isOwnedBy(session, currentUserId) ? null : ownerName(session)
   return (
+    /* `h-full overflow-hidden`, every line with an explicit `leading-*`, and three lines clamped to
+       two: this row is rendered inside a virtualised list whose row heights are COMPUTED from the
+       same three conditions (sessionStatusRowHeight in components/row-heights.ts) and then forced.
+       Where `line-clamp-2` was added, `block` was REMOVED on purpose — line-clamp sets
+       `display: -webkit-box`, and Tailwind v4 resolves two classes for one property by stylesheet
+       order, not by their order in this string. */
     <Link
       to="/sessions/$sessionId"
       params={{ sessionId: session.sessionId }}
-      className="touch-target flex items-start gap-2 rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
+      className="touch-target flex h-full items-start gap-2 overflow-hidden rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
     >
       <span className="min-w-0 flex-1">
         <span className="flex items-start justify-between gap-2">
           {/* The official number once the server assigned one, the PO number until then: that is
               the identifier the operator can actually match against paperwork at each stage. */}
-          <span className="min-w-0 truncate text-base font-bold tabular-nums text-fg">
+          <span className="min-w-0 truncate text-base leading-6 font-bold tabular-nums text-fg">
             {session.number ?? session.purchaseNumber ?? session.purchaseId}
           </span>
           <Badge tone={toneFor(session.status)}>{SESSION_STATUS_LABEL[session.status]}</Badge>
         </span>
-        <span className="block truncate text-sm text-fg-subtle">
+        <span className="block truncate text-sm leading-5 text-fg-subtle">
           {session.vendorName ?? '-'} · {itemCount} item
         </span>
         {foreignOwner ? (
-          <span className="block truncate text-sm font-semibold text-warn-text">
+          <span className="block truncate text-sm leading-5 font-semibold text-warn-text">
             Milik {foreignOwner}
           </span>
         ) : null}
-        <span className={`block text-sm ${rejected ? 'text-danger-soft' : 'text-fg-muted'}`}>
+        <span
+          className={`line-clamp-2 text-sm leading-5 ${rejected ? 'text-danger-soft' : 'text-fg-muted'}`}
+        >
           {detailLine(session)}
         </span>
         {/* FAILED keeps the server's own words as well: unlike a rejection it is temporary, and
             the reason is the only clue about what to wait for. */}
         {session.status === SESSION_STATUS.FAILED && session.lastError ? (
-          <span className="block text-sm text-danger-soft">{session.lastError}</span>
+          <span className="line-clamp-2 text-sm leading-5 text-danger-soft">
+            {session.lastError}
+          </span>
         ) : null}
         {/* Moved here from SessionContextStrip: overReceive and excessTotal are written only by
             markSynced, so they are only ever true on a document that already reached the server —
             and that is this screen's subject, not the scan cockpit's. */}
         {session.overReceive ? (
-          <span className="block text-sm font-semibold tabular-nums text-warn-text">
+          <span className="line-clamp-2 text-sm leading-5 font-semibold tabular-nums text-warn-text">
             Kelebihan terima {formatQty(session.excessTotal)} — menunggu persetujuan admin.
           </span>
         ) : null}

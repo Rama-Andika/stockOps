@@ -183,6 +183,32 @@ dipakai; kolom lain mengikuti default database). Tidak ada migrasi/Drizzle Kit y
 dijalankan terhadap `demo`. Pembuatan schema uji menyalin DDL asli via `SHOW CREATE TABLE`
 lalu melepas foreign key agar tidak bergantung tabel lain.
 
+### 3.5 Virtualisasi daftar panjang
+
+Enam daftar merender **hanya baris yang terlihat**: daftar PO, item PO di detail PO, pemilih item
+(`ItemPicker`), baris sesi di kokpit, daftar dokumen di Penerimaan, dan log di Diagnostik. Batasnya
+bukan tebakan — `pull` boleh mengambil 2000 baris, satu sesi boleh memuat 5000 baris, dan ring
+buffer log memegang 2000 entri. Merender semuanya adalah *hang* di PDT kelas bawah, dan *hang*
+terbaca operator sebagai aplikasi rusak.
+
+Semuanya lewat satu komponen, `src/components/virtual-list.tsx`:
+
+- **Scroller ditemukan lewat context** (`src/components/scroll-container.tsx`), bukan dengan
+  menyusuri DOM. `<main>` milik shell adalah scroller untuk sebagian besar layar; kokpit dan
+  `ItemPicker` menyediakan scroller sendiri.
+- **Tinggi baris dihitung dari data**, tidak diukur (`src/components/row-heights.ts`), lalu
+  dipaksa lewat inline style. Konsekuensinya: setiap baris teks di dalam baris virtual wajib punya
+  `leading-*` eksplisit, dan teks yang bisa membungkus dipotong (`truncate`) atau diklamp
+  (`line-clamp-2`). Nama barang dan nama vendor yang sangat panjang karena itu berakhir dengan
+  elipsis atau maksimal dua baris.
+- **Di bawah 60 baris, daftar dirender biasa** — jadi layar kecil tidak membayar biaya apa pun, dan
+  perilakunya identik.
+- **Posisi scroll daftar PO diingat** per kombinasi filter + kata kunci: kembali dari detail PO
+  mempertahankan posisi, sedangkan menyaring atau mengetik melompat ke atas.
+
+Yang **tidak** divirtualisasi: worklist over-receive (dibatasi server di 200 baris) dan layar
+review.
+
 ---
 
 ## 4. Struktur Proyek
@@ -217,6 +243,9 @@ src/
     feedback.ts, toast.ts Bunyi/getar dan notifikasi singkat
     preferences.ts        Preferensi operator (mis. input qty)
   components/             UI (keypad-first) + form login
+    virtual-list.tsx      Daftar tervirtualisasi (satu komponen untuk enam daftar)
+    scroll-container.tsx  Context "siapa scroller terdekat"
+    row-heights.ts        Tinggi baris tiap daftar (dihitung, bukan diukur)
   routes/                 Halaman: login, /pos, /pos/$id, /sessions, /sessions/$id, /settings
 public/                   icon.svg, manifest.webmanifest, sw.js, offline.html
 scripts/                  seed demo, setup/teardown DB uji, server produksi
@@ -227,7 +256,7 @@ tests/                    unit, server, client, component
 
 ## 5. Pengujian
 
-`npm test` menjalankan 246 test pada 24 berkas:
+`npm test` menjalankan 489 test pada 46 berkas:
 
 | Lapisan | Berkas | Fokus |
 | --- | --- | --- |

@@ -173,3 +173,39 @@ describe('SessionOwnerGate', () => {
     expect(screen.queryByText(/^Dibuat /)).toBeNull()
   })
 })
+
+/**
+ * Tinggi baris dokumen dihitung dari data, bukan diukur, jadi tiga kondisi yang membuat baris
+ * tumbuh harus benar-benar tercermin di tingginya. Kalau markup `SessionStatusRow` menambah atau
+ * mengurangi satu baris teks tanpa `row-heights.ts` ikut berubah, baris akan terpotong di perangkat
+ * yang tidak dipakai siapa pun untuk melaporkan bug.
+ *
+ * Yang diperiksa adalah PERBANDINGAN, bukan angkanya: angka pastinya sudah dikunci
+ * tests/unit/row-heights.test.ts, dan mengulangnya di sini hanya akan jadi tempat kedua yang harus
+ * diperbarui.
+ */
+describe('SessionGroupList — tinggi baris', () => {
+  it('baris FAILED dengan pesan server lebih tinggi daripada baris biasa', () => {
+    render(
+      <SessionGroupList
+        sessions={[
+          row({ sessionId: 'S1', status: SESSION_STATUS.PENDING }),
+          row({
+            sessionId: 'S2',
+            status: SESSION_STATUS.FAILED,
+            lastError: 'Koneksi ke server terputus saat mengirim dokumen.',
+          }),
+        ]}
+        itemCounts={noCounts}
+        currentUserId="U1"
+      />,
+    )
+
+    const rows = screen.getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    const tinggi = (element: Element) => Number.parseInt((element as HTMLElement).style.height, 10)
+    const [biasa, gagal] = rows
+    expect(tinggi(biasa as Element)).toBeGreaterThan(0)
+    expect(tinggi(gagal as Element)).toBeGreaterThan(tinggi(biasa as Element))
+  })
+})

@@ -169,4 +169,46 @@ describe('VirtualList', () => {
     // Jauh di bawah 300: tidak pernah ada satu pass pun yang merender seluruh daftar.
     expect(renderRow.mock.calls.length).toBeLessThan(40)
   })
+
+  /**
+   * Array `rows` yang baru HARUS membangun ulang pengukuran.
+   *
+   * Ini mekanisme yang diandalkan setiap pemanggil: `virtual-core` membangun ulang pengukurannya
+   * ketika `getItemKey` berganti identitas, dan TIDAK PERNAH karena `estimateSize` kini menjawab
+   * berbeda — jadi identitas `rows` adalah satu-satunya sinyal yang tersisa. Kokpit pernah
+   * melanggarnya: tingginya membaca peta PO dari closure, peta itu datang satu putaran Dexie
+   * setelah barisnya, dan baris "Dipesan N" terpotong habis oleh tinggi yang sudah terlanjur
+   * dipaku. Kalau test ini pecah, aturan "setiap input tinggi harus ada di dalam `rows`" kehilangan
+   * dasarnya dan enam pemanggil ikut terdampak.
+   */
+  it('array rows yang baru membangun ulang tinggi, meski panjang dan kuncinya sama', () => {
+    const view = render(
+      <ScrollHarness contentHeight={80 * ROW_HEIGHT}>
+        <VirtualList
+          as="ul"
+          rows={rows(80)}
+          getKey={(row) => row.id}
+          rowHeight={() => ROW_HEIGHT}
+          label="Daftar uji"
+          renderRow={(row) => <span>{row.label}</span>}
+        />
+      </ScrollHarness>,
+    )
+    expect(screen.getAllByRole('listitem')[0]).toHaveStyle({ height: `${ROW_HEIGHT}px` })
+
+    // Panjang sama, kunci sama, hanya tingginya yang kini dijawab berbeda — dan array-nya baru.
+    view.rerender(
+      <ScrollHarness contentHeight={80 * ROW_HEIGHT}>
+        <VirtualList
+          as="ul"
+          rows={rows(80)}
+          getKey={(row) => row.id}
+          rowHeight={() => ROW_HEIGHT * 2}
+          label="Daftar uji"
+          renderRow={(row) => <span>{row.label}</span>}
+        />
+      </ScrollHarness>,
+    )
+    expect(screen.getAllByRole('listitem')[0]).toHaveStyle({ height: `${ROW_HEIGHT * 2}px` })
+  })
 })

@@ -15,10 +15,13 @@ import { ConfirmButton } from '~/components/confirm-button'
 import { ItemPicker } from '~/components/item-picker'
 import { ScanBar } from '~/components/scan-bar'
 import { ScanHero, type ScanHeroState } from '~/components/scan-hero'
+import { sessionLineRowHeight } from '~/components/row-heights'
+import { ScrollContainerProvider } from '~/components/scroll-container'
 import { SessionContextStrip } from '~/components/session-context-strip'
 import { SessionOwnerGate } from '~/components/session-owner-gate'
 import { VendorDocCard } from '~/components/vendor-doc-card'
 import { Badge, Button, Card, EmptyState, Loading, Notice, inputClass } from '~/components/ui'
+import { VirtualList } from '~/components/virtual-list'
 import { SESSION_STATUS, SESSION_STATUS_LABEL, type SessionStatus } from '~/shared/constants'
 import { formatQty } from '~/shared/format'
 import { buildPickerItems } from '~/shared/item-picker'
@@ -125,6 +128,26 @@ function SessionDetailPage() {
         : [],
     [pickerDetail, lines, unitMap],
   )
+  /**
+   * The session's lines, each carrying the one fact outside the line itself that decides how tall
+   * its row is: whether the PO line could be resolved, which is what renders the "Dipesan N" line.
+   *
+   * It is bundled into the array rather than read from a closure because the identity of the array
+   * handed to `VirtualList` is the ONLY thing that invalidates its measurements — see the contract
+   * on `rows` in components/virtual-list.tsx. `purchaseItems` is loaded from `session.purchaseId`
+   * while `lines` is loaded from `sessionId`, so the map arrives a Dexie round AFTER the lines:
+   * without this, every row is measured while the map is still empty, and the "Dipesan" line that
+   * appears a moment later is clipped by the height those measurements fixed. A pull that calls
+   * `replacePurchases` can reopen the same gap at any time.
+   */
+  const lineRows = useMemo(
+    () =>
+      lines.map((line) => ({
+        line,
+        hasOrderedLine: purchaseItemMap.has(line.purchaseItemId),
+      })),
+    [lines, purchaseItemMap],
+  )
   // Anything other than 'items' falls back to 'scan', which also migrates a device that still has
   // 'docs' saved from before the review screen existed: the value stays in Dexie until the
   // session is deleted, so it must not be able to select a tab that is gone.
@@ -137,6 +160,14 @@ function SessionDetailPage() {
   const scanRef = useRef<HTMLInputElement>(null)
   // Scans are saved strictly one after another (FIFO), even when the scanner is faster than IndexedDB.
   const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+  /**
+   * The cockpit's own scroller, handed to the session-line list so it can render only the rows on
+   * screen. It cannot use the shell's <main>: on this route <main> is overflow-hidden
+   * (`isSessionFlow` in components/app-shell.tsx) and the element below is what actually scrolls.
+   * Declared here, with the other refs and before the early returns, because this file's hook
+   * order is load-bearing.
+   */
+  const scrollRef = useRef<HTMLDivElement>(null)
   const user = useAppStore((state) => state.user)
   // Acknowledgement of the ownership gate below. Route state on purpose — not a search param,
   // not persisted: it lasts exactly as long as this screen stays open, so reopening the session
@@ -563,6 +594,7 @@ function SessionDetailPage() {
 
       {/* The only scrollable region. It is the tab panel while the session is editable. */}
       <div
+        ref={scrollRef}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-2"
         role={editable ? 'tabpanel' : undefined}
         id={editable ? 'session-tab-panel' : undefined}
@@ -595,55 +627,93 @@ function SessionDetailPage() {
         ) : null}
 
         {!editable || tab === 'items' ? (
-          <Card title={`Item dalam sesi (${lines.length})`}>
-            {editable ? (
-              <p className="mb-1 text-sm text-fg-subtle">Ketuk item untuk mengubah qty atau menghapus.</p>
-            ) : null}
-            <ul className="flex flex-col divide-y divide-line-soft">
-              {lines.map((line) => {
-                const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
-                const item = items[line.itemMasterId]
-                const isOver = overLineIds.has(line.lineId)
-                return (
-                  <li key={line.lineId}>
-                    <button
-                      type="button"
-                      className="touch-target w-full py-3 text-left"
-                      disabled={!editable}
-                      onClick={() => setEditingLineId(line.lineId)}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-fg">{item?.name ?? line.itemMasterId}</p>
-                          <p className="text-sm text-fg-subtle">
-                            {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
-                            {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
-                            {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
-                          </p>
-                          <p className="text-sm tabular-nums text-fg-subtle">
-                            = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
-                          </p>
-                          {purchaseItem ? (
-                            <p className="text-sm tabular-nums text-fg-muted">
-                              Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+          /* The provider wraps only this card, not the whole scroller: the scroller's children run
+             for a couple of hundred lines of JSX, and a wrapper around all of them would be an edit
+             on two far-apart places for no gain. A provider only has to be an ANCESTOR of the
+             list. */
+          <ScrollContainerProvider value={scrollRef}>
+            <Card title={`Item dalam sesi (${lines.length})`}>
+              {editable ? (
+                <p className="mb-1 text-sm text-fg-subtle">Ketuk item untuk mengubah qty atau menghapus.</p>
+              ) : null}
+              {/* The empty state moved out of the list: it used to be a <p> directly inside <ul>,
+                  which is invalid markup, and VirtualList owns the <ul> now. */}
+              {lines.length === 0 ? (
+                <EmptyState>Belum ada item. Scan barcode untuk menambah.</EmptyState>
+              ) : (
+                /* Windowed: the server accepts up to 5000 lines in one session
+                   (MAX_SESSION_LINES), and a scan session that long is exactly the one running on
+                   the weakest device at the end of a shift.
+
+                   Height is computed from the row's own data, never measured — the code line grows
+                   to two lines when the conversion factor was not found, and the "Dipesan" line
+                   exists only when the PO line could be resolved. Both of those inputs live in
+                   `lineRows` rather than in a closure, because that array's identity is what
+                   invalidates the measurements. See components/row-heights.ts. */
+                <VirtualList
+                  as="ul"
+                  rows={lineRows}
+                  label="Item dalam sesi"
+                  getKey={(row) => row.line.lineId}
+                  rowHeight={(row) =>
+                    sessionLineRowHeight({
+                      convFound: row.line.convFound,
+                      hasOrderedLine: row.hasOrderedLine,
+                    })
+                  }
+                  rowClassName="border-b border-line-soft"
+                  renderRow={({ line }) => {
+                    const purchaseItem = purchaseItemMap.get(line.purchaseItemId)
+                    const item = items[line.itemMasterId]
+                    const isOver = overLineIds.has(line.lineId)
+                    return (
+                      <button
+                        type="button"
+                        className="touch-target h-full w-full overflow-hidden py-3 text-left"
+                        disabled={!editable}
+                        onClick={() => setEditingLineId(line.lineId)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="line-clamp-2 font-semibold leading-6 text-fg">
+                              {item?.name ?? line.itemMasterId}
                             </p>
-                          ) : null}
+                            {/* The clamp follows the height branch exactly: a second line is only
+                                BUDGETED when the conversion note is appended, so allowing one
+                                anywhere else would let it be cut in half by `overflow-hidden`.
+                                `truncate` is also the better failure here — an ellipsis says the
+                                text continues, half a second line just looks broken. */}
+                            <p
+                              className={`${line.convFound ? 'truncate' : 'line-clamp-2'} text-sm leading-5 text-fg-subtle`}
+                            >
+                              {item?.code ?? '-'} • {formatQty(line.qty)}{' '}
+                              {unitMap.get(line.uomPurchaseId) ?? line.uomPurchaseId}
+                              {line.convFound ? '' : ' • konversi tidak ditemukan (faktor 1)'}
+                            </p>
+                            <p className="truncate text-sm leading-5 tabular-nums text-fg-subtle">
+                              = {formatQty(line.qty * line.convQty)} {unitMap.get(line.uomId) ?? line.uomId}
+                            </p>
+                            {purchaseItem ? (
+                              <p className="truncate text-sm leading-5 tabular-nums text-fg-muted">
+                                Dipesan {formatQty(purchaseItem.qty)} {unitMap.get(purchaseItem.uomId) ?? ''}
+                              </p>
+                            ) : null}
+                          </div>
+                          {/* Stacked, not side by side: a line can be both over-received and partly
+                              manual, and at 360px two badges in a row push the item name into a
+                              third line of wrapping. */}
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
+                            {line.pickedManually ? <Badge tone="neutral">Manual</Badge> : null}
+                          </div>
                         </div>
-                        {/* Stacked, not side by side: a line can be both over-received and partly
-                            manual, and at 360px two badges in a row push the item name into a third
-                            line of wrapping. */}
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          {isOver ? <Badge tone="danger">Over-receive</Badge> : null}
-                          {line.pickedManually ? <Badge tone="neutral">Manual</Badge> : null}
-                        </div>
-                      </div>
-                    </button>
-                  </li>
-                )
-              })}
-              {lines.length === 0 ? <EmptyState>Belum ada item. Scan barcode untuk menambah.</EmptyState> : null}
-            </ul>
-          </Card>
+                      </button>
+                    )
+                  }}
+                />
+              )}
+            </Card>
+          </ScrollContainerProvider>
         ) : null}
 
         {/* Hold-to-cancel sits on the item tab, not in the review screen's footer: nothing

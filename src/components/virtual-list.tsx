@@ -63,10 +63,27 @@ export function clearScrollMemory(): void {
 }
 
 export interface VirtualListProps<T> {
+  /**
+   * The rows, and — this is the part that bites — the MEASUREMENT IDENTITY of the list.
+   *
+   * virtual-core rebuilds its measurements when `getItemKey` changes identity and never because
+   * `estimateSize` would now answer differently, so a new `rows` array is the only signal this
+   * component has. The rule that follows is absolute: EVERY input `rowHeight` reads must live
+   * inside `rows`. A height that depends on something read from a closure keeps the value it had
+   * when the rows last changed, and because rows are clipped to their measured height, the extra
+   * line simply disappears — silently, on every row at once.
+   *
+   * The cockpit is the worked example: whether a session line shows "Dipesan N" depends on a PO
+   * map that loads a Dexie round later than the lines themselves, so it is folded into the array
+   * (`lineRows` in routes/sessions/$sessionId.tsx) instead of being read where the row is drawn.
+   */
   rows: readonly T[]
   /** Stable identity per row. Used as the React key on both paths. */
   getKey: (row: T) => string
-  /** Height in CSS pixels, computed from the row's data — never measured. */
+  /**
+   * Height in CSS pixels, computed from the row's data — never measured. It must read nothing but
+   * `row`: see the note on `rows` for what happens when it does.
+   */
   rowHeight: (row: T, index: number) => number
   renderRow: (row: T, index: number) => ReactNode
   /** 'ul' renders <li> rows, 'div' renders <div> rows with explicit list roles. */
