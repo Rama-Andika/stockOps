@@ -6,6 +6,9 @@ import { AppStoreProvider } from '~/client/state/store/app-store-provider'
 import type { AppState } from '~/client/state/store/types'
 import { Route } from '~/routes/settings'
 import { getToasts } from '~/client/toast'
+import { ThemeToggle } from '~/components/theme-toggle'
+import { applyThemePreference } from '~/client/theme'
+import { loadPreferences } from '~/client/preferences'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -71,6 +74,13 @@ function renderSettings(overrides: Partial<AppState> = {}) {
 describe('SettingsPage UI & UX', () => {
   beforeEach(() => {
     localStorage.clear()
+    // The theme row writes to <html>, and jsdom shares one document across this whole file.
+    document.documentElement.removeAttribute('data-theme')
+    // src/client/theme.ts is a module singleton that survives between tests, so clearing storage
+    // is not enough — this is what pulls its in-memory value back to the default. Without it the
+    // first test to switch the theme leaves every later one running against 'light', and the
+    // failures land in whichever test happens to run next.
+    applyThemePreference()
   })
 
   afterEach(() => {
@@ -121,14 +131,17 @@ describe('SettingsPage UI & UX', () => {
     })
   })
 
-  it('mengubah preferensi kontras, bunyi, dan getar saat sakelar diklik', () => {
+  it('mengubah preferensi tema, bunyi, dan getar saat sakelar diklik', () => {
     renderSettings()
 
-    const contrastSwitch = screen.getByRole('switch', { name: 'Kontras Tinggi' })
-    expect(contrastSwitch).toHaveAttribute('aria-checked', 'false')
+    const themeSwitch = screen.getByRole('switch', { name: 'Tema Terang' })
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
 
-    fireEvent.click(contrastSwitch)
-    expect(contrastSwitch).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(themeSwitch)
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
+    // The row writes through src/client/theme.ts, so the DOCUMENT itself has to have changed, not
+    // just the switch. Without this line the two could drift apart and no test would fail.
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
 
     const soundSwitch = screen.getByRole('switch', { name: 'Bunyi Scanner' })
     expect(soundSwitch).toHaveAttribute('aria-checked', 'true')
@@ -188,5 +201,76 @@ describe('SettingsPage UI & UX', () => {
       expect(text).toMatch(/Kirim dulu dokumen yang belum terkirim/)
       expect(text).not.toMatch(/Tombol "Muat ulang" ada di bagian atas layar/)
     })
+  })
+})
+
+/**
+ * Satu sakelar, dua tempat: ikon di app bar (`ThemeToggle`, dirender oleh `AppShell`) dan baris
+ * "Tema Terang" di Pengaturan. Keduanya TIDAK pernah berada dalam satu subtree React, jadi
+ * satu-satunya yang menyatukannya adalah singleton di `src/client/theme.ts`.
+ *
+ * Arah Pengaturan → app bar sudah dijaga test di atas (sakelarnya memasang `data-theme`). Dua test
+ * di bawah menjaga arah sebaliknya, yang sempat hilang dan lolos sampai review: ikon app bar
+ * dirender juga SAAT layar Pengaturan terbuka, jadi jalur ini bukan hipotetis.
+ *
+ * Test kedua adalah yang paling penting dari keduanya. Kegagalan di sana tidak terlihat di layar
+ * sama sekali — tema tetap terang — dan baru muncul sebagai "temanya tidak mau tersimpan" saat
+ * aplikasi dibuka lagi besok paginya.
+ */
+describe('SettingsPage — sinkronisasi tema dengan ikon app bar', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    applyThemePreference()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+    applyThemePreference()
+  })
+
+  /** Keduanya dirender bersama, karena itulah keadaan nyatanya: app bar tidak pernah hilang. */
+  function renderBoth() {
+    const store = createAppStore()
+    store.setState({ ...baseState, refresh: vi.fn(async () => undefined) })
+    return render(
+      <AppStoreProvider store={store}>
+        <ThemeToggle />
+        <SettingsPage />
+      </AppStoreProvider>,
+    )
+  }
+
+  it('tema diganti dari ikon app bar: baris di Pengaturan ikut menyala', () => {
+    renderBoth()
+
+    const themeSwitch = screen.getByRole('switch', { name: 'Tema Terang' })
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
+
+    // Tanpa langganan ke singleton-nya, baris ini tetap OFF — sakelar yang membantah layarnya
+    // sendiri, karena halamannya sudah terang.
+    expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  })
+
+  it('mengubah preferensi LAIN setelah itu tidak menulis balik tema yang lama', () => {
+    renderBoth()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ganti ke tema terang' }))
+    expect(loadPreferences().theme).toBe('light')
+
+    // Patch ini tidak membawa kunci `theme` sama sekali, jadi `setTheme` tidak terpanggil. Kalau
+    // `updatePreferences` menyusun objek simpanannya dari snapshot `preferences` saat mount, di
+    // sinilah 'dark' yang basi masuk ke localStorage — dan DOM-nya tetap terang, jadi tidak ada
+    // satu pun gejala sampai aplikasi dimuat ulang.
+    fireEvent.click(screen.getByRole('switch', { name: 'Bunyi Scanner' }))
+
+    expect(loadPreferences().theme).toBe('light')
+    expect(loadPreferences().feedbackBeep).toBe(false)
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 })

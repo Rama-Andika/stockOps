@@ -3,12 +3,13 @@ import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useAppStore } from "~/client/state/store/app-store";
 import { checkForUpdate, registerServiceWorker } from "~/client/pwa";
 import { installErrorTrap } from "~/client/diagnostics/error-trap";
-import { applyContrastPreference } from "~/client/theme";
+import { applyThemePreference } from "~/client/theme";
 import { Loading } from "./ui";
 import { ToastHost } from "./toast-host";
 import { Barcode, ClipboardList, Settings } from "lucide-react";
 import { SyncStatus, useSendStatus } from "./sync-status";
 import { UpdateBanner } from "./update-banner";
+import { ThemeToggle } from "./theme-toggle";
 
 // z-index scale used across the app, highest first:
 //   60 toast (ToastHost) · 40 dialogs (LineEditSheet) · 30 keypad sheet (ScanBar).
@@ -57,6 +58,7 @@ function TopBar() {
             {user.fullName}
           </span>
         ) : null}
+        <ThemeToggle />
       </div>
       {quiet ? <UpdateBanner /> : null}
       <SyncStatus />
@@ -126,7 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     // such a throw into something IT can read later instead of a blank screen nobody can explain.
     installErrorTrap();
     registerServiceWorker(markUpdateReady);
-    applyContrastPreference();
+    applyThemePreference();
     // `markUpdateReady` is a zustand action and therefore a stable reference, so this effect still
     // runs exactly once. It is in the deps because it is used, not because it changes.
   }, [markUpdateReady]);

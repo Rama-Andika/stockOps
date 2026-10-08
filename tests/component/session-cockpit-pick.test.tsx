@@ -109,7 +109,7 @@ function setPreference(manualPick: boolean) {
   savePreferences({
     feedbackBeep: false,
     feedbackVibrate: false,
-    highContrast: false,
+    theme: 'dark',
     manualPick,
   })
 }

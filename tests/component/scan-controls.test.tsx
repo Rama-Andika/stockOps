@@ -79,12 +79,12 @@ describe('preferensi perangkat', () => {
     window.localStorage.removeItem('stockops.preferences')
   })
 
-  it('memakai default bunyi, getar, dan kontras normal', () => {
+  it('memakai default bunyi, getar, dan tema gelap', () => {
     window.localStorage.removeItem('stockops.preferences')
     expect(loadPreferences()).toEqual({
       feedbackBeep: true,
       feedbackVibrate: true,
-      highContrast: false,
+      theme: 'dark',
       manualPick: true,
     })
   })
@@ -93,31 +93,48 @@ describe('preferensi perangkat', () => {
     savePreferences({
       feedbackBeep: false,
       feedbackVibrate: true,
-      highContrast: true,
+      theme: 'light',
       manualPick: true,
     })
     expect(loadPreferences()).toEqual({
       feedbackBeep: false,
       feedbackVibrate: true,
-      highContrast: true,
+      theme: 'light',
       manualPick: true,
     })
   })
 
-  // `qtyInput` was a real preference until the keypad toggle was dropped from Settings. A device
-  // upgraded from that version still has it in localStorage, so loading must ignore it silently
-  // rather than carry it through or throw.
-  it('preferensi lama (tanpa highContrast, dengan qtyInput) tetap terbaca', () => {
+  // Two preferences have been removed over time: `qtyInput` when the keypad toggle was dropped
+  // from Settings, and `highContrast` when the light theme replaced the high-contrast layer. A
+  // device upgraded from either version still has them in localStorage, so loading must ignore
+  // them silently rather than carry them through or throw — which is also why removing a
+  // preference needs no migration step.
+  it('preferensi lama (qtyInput, highContrast) diabaikan, bukan dibawa ikut', () => {
     window.localStorage.setItem(
       'stockops.preferences',
-      JSON.stringify({ qtyInput: 'pad', feedbackBeep: true, feedbackVibrate: false }),
+      JSON.stringify({
+        qtyInput: 'pad',
+        highContrast: true,
+        feedbackBeep: true,
+        feedbackVibrate: false,
+      }),
     )
     expect(loadPreferences()).toEqual({
       feedbackBeep: true,
       feedbackVibrate: false,
-      highContrast: false,
+      theme: 'dark',
       manualPick: true,
     })
+  })
+
+  // A stored theme that is neither 'dark' nor 'light' (hand-edited storage, or a value from a
+  // future version) falls back to the default instead of reaching <html> as an unknown attribute.
+  it('nilai tema yang tidak dikenal jatuh ke default gelap', () => {
+    window.localStorage.setItem(
+      'stockops.preferences',
+      JSON.stringify({ theme: 'sepia' }),
+    )
+    expect(loadPreferences().theme).toBe('dark')
   })
 })
 

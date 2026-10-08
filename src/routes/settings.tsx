@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { localRepo } from "~/client/db/local-repo";
 import { useAppStore } from "~/client/state/store/app-store";
 import { useLive } from "~/client/hooks/use-live";
@@ -12,7 +12,12 @@ import {
   savePreferences,
   type Preferences,
 } from "~/client/preferences";
-import { applyContrastPreference } from "~/client/theme";
+import {
+  getServerTheme,
+  getTheme,
+  setTheme,
+  subscribeTheme,
+} from "~/client/theme";
 import { playFeedback } from "~/client/feedback";
 import { formatDateTime, formatRelativeDateTime } from "~/shared/format";
 import { formatAppVersion } from "~/shared/app-version";
@@ -22,16 +27,18 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Contrast,
+  Sun,
   Copy,
   Database,
   Download,
   HardDrive,
   ListChecks,
+  Play,
   RefreshCw,
   ShieldCheck,
   Smartphone,
   Stethoscope,
+  SunMoon,
   User,
   Vibrate,
   Volume2,
@@ -154,6 +161,17 @@ function SettingsPage() {
   const [preferences, setPreferences] = useState<Preferences>(() =>
     loadPreferences(),
   );
+  /**
+   * The theme is read from the singleton, NOT from `preferences` above, and that asymmetry is
+   * load-bearing: the same switch also lives in the app bar (src/components/theme-toggle.tsx),
+   * which renders while this screen is open. `preferences` is read once at mount and never
+   * resynced, so a theme changed from up there would leave this row showing the opposite of what
+   * the screen plainly looks like — and then the next flip of ANY other preference would write
+   * that stale theme back to localStorage through `updatePreferences`, so the operator's choice
+   * would silently revert on the next app start. See the base of `next` in `updatePreferences`,
+   * which closes the same hole from the other side.
+   */
+  const theme = useSyncExternalStore(subscribeTheme, getTheme, getServerTheme);
   const [copied, setCopied] = useState(false);
   const updateReady = useAppStore((state) => state.updateReady);
   const clearUpdateSnooze = useAppStore((state) => state.clearUpdateSnooze);
@@ -223,6 +241,47 @@ function SettingsPage() {
     );
   };
 
+  /**
+   * Plays the three signals in the order the operator meets them, spaced far enough apart to be
+   * counted by ear (the longest one runs 400 ms).
+   *
+   * The timers are cancelled on unmount, and NOT because of a React warning — `playFeedback`
+   * touches no React state, so nothing leaks and nothing would be logged. It is the sound itself
+   * that has to be cancelled: leaving this screen mid-sequence and opening a scan session would
+   * play the 400 ms failure buzz inside the cockpit with no card on screen, which is exactly the
+   * signal that means "nothing was recorded" — and the operator has no way to tell it apart from
+   * a real rejected scan.
+   */
+  const feedbackTestTimers = useRef<number[]>([]);
+
+  useEffect(
+    () => () => {
+      for (const id of feedbackTestTimers.current) window.clearTimeout(id);
+      feedbackTestTimers.current = [];
+    },
+    [],
+  );
+
+  const handleTestFeedback = () => {
+    if (!preferences.feedbackBeep && !preferences.feedbackVibrate) {
+      toast(
+        "warn",
+        "Bunyi dan getar sedang dimatikan — nyalakan salah satunya dulu.",
+      );
+      return;
+    }
+    // A second press restarts the sequence instead of overlapping with the one still running.
+    for (const id of feedbackTestTimers.current) window.clearTimeout(id);
+    feedbackTestTimers.current = [];
+
+    playFeedback("success");
+    feedbackTestTimers.current.push(
+      window.setTimeout(() => playFeedback("over"), 900),
+      window.setTimeout(() => playFeedback("danger"), 2000),
+    );
+    toast("info", "Memutar: berhasil → kelebihan terima → gagal.");
+  };
+
   const handleCopyDeviceId = async () => {
     if (!deviceId) return;
     try {
@@ -236,10 +295,22 @@ function SettingsPage() {
   };
 
   const updatePreferences = (patch: Partial<Preferences>) => {
-    const next = { ...preferences, ...patch };
+    // `theme: getTheme()` sits between the spread and the patch on purpose, and removing it
+    // reintroduces a bug that costs the operator their theme. `preferences` is a mount-time
+    // snapshot, so after the app-bar button has flipped the theme it still holds the OLD value —
+    // and this very line is what would persist it. A patch for some unrelated preference (say
+    // "Bunyi Scanner") carries no `theme` key, so `setTheme` below would not fire either: the
+    // document would stay light while storage went back to dark, and the next app start would
+    // read dark. Taking the theme from the singleton instead means only an explicit
+    // `patch.theme` can ever change it. `...patch` must stay LAST so that an explicit one wins.
+    const next = { ...preferences, theme: getTheme(), ...patch };
     setPreferences(next);
     savePreferences(next);
-    applyContrastPreference();
+    // The theme is applied through the singleton in src/client/theme.ts, not here: that is what
+    // notifies the SAME switch in the app bar, which is not in this subtree and would otherwise
+    // keep showing the old face. `setTheme` persists it as well; the `savePreferences` call above
+    // already wrote the identical value, and writing it twice is harmless.
+    if (patch.theme) setTheme(patch.theme);
 
     // Berikan feedback langsung saat mengaktifkan preferensi suara / getar
     if (patch.feedbackBeep === true) {
@@ -376,7 +447,7 @@ function SettingsPage() {
       <Card
         title={
           <div className="flex items-center gap-2">
-            <Contrast
+            <SunMoon
               className="h-5 w-5 text-brand-bright"
               aria-hidden="true"
             />
@@ -386,11 +457,11 @@ function SettingsPage() {
       >
         <div className="flex flex-col gap-2.5">
           <SettingRow
-            icon={Contrast}
-            title="Kontras Tinggi"
-            description="Tegaskan garis batas dan pekatkan permukaan untuk gudang atau dok bongkar yang sangat terang."
-            checked={preferences.highContrast}
-            onChange={(checked) => updatePreferences({ highContrast: checked })}
+            icon={Sun}
+            title="Tema Terang"
+            description="Latar terang untuk gudang atau dok bongkar yang sangat terang. Tema gelap tetap default. Bisa juga diganti dari ikon matahari/bulan di bagian atas layar."
+            checked={theme === "light"}
+            onChange={(checked) => updatePreferences({ theme: checked ? "light" : "dark" })}
           />
 
           <SettingRow
@@ -410,6 +481,35 @@ function SettingsPage() {
               updatePreferences({ feedbackVibrate: checked })
             }
           />
+        </div>
+      </Card>
+
+      {/* 3c. Tes Suara & Getar (Tim IT) */}
+      <Card
+        title={
+          <div className="flex items-center gap-2">
+            <Volume2
+              className="h-5 w-5 text-brand-bright"
+              aria-hidden="true"
+            />
+            <span>Tes Suara & Getar</span>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-1">
+          <Button
+            variant="secondary"
+            className="flex w-full items-center justify-center gap-2 font-semibold"
+            onClick={handleTestFeedback}
+          >
+            <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>Putar Ketiga Nada</span>
+          </Button>
+          <p className="text-xs text-fg-subtle px-1">
+            Berhasil (satu bip pendek) → kelebihan terima (dua bip) → gagal (satu bunyi
+            panjang). Dipakai user saat menyiapkan PDT, supaya speaker bisa diperiksa tanpa
+            harus sengaja men-scan barang yang salah.
+          </p>
         </div>
       </Card>
 

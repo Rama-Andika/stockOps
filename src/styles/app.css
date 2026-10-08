@@ -160,38 +160,116 @@ button {
 }
 
 /* ============================================================
-   High-contrast mode, for a loading dock in full daylight. Set by src/client/theme.ts as
-   data-contrast="high" on <html>.
+   Light theme — "paper": an off-white page with white cards. Set by src/client/theme.ts, and by
+   the inline script in src/routes/__root.tsx before the first paint, as data-theme="light" on
+   <html>.
 
-   One override layer on top of the dark theme, NOT a light theme. The difference matters:
-   component colours are hard-coded slate-* classes throughout, so a real light theme would
-   mean touching every component, while this layer only has to win where contrast is too low.
+   This is a pure redefinition of the tokens in @theme above. It works ONLY because that block is
+   `@theme` and not `@theme inline`: plain @theme emits variables that the utilities read through
+   var(), so one selector can swap them all — opacity modifiers included, since `bg-surface/60`
+   compiles to color-mix(... var(--color-surface) 60% ...). Never change that block to
+   `@theme inline`; it would bake the values into the utilities and make a theme impossible.
+   Nothing here touches a component.
+
+   It REPLACED the old data-contrast="high" override layer. The light theme is the bright-dock
+   mode now, which is why its steps are picked for measured contrast rather than for prettiness —
+   each ratio below is against the page itself (--color-ground), the worst case; on a card
+   (bg-surface/40 and up) every one of them improves.
+
+   THREE RULES, each one a bug waiting to happen:
+
+   1. --color-scrim is NOT redefined, and must never be. It is the dark backdrop behind dialogs
+      (bg-scrim/60). Its job is to DIM content, not to be a surface. Flip it light and the dialogs
+      lose their backdrop entirely — which reads as "a sheet floating for no reason", not as a
+      wrong colour.
+   2. The *-fill / on-*-fill pairs, the *-solid fills and the two status dots are NOT redefined
+      either. The pairs are self-contained (a saturated fill plus its own foreground) and already
+      read correctly on any page. The dots live INSIDE those fills — bg-ok-dot sits in the
+      bg-ok-fill pill in app-shell.tsx — so they must stay LIGHT; darkening them hides them inside
+      their own pill.
+   3. The line-* ladder runs the OTHER WAY here. In the dark theme "stronger" means lighter; on
+      paper it means darker. Copy the dark direction and field borders (line-strong) end up fainter
+      than ordinary card borders (line) — the exact opposite of the intent.
+
+   Several tokens land on the SAME value below (danger / danger-text / danger-soft; brand-bright /
+   brand-soft; raised / control). That is not leftover copy-paste: on paper the usable contrast
+   band is far narrower than on black, and these simply need the same step. Each still has its own
+   job in its own place, so do not "tidy up" by lightening one of them.
    ============================================================ */
 
-:root[data-contrast='high'] body {
-  background: #000000;
-  color: #ffffff;
-}
+:root[data-theme='light'] {
+  color-scheme: light;
 
-/* Translucent panels go solid: 60% opacity over black is nearly invisible outdoors. */
-:root[data-contrast='high'] .bg-surface\/60 {
-  background-color: #10151c;
-}
+  /* --- The page itself -------------------------------------------------- */
+  --color-ground: oklch(92.9% 0.013 255.508); /* slate-200 — paper, not pure white */
+  --color-ground-fg: oklch(20.8% 0.042 265.755); /* slate-900 */
 
-/* Borders carry the layout when glare washes out fills. */
-:root[data-contrast='high'] .border-line,
-:root[data-contrast='high'] .border-line-strong {
-  border-color: #7c8b99;
-}
+  /* --- Neutrals: text --------------------------------------------------- */
+  --color-fg: oklch(12.9% 0.042 264.695); /* slate-950 — 15:1 on ground */
+  --color-fg-soft: oklch(27.9% 0.041 260.031); /* slate-800 — 9:1 */
+  --color-fg-muted: oklch(37.2% 0.044 257.287); /* slate-700 — 6.1:1 */
+  --color-fg-subtle: oklch(44.6% 0.043 257.281); /* slate-600 — 4.6:1, smallest text, AA */
 
-/* Secondary text up to full white; it is the smallest text on screen. */
-:root[data-contrast='high'] .text-fg-subtle,
-:root[data-contrast='high'] .text-fg-muted {
-  color: #ffffff;
-}
+  /* --- Neutrals: surfaces ----------------------------------------------- */
+  /* White, used through bg-surface/30…/80 over the paper ground: the composite rises
+     monotonically (95.7% → 97.2% → 98.6% L), so the nesting order still reads. */
+  --color-surface: oklch(100% 0 0);
+  --color-sheet: oklch(100% 0 0);
+  --color-field: oklch(100% 0 0); /* inputs crisp against the paper page */
+  --color-chrome: oklch(100% 0 0); /* bars, used as chrome/95 */
+  /* Raised and pressed surfaces go DARKER than the white they sit on — the dark theme's
+     "raised = lighter" has no meaning here. */
+  --color-raised: oklch(86.9% 0.022 252.894); /* slate-300 — keypad keys, hover, active tab */
+  --color-control: oklch(86.9% 0.022 252.894); /* slate-300 — secondary buttons, with text-fg */
+  --color-control-off: oklch(70.4% 0.04 256.788); /* slate-400 — disabled & pressed */
+  /* --color-scrim: deliberately absent — see rule 1 above. */
 
-/* A thicker focus ring survives a scratched screen protector. */
-:root[data-contrast='high'] :focus-visible {
-  outline-width: 4px;
+  /* --- Neutrals: lines -------------------------------------------------- */
+  /* Ladder reversed: stronger = darker. See rule 3 above. */
+  --color-line: oklch(70.4% 0.04 256.788); /* slate-400 */
+  --color-line-strong: oklch(55.4% 0.046 257.417); /* slate-500 — field borders */
+  --color-line-hover: oklch(44.6% 0.043 257.281); /* slate-600 — row hover */
+  --color-line-soft: oklch(86.9% 0.022 252.894); /* slate-300 — list dividers */
+
+  /* --- Brand ------------------------------------------------------------ */
+  /* Deep cyan, because this token has three jobs at once: the primary button fill (with white
+     on-brand, 5.3:1), the brand TEXT (text-brand-bright on the wordmark and the Pengaturan card
+     icons, 5.6:1) and the focus ring. A bright cyan would satisfy only the first. */
+  --color-brand: oklch(45% 0.085 224.283); /* cyan-800 */
+  --color-brand-bright: oklch(39.8% 0.07 227.392); /* cyan-900 — hover fill & brand text */
+  --color-brand-soft: oklch(39.8% 0.07 227.392); /* cyan-900 — 4.8:1 on bg-raised tabs */
+  --color-brand-wash: oklch(91.7% 0.08 205.041); /* cyan-200 — wash/40 and the avatar circle */
+  --color-on-brand: oklch(100% 0 0); /* white — text on brand fills, and the toggle knob */
+
+  /* --- Status: success -------------------------------------------------- */
+  --color-ok: oklch(59.6% 0.145 163.225); /* emerald-600 — borders & the progress fill */
+  --color-ok-bright: oklch(50.8% 0.118 165.612); /* emerald-700 — icons, 3.7:1 */
+  --color-ok-wash: oklch(90.5% 0.093 164.15); /* emerald-200 — used as ok-wash/40 */
+
+  /* --- Status: attention ------------------------------------------------ */
+  /* Amber is intrinsically light, so this family splits further apart than the others:
+     --color-warn has to stay light enough for slate-950 `on-warn` text to read on it (5.3:1 at
+     amber-600), while warning TEXT on paper needs a deep amber or it washes out entirely
+     (amber-700 would be 3.1:1 — below AA — hence amber-900 at 5.2:1). */
+  --color-warn: oklch(66.6% 0.179 58.318); /* amber-600 — badges, toast, borders */
+  --color-warn-bright: oklch(76.9% 0.188 70.08); /* amber-500 — hover fill, stays light */
+  --color-warn-text: oklch(41.4% 0.112 45.904); /* amber-900 — text, 5.2:1 */
+  --color-warn-wash: oklch(92.4% 0.12 95.746); /* amber-200 — used as warn-wash/40 */
+
+  /* --- Status: failure -------------------------------------------------- */
+  /* red-800 is the only step that is both unmistakably red AND legible as small text on paper, so
+     three tokens land on it. The invalid-field border is the exception: it is a 2px line, nothing
+     reads on top of it, and it has to be vivid. */
+  --color-danger: oklch(44.4% 0.177 26.899); /* red-800 — fills, white text at 5.4:1 */
+  --color-danger-bright: oklch(39.6% 0.141 25.723); /* red-900 — hover fill */
+  --color-danger-line: oklch(57.7% 0.245 27.325); /* red-600 — invalid field border */
+  --color-danger-text: oklch(44.4% 0.177 26.899); /* red-800 — 4.6:1 */
+  --color-danger-soft: oklch(44.4% 0.177 26.899); /* red-800 — 4.6:1 */
+  --color-danger-wash: oklch(88.5% 0.062 18.334); /* red-200 — used as danger-wash/40 */
+
+  /* --- Status: information ---------------------------------------------- */
+  --color-info: oklch(50% 0.134 242.749); /* sky-700 — card border */
+  --color-info-text: oklch(44.3% 0.11 240.79); /* sky-800 — 4.6:1 */
+  --color-info-wash: oklch(90.1% 0.058 230.902); /* sky-200 — used as info-wash/40 */
 }
 

@@ -338,17 +338,28 @@ berganti, lalu jalankan ulang `npm start`; sertifikat hanya dibaca saat server d
   muat ulang satu kali. Perangkat yang masih menjalankan versi lama (sebelum otorisasi perangkat) akan
   ditolak saat pull/push sampai halaman dimuat ulang.
 
-### Mode kontras tinggi
+### Tema terang & gelap
 
-Pengaturan → Tampilan → **Kontras tinggi**. Ditujukan untuk gudang atau dok bongkar yang terang:
-permukaan tembus pandang dibuat pekat, garis batas dipertegas, teks keterangan dinaikkan ke putih, dan
-cincin fokus dipertebal. Pilihannya disimpan per perangkat di `localStorage`
-(`stockops.preferences`, field `highContrast`) dan diterapkan sebagai atribut
-`data-contrast="high"` pada elemen `<html>`.
+Pengaturan → Tampilan & Umpan Balik → **Tema Terang**, atau ikon matahari/bulan di bagian atas
+layar. **Tema gelap adalah default**, dan perangkat yang sudah terpasang tidak berubah saat
+diperbarui. Pilihannya disimpan per perangkat di `localStorage` (`stockops.preferences`, field
+`theme`) dan diterapkan sebagai atribut `data-theme="light"` pada elemen `<html>` — tema gelap
+adalah **tidak adanya** atribut itu.
 
-Ini **bukan** tema terang. Warna aplikasi ditulis sebagai kelas Tailwind `slate-*` yang tersebar di
-seluruh komponen, sehingga tema terang penuh menuntut migrasi kelas-kelas itu menjadi kelas semantik —
-pekerjaan terpisah yang belum dijadwalkan.
+Warnanya hidup di ±49 token semantik di `src/styles/app.css`, jadi tema terang hanyalah satu blok
+`:root[data-theme='light']` yang mendefinisikan ulang token-token itu; tidak ada komponen yang
+disentuh. Atributnya dipasang dua kali: oleh skrip inline di `src/routes/__root.tsx` sebelum paint
+pertama (tanpa itu setiap kali aplikasi dibuka akan berkedip gelap satu frame) dan oleh
+`src/client/theme.ts` untuk sisa sesi.
+
+Mode **kontras tinggi** (`data-contrast="high"`) **sudah dihapus**: tema terang-lah mode untuk dok
+bongkar yang terang, dan langkah warnanya dipilih supaya teks terkecil tetap lolos WCAG AA di atas
+latar abu kertas. Konsekuensinya diterima sadar: **tidak ada lagi penguat kontras untuk tema
+gelap** (shift malam memakai tema gelap polos).
+
+`theme_color` di `public/manifest.webmanifest` tetap gelap, karena manifest dibaca sekali saat
+install dan tidak bisa mengikuti sakelar runtime — jadi splash screen PWA selalu gelap. Meta
+`theme-color` di dokumen **memang** mengikuti tema, sehingga status bar Android tetap sejalan.
 
 ### 6.3 Diagnostik & ekspor log
 

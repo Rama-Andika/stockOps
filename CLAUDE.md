@@ -72,10 +72,45 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
 - **UI invariants (plans/implementation-plan-ux-refresh-*):** the scan loop must fit 360×640 without
   scrolling; only a successful scan result disappears on its own, the other three scan states wait for
   the operator; undo subtracts the last scanned qty from the line (`addOrIncrementLine` merges repeated
-  scans, so `removeLine` would delete too much); `Progress` in `ui.tsx` is kept only because
-  `tests/component/ui.test.tsx` asserts its colour classes — new screens use `SegmentedProgress`;
-  high-contrast mode is an override layer on `data-contrast="high"`, NOT a light theme, because colours
-  are hard-coded Tailwind `slate-*` classes across every component.
+  scans, so `removeLine` would delete too much); progress bars are `SegmentedProgress` — the old
+  `Progress` component is gone from `ui.tsx` and from its tests.
+- **Themes (plans/implementation-plan-tema-terang-suara-scan.md):** colour lives in ~49 semantic
+  tokens in `src/styles/app.css` declared with `@theme` — NOT `@theme inline`, which would bake the
+  values into the utilities and make a theme impossible — so the light theme is ONE
+  `:root[data-theme='light']` block and no component is touched. `data-theme` is written twice: by
+  an inline script in `src/routes/__root.tsx` before the first paint (without it every app start
+  flashes dark) and by `src/client/theme.ts` for the rest of the session; both read the same
+  `stockops.preferences` key and change together. That module is a subscriber singleton like
+  `toast.ts`, because the same switch exists in two places never in one subtree — the app-bar
+  button (`theme-toggle.tsx`) and the Pengaturan row. Dark is the ABSENCE of the attribute. BOTH
+  screens must READ that singleton, not just write it: Pengaturan takes the theme from
+  `useSyncExternalStore`, never from its own mount-time `preferences` snapshot, and
+  `updatePreferences` rebases on `getTheme()` — otherwise flipping the theme from the app bar while
+  Pengaturan is open leaves its row contradicting the screen, and the next flip of any OTHER
+  preference persists the stale theme, so the choice silently reverts on the next app start (locked
+  by `tests/component/settings-screen.test.tsx`, describe "sinkronisasi tema dengan ikon app bar").
+  Three traps in the light block: `--color-scrim` must stay DARK (it dims content, it is not a
+  surface); the `*-fill`/`on-*-fill` pairs, the `*-solid` fills and the two status dots are
+  deliberately NOT redefined (self-contained, and the dots live inside the fills); and the `line-*`
+  ladder runs the other way — "strong" means darker. The old `data-contrast="high"` layer is GONE:
+  the light theme is the bright-dock mode now, so there is no contrast booster left for the dark
+  theme. The app-bar button is `h-10` PLUS `-my-1.5`, and the margin is not cosmetic: the title row
+  is `items-center` with `py-2`, so its height is (tallest child) + 16px and that child was 28px,
+  making the row 44px. A bare 40px button makes it 56px — +12px on every screen, taken from the
+  scan cockpit's only scroller. It also calls `requestScanFocus()` for the same reason
+  `UpdateBanner` does. `public/offline.html` is outside the token system and stays dark in both
+  themes.
+- **Scan feedback (same plan):** every tone in `src/client/feedback.ts` sits at or above 950 Hz and
+  uses a `square` wave. A 220 Hz sine was inaudible on a PDT speaker, which rolls off steeply below
+  ~400 Hz — the failure sound was silent in the field for a long time because success (1000 Hz) was
+  heard, so it read as "no sound on failure" rather than as a frequency problem. Lowering those
+  numbers makes the beeps silent, not gentle. `warn` and `danger` share ONE sound and vibration
+  (the operator asked for a single failure signal, and the card on screen carries the difference),
+  but both names stay because the call sites mean different things — which is also why
+  `routes/sessions/$sessionId.tsx` needs no edit. `over` keeps its own signal on purpose: the line
+  IS saved, and sounding it as a failure teaches operators to scan the box twice. A suspended
+  AudioContext does not advance `currentTime`, so the tone is scheduled INSIDE the `resume()`
+  callback; scheduling first and resuming after loses the first beep.
 - **Session ownership (plans/implementation-plan-pemilik-sesi-mvp.md):** one PDT is shared between
   operators, so `LocalSession` carries the owner's denormalized name (`userFullName`,
   `userLoginId`, backfilled by the Dexie v2 upgrade) and every screen asks
