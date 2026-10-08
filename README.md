@@ -1,6 +1,6 @@
 # StockOps — Aplikasi Penerimaan Barang Berbasis PO (Offline-First)
 
-Implementasi dari `PRD_Penerimaan_Barang_PDT.md` dan `BRD_Penerimaan_Barang_PDT.md`.
+Implementasi dari `docs/prd.md` dan `docs/brd.md`.
 
 Aplikasi web (PWA) untuk operator gudang memakai **PDT (Portable Data Terminal)** — perangkat apa pun yang
 mendukung browser modern: mencatat barang
@@ -12,6 +12,16 @@ lalu dikirim ke database pusat saat online.
 - Stack: React + Vite + Tailwind CSS + TanStack Start (Router + server functions) +
   Drizzle ORM + Zod + Dexie.
 - Perilaku PWA: service worker manual (`public/sw.js`) + manifest.
+
+## Dokumen
+
+| Dokumen | Isi |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Peta arsitektur, perintah, dan invariant lintas-fitur. Dibaca lebih dulu. |
+| [docs/prd.md](docs/prd.md) | Kebutuhan fungsional (`FR-n.n`), non-fungsional (`NF-n`), aturan bisnis (§10), semantik tabel/kolom (§12), peta FR→berkas (§18). |
+| [docs/brd.md](docs/brd.md) | Latar belakang dan proses bisnis. Tanpa ID kebutuhan. |
+| [docs/invariants/](docs/invariants/) | Sembilan esai per-fitur: apa yang rusak kalau aturannya diubah, dan kenapa. |
+| [docs/pdt-keymap.md](docs/pdt-keymap.md) | Pemetaan tombol perangkat PDT. |
 
 ---
 
@@ -140,13 +150,13 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
   user sudah dicabut admin dan dihapus dari perangkat). Daftar Penerimaan memisahkan "Sesi saya"
   dari "Operator lain"; membuka sesi milik operator lain memunculkan konfirmasi lalu layar
   **baca-saja** — scan, ubah qty, undo, batalkan, dan finalisasi hanya untuk pemiliknya
-  (`canEditSession` di `src/shared/session-owner.ts`). PO yang punya sesi berjalan milik operator
+  (`canEditSession` di `src/features/receiving/logic/session-owner.ts`). PO yang punya sesi berjalan milik operator
   lain **tetap** boleh diterima lewat sesi baru (dengan peringatan yang menyebut pemiliknya), dan
   **pengiriman tidak dibatasi**: tombol Kirim mendorong seluruh outbox termasuk dokumen operator
   lain, supaya dokumen final tidak tertahan menunggu pemiliknya login.
 - **Dedupe sesi per PO:** sebelum membuat sesi, layar detail PO memeriksa apakah operator yang
   sedang login **sudah** punya sesi **berjalan** untuk PO itu (`findRunningSessionForPurchase` di
-  `src/shared/session-owner.ts`). Bila ada, muncul lembar konfirmasi dengan dua pilihan:
+  `src/features/receiving/logic/session-owner.ts`). Bila ada, muncul lembar konfirmasi dengan dua pilihan:
   melanjutkan sesi itu, atau membuat dokumen baru. Tujuannya mencegah satu kiriman tercatat pada
   dua dokumen. Cakupannya sengaja sempit: **hanya sesi `RUNNING`** (dokumen yang sudah difinalisasi,
   sedang dikirim, atau gagal kirim adalah dokumen selesai — satu PO boleh diterima dalam beberapa
@@ -191,12 +201,12 @@ bukan tebakan — `pull` boleh mengambil 2000 baris, satu sesi boleh memuat 5000
 buffer log memegang 2000 entri. Merender semuanya adalah *hang* di PDT kelas bawah, dan *hang*
 terbaca operator sebagai aplikasi rusak.
 
-Semuanya lewat satu komponen, `src/components/virtual-list.tsx`:
+Semuanya lewat satu komponen, `src/ui/virtual/virtual-list.tsx`:
 
-- **Scroller ditemukan lewat context** (`src/components/scroll-container.tsx`), bukan dengan
+- **Scroller ditemukan lewat context** (`src/ui/virtual/scroll-container.tsx`), bukan dengan
   menyusuri DOM. `<main>` milik shell adalah scroller untuk sebagian besar layar; kokpit dan
   `ItemPicker` menyediakan scroller sendiri.
-- **Tinggi baris dihitung dari data**, tidak diukur (`src/components/row-heights.ts`), lalu
+- **Tinggi baris dihitung dari data**, tidak diukur (`src/ui/virtual/row-metrics.ts`), lalu
   dipaksa lewat inline style. Konsekuensinya: setiap baris teks di dalam baris virtual wajib punya
   `leading-*` eksplisit, dan teks yang bisa membungkus dipotong (`truncate`) atau diklamp
   (`line-clamp-2`). Nama barang dan nama vendor yang sangat panjang karena itu berakhir dengan
@@ -215,41 +225,40 @@ review.
 
 ```
 src/
-  shared/                 Logika murni (dipakai server & klien)
-    ids.ts                Skema ID admin (bigint), IdGenerator monotonik
-    doc-number.ts         Nomor dokumen IN<MMYY><NNNN>
-    uom.ts                Resolusi conv_qty (BR-7)
-    barcode.ts            Pencocokan barcode/barcode_2/barcode_3/kode
-    over-receive.ts       Perhitungan over-receive
-    memo.ts               Konvensi kolom note/memo
-    receive-date.ts       Sanitasi tanggal penerimaan
-    schemas.ts            Kontrak Zod (server functions)
-    constants.ts, num.ts, format.ts, uuid.ts
-  server/
+  core/                   Logika murni (dipakai server & klien, tanpa I/O, tanpa React)
+    contracts/            Kontrak bersama (schemas, constants, diag-events)
+    money/                Kalkulasi finansial pos_receive (pembulatan, prorata)
+    receiving/            Logika penerimaan murni (memo, sanitize-date, uom)
+    identity/             Skema ID admin (bigint), nomor dokumen IN<MMYY><NNNN>
+    format.ts             Format mata uang, tanggal, desimal
+  server/                 Backend & database admin
     env.ts                Konfigurasi lingkungan + pengecekan secret/kredensial produksi
     db/                   client (pool+Drizzle), schema, cache, rows, sql-utils
-    auth/credentials.ts   Fingerprint HMAC & verifikasi password legacy
+    crypto/               Fingerprint HMAC & verifikasi password legacy
     services/             auth-service, pull-service, sync-service
     functions/            Server functions (auth, data, sync)
-  client/
-    db/                   Dexie (local-db) & LocalRepository
-    auth/offline-auth.ts  Hash PBKDF2 + verifikasi offline + kedaluwarsa
-    sync/                 transport (server functions) + engine (pull/push)
-    services/scanning.ts  Scan → item + baris PO + konversi
-    state/store/           Store Zustand (slice auth, sync, app) + provider SSR-safe
-    hooks/use-live.ts     Pembungkus useLiveQuery yang aman untuk SPA
-    pwa.ts                Registrasi service worker
-    secure-context.ts     Deteksi https/localhost & ketersediaan WebCrypto
-    feedback.ts, toast.ts Bunyi/getar dan notifikasi singkat
-    preferences.ts        Preferensi operator (mis. input qty)
-  components/             UI (keypad-first) + form login
-    virtual-list.tsx      Daftar tervirtualisasi (satu komponen untuk enam daftar)
-    scroll-container.tsx  Context "siapa scroller terdekat"
-    row-heights.ts        Tinggi baris tiap daftar (dihitung, bukan diukur)
-  routes/                 Halaman: login, /pos, /pos/$id, /sessions, /sessions/$id, /settings
+  data/                   Akses IndexedDB / Dexie
+    local-db.ts           Skema Dexie & migrasi lokal
+    local-repo.ts         LocalRepository (satu-satunya akses ke IndexedDB)
+    use-live.ts           Pembungkus useLiveQuery yang aman untuk SPA/prerender
+  platform/               Browser adapters & module singletons
+    theme.ts, toast.ts, feedback.ts, preferences.ts, scan-focus.ts, secure-context.ts, download.ts
+  ui/                     Design system (bebas domain)
+    primitives.tsx, feedback.tsx, layout.tsx, virtual/ (virtual-list, scroll-container, row-metrics)
+  app/                    Bingkai aplikasi & composition root
+    shell.tsx, top-bar.tsx, bottom-nav.tsx, app-bar.tsx, pwa.tsx, update-banner.tsx, theme-toggle.tsx
+    store/                Store Zustand (slice auth, sync, app)
+  features/               Vertical feature slices
+    auth/                 Layar & form login, offline-auth (PBKDF2)
+    purchase-orders/      Daftar & detail PO
+    receiving/            Penerimaan barang (cockpit, session, review, over-receive, logic, hooks)
+    sync/                 Sinkronisasi offline-first (engine, transport, sync-status)
+    diagnostics/          Diagnostik, ring buffer log, ekspor CSV
+    settings/             Pengaturan perangkat & preferensi
+  routes/                 File-based routes tipis (createFileRoute + komponen fitur)
 public/                   icon.svg, manifest.webmanifest, sw.js, offline.html
 scripts/                  seed demo, setup/teardown DB uji, server produksi
-tests/                    unit, server, client, component
+tests/                    unit, server, integration, component
 ```
 
 ---
@@ -262,8 +271,8 @@ tests/                    unit, server, client, component
 | --- | --- | --- |
 | Unit | `tests/unit/*` | ID bigint, nomor dokumen, UOM, barcode, over-receive (termasuk baris ganda), memo, angka desimal, kalkulasi finansial, validasi secret produksi, deteksi secure context |
 | Server (integrasi MySQL uji) | `tests/server/auth-service`, `pull-service`, `sync-service` | login, pencabutan kredensial, **otorisasi perangkat**, pull bertahap, **idempotensi**, **over-receive lintas device**, penomoran, **rollback transaksi**, sanitasi tanggal, data dokumen dari PO |
-| Klien (Dexie) | `tests/client/local-repo`, `offline-auth`, `auth-webcrypto-guard`, `sync-slice-queue`, `sync-slice-refresh` | repositori lokal (transaksi baris sesi, `markSynced` idempoten, `markFailed` tidak menimpa SYNCED), progress PO, hash & kedaluwarsa kredensial, guard WebCrypto saat login, antrean eksklusif sync/unduh/refresh PO, penanda "PO perlu diperbarui" |
-| Klien ↔ server ↔ MySQL | `tests/client/sync-engine` | alur offline lengkap: pull → scan → finalisasi → sinkron → nomor resmi; replay idempoten; pencabutan kredensial; unduhan gagal atau timeout tidak menghapus data lama; hasil sinkronisasi diproses per sesi; refresh PO tidak menghapus sesi |
+| Klien (Dexie) | `tests/integration/local-repo`, `offline-auth`, `auth-webcrypto-guard`, `sync-slice-queue`, `sync-slice-refresh` | repositori lokal (transaksi baris sesi, `markSynced` idempoten, `markFailed` tidak menimpa SYNCED), progress PO, hash & kedaluwarsa kredensial, guard WebCrypto saat login, antrean eksklusif sync/unduh/refresh PO, penanda "PO perlu diperbarui" |
+| Klien ↔ server ↔ MySQL | `tests/integration/sync-engine` | alur offline lengkap: pull → scan → finalisasi → sinkron → nomor resmi; replay idempoten; pencabutan kredensial; unduhan gagal atau timeout tidak menghapus data lama; hasil sinkronisasi diproses per sesi; refresh PO tidak menghapus sesi |
 | Komponen UI | `tests/component/*` | komponen dasar, kontrol scan, form login, peringatan http di layar login (jsdom + Testing Library) |
 
 > Jumlah test di atas dihitung manual dari `npm test`; perbarui bila menambah/menghapus test.
@@ -284,7 +293,7 @@ Contoh perilaku yang diuji secara eksplisit:
 - `public/sw.js` menyimpan shell SPA + aset statis; navigasi network-first dengan
   fallback shell. Panggilan `/_serverFn/*` dan `/api/*` selalu **network-only**.
 - Service worker didaftarkan di **semua** environment (`registerServiceWorker()` di
-  `src/components/app-shell.tsx`). Perilaku offline penuh hanya terjamin pada build
+  `src/app/shell.tsx`). Perilaku offline penuh hanya terjamin pada build
   (`npm run build && npm start`); di `npm run dev` cache shell bisa basi.
 - **Naikkan `CACHE_VERSION` di `public/sw.js` pada setiap rilis yang mengubah aset** lalu jalankan
   `npm run build` ulang: daftar aset (`precache-manifest.json`) hanya dibaca saat service worker
@@ -379,7 +388,7 @@ Warnanya hidup di ±49 token semantik di `src/styles/app.css`, jadi tema terang 
 `:root[data-theme='light']` yang mendefinisikan ulang token-token itu; tidak ada komponen yang
 disentuh. Atributnya dipasang dua kali: oleh skrip inline di `src/routes/__root.tsx` sebelum paint
 pertama (tanpa itu setiap kali aplikasi dibuka akan berkedip gelap satu frame) dan oleh
-`src/client/theme.ts` untuk sisa sesi.
+`src/platform/theme.ts` untuk sisa sesi.
 
 Mode **kontras tinggi** (`data-contrast="high"`) **sudah dihapus**: tema terang-lah mode untuk dok
 bongkar yang terang, dan langkah warnanya dipilih supaya teks terkecil tetap lolos WCAG AA di atas
@@ -433,7 +442,7 @@ Beberapa keputusan yang penting dipahami sebelum mengubahnya:
   terautentikasi, jadi perangkat yang memegang satu kredensial valid secara teknis bisa mengirim sesi atas
   nama user lain (jejak `pos_receive.user_id`). Perlu keputusan produk bila dianggap risiko.
 - **Penanda pemilik sesi adalah pencegah kekeliruan, bukan kontrol akses.** Seluruh aturannya
-  berjalan di perangkat (`src/shared/session-owner.ts` + layar sesi); server tidak memeriksa pemilik
+  berjalan di perangkat (`src/features/receiving/logic/session-owner.ts` + layar sesi); server tidak memeriksa pemilik
   sesi sama sekali, sehingga keterbatasan `userId` pada butir di atas tetap berlaku utuh.
 - Sesi **berjalan** milik operator yang tidak kembali (mis. kredensialnya dicabut admin) tidak bisa
   dilanjutkan, diambil alih, atau dihapus oleh operator lain. Sesi itu menetap di perangkat, dan

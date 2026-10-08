@@ -6,7 +6,7 @@ import {
   decomposeId,
   maxIdForApp,
   minIdForApp,
-} from '~/shared/ids'
+} from '~/core/identity/ids'
 
 describe('ids', () => {
   it('mengikuti rumus admin: (millis + 2^56*appIdx)*10 + digit', () => {
@@ -47,7 +47,11 @@ describe('ids', () => {
   describe('IdGenerator', () => {
     it('menghasilkan ID yang selalu naik & unik walau jam tetap', () => {
       let now = 1_000
-      const gen = new IdGenerator(2, () => now, () => 0.5)
+      const gen = new IdGenerator(
+        2,
+        () => now,
+        () => 0.5,
+      )
       const a = gen.next()
       const b = gen.next()
       const c = gen.next()
@@ -61,12 +65,20 @@ describe('ids', () => {
     })
 
     it('memakai appIdx yang diberikan', () => {
-      const gen = new IdGenerator(2, () => 1_000, () => 0)
+      const gen = new IdGenerator(
+        2,
+        () => 1_000,
+        () => 0,
+      )
       expect(decomposeId(gen.next()).appIdx).toBe(2)
     })
 
     it('digit acak tetap 0..9', () => {
-      const gen = new IdGenerator(2, () => 1_000, () => 0.999999)
+      const gen = new IdGenerator(
+        2,
+        () => 1_000,
+        () => 0.999999,
+      )
       expect(decomposeId(gen.next()).digit).toBe(9)
     })
   })

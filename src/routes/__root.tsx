@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
-import { AppStoreProvider } from '~/client/state/store/app-store-provider'
-import { AppShell } from '~/components/app-shell'
+import { AppStoreProvider } from '~/app/store/app-store-provider'
+import { AppShell } from '~/app/shell'
 import appCss from '~/styles/app.css?url'
 
 export const Route = createRootRoute({
@@ -12,11 +12,14 @@ export const Route = createRootRoute({
       // The DARK value, and the one the document starts with. A meta tag cannot read var(), so it
       // is a copy of --color-ground in src/styles/app.css; theme_color in
       // public/manifest.webmanifest is a third copy and all three change together.
-      // src/client/theme.ts rewrites this tag's content when the operator switches theme (see
+      // src/platform/theme.ts rewrites this tag's content when the operator switches theme (see
       // THEME_COLOR there); the manifest deliberately does NOT follow, because it is read once at
       // install time.
       { name: 'theme-color', content: '#0b1220' },
-      { name: 'description', content: 'Pencatatan penerimaan barang berbasis PO untuk PDT (offline-first)' },
+      {
+        name: 'description',
+        content: 'Pencatatan penerimaan barang berbasis PO untuk PDT (offline-first)',
+      },
       { title: 'StockOps — Penerimaan Barang' },
     ],
     links: [
@@ -50,7 +53,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
             device set to light. On a PDT that is opened and closed all shift long, that flash is
             very visible.
 
-            src/client/theme.ts owns the same decision for the rest of the session. The two read the
+            src/platform/theme.ts owns the same decision for the rest of the session. The two read the
             SAME localStorage key and MUST be changed together. This is duplicated rather than
             imported on purpose: at this point in the document the application bundle has not been
             fetched, so there is nothing to import from.

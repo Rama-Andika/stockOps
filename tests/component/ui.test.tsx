@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { Badge, Button, Field, Notice } from '~/components/ui'
+import { Badge, Button, Field, Notice } from '~/ui/primitives'
 
 describe('komponen UI (keypad-first)', () => {
   it('Button memanggil handler saat diklik', () => {
@@ -43,5 +43,4 @@ describe('komponen UI (keypad-first)', () => {
     expect(screen.getByText('Nomor Invoice')).toBeInTheDocument()
     expect(screen.getByText('Wajib diisi')).toBeInTheDocument()
   })
-
 })

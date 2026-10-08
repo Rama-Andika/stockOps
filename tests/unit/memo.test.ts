@@ -7,8 +7,8 @@ import {
   isOverReceiveMemo,
   parseOverReceiveMemo,
   parseSessionNote,
-} from '~/shared/memo'
-import { MEMO_MAX_LENGTH } from '~/shared/constants'
+} from '~/core/receiving/memo'
+import { MEMO_MAX_LENGTH } from '~/core/contracts/constants'
 
 describe('session note (kunci idempotensi)', () => {
   const note = buildSessionNote({

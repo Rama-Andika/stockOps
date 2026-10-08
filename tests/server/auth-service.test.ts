@@ -8,7 +8,7 @@ import {
   findAuthorizedUserIds,
   loginOnline,
 } from '~/server/services/auth-service'
-import { computeFingerprint } from '~/server/auth/credentials'
+import { computeFingerprint } from '~/server/crypto/credentials'
 import { CREDENTIALS, FIXTURE, queryRows, seedAll } from './helpers'
 
 describe('auth-service', () => {

@@ -5,7 +5,7 @@ import {
   rejectionReasonText,
   summarizeQtyByUnit,
   type OrderedItemInput,
-} from '~/shared/session-view'
+} from '~/features/receiving/logic/session-view'
 
 /** The admin DB hands decimals back as strings, so the fixtures use strings on purpose. */
 function ordered(entries: Array<[string, string, string]>): Map<string, OrderedItemInput> {

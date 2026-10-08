@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-StockOps is an offline-first PWA for warehouse operators on PDT (Portable Data Terminal) devices to record goods received against Purchase Orders. It reads from and writes to an **existing admin MySQL/MariaDB database** (tested on MariaDB 10.4) that it does not own. Requirements live in `PRD_Penerimaan_Barang_PDT.md` (functional requirements `FR-n.n`, non-functional `NF-n`, business rules `BR-n` in §10, table/column semantics in §12) and `BRD_Penerimaan_Barang_PDT.md` (background and process, no IDs). `README.md` (Indonesian) documents the business rules and design decisions in detail. UI strings are in Indonesian; code comments are in English.
+StockOps is an offline-first PWA for warehouse operators on PDT (Portable Data Terminal) devices to record goods received against Purchase Orders. It reads from and writes to an **existing admin MySQL/MariaDB database** (tested on MariaDB 10.4) that it does not own. Requirements live in `docs/prd.md` (functional requirements `FR-n.n`, non-functional `NF-n`, business rules `BR-n` in §10, table/column semantics in §12) and `docs/brd.md` (background and process, no IDs). `README.md` (Indonesian) documents the business rules and design decisions in detail. UI strings are in Indonesian; code comments are in English.
 
-**Code comments carry no requirement IDs.** A comment has to be understandable without opening any document, so it states the rule itself, why it exists, and what breaks if it changes — never `FR-5.1` as a stand-in for any of that. Traceability runs the other way: the PRD's business-rule table (§10) carries an "Implementasi" column and §18 maps the FR/NF groups onto files. Cross-reference by symbol or path (`see PERMANENT_REJECT_CODES`, `src/shared/memo.ts`), name the test that locks a load-bearing invariant, and don't restate what the code already says.
+**Code comments carry no requirement IDs.** A comment has to be understandable without opening any document, so it states the rule itself, why it exists, and what breaks if it changes — never `FR-5.1` as a stand-in for any of that. Traceability runs the other way: the PRD's business-rule table (§10) carries an "Implementasi" column and §18 maps the FR/NF groups onto files. Cross-reference by symbol or path (`see PERMANENT_REJECT_CODES`, `src/core/receiving/memo.ts`), name the test that locks a load-bearing invariant, and don't restate what the code already says.
 
 Stack: TanStack Start in **SPA mode** (router + server functions), React 19, Vite, Tailwind v4, Drizzle ORM over mysql2, Zod 4, Dexie (IndexedDB), Zustand. Import alias `~/*` → `src/*`.
 
@@ -20,7 +20,7 @@ npm run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
 npm test                 # all tests
 npm run test:unit        # tests/unit only (pure logic)
 npm run test:server      # tests/server (MySQL integration)
-npm run test:client      # tests/client (Dexie + full sync flow)
+npm run test:integration # tests/integration (Dexie + full sync flow, needs MySQL)
 npx vitest run tests/unit/ids.test.ts          # single file
 npx vitest run -t "name of test"               # single test by name
 npm run db:seed          # demo data in the `demo` DB (login pdt / pdt123)
@@ -31,18 +31,53 @@ Testing notes:
 - **Every test run needs a running MySQL/MariaDB** (from `.env`): Vitest `globalSetup` (`tests/global-setup.mjs` → `scripts/lib/test-db.mjs`) always recreates the `stockops_test` schema by cloning the real DDL via `SHOW CREATE TABLE` (foreign keys stripped). `tests/setup.ts` forces `DB_NAME=stockops_test` so tests never touch `demo`.
 - Tests run serially (`fileParallelism: false`, `pool: 'forks'`); default environment is `node`. Component tests opt into jsdom; client tests use `fake-indexeddb`.
 - Server test fixtures (IDs, rows) are in `tests/server/helpers.ts`.
-- The service worker is registered in every environment (`registerServiceWorker()` in `src/components/app-shell.tsx`), but full offline behavior only works on a build (`npm run build && npm start`); under `npm run dev` the cached shell goes stale. `CACHE_VERSION` no longer needs a manual bump: `scripts/stamp-sw.mjs` (last step of `npm run build`) stamps the package version and the build time into `dist/client/sw.js`, so `sw.js` differs on every build and the browser always re-runs `install` — the only moment the precache manifest is read. Under `npm run dev` the file is served unstamped and never changes, so clear a stale shell from DevTools → Application → Service Workers instead.
-- **App version & reload prompt (plans/implementation-plan-versi-app-prompt-muat-ulang.md):** `public/sw.js` deliberately does NOT call `skipWaiting()` in `install` — a new worker stays in `waiting` until the operator accepts the banner, because `activate` deletes the previous `CACHE_VERSION` and would otherwise pull the route chunks out from under an open scan session. The only activation path is the `SKIP_WAITING` message (`activateUpdate()` in `src/client/pwa.ts`), whose reload waits for `controllerchange`; that listener is armed inside `activateUpdate` and nowhere else, because `clients.claim()` also fires it on a device's first install. The banner shares ONE app-bar row with `SyncStatus` and `SyncStatus` always wins (`useSendStatus()` in `sync-status.tsx` is the single definition of "quiet", read by `TopBar`), so a pending outbox hides the banner rather than hiding the "Kirim" button — which is why `UpdateBanner`'s `pendingCount` branch is currently unreachable and is kept on purpose. "Nanti" is 15 minutes, in memory only (`UPDATE_SNOOZE_MS`). Because the banner renders on every screen, the cockpit included, its "Nanti" hands the focus back to the barcode field through `src/client/scan-focus.ts` — a module singleton, because the app bar is a sibling of the route that owns `scanRef`.
+- The service worker is registered in every environment (`registerServiceWorker()` in `src/app/shell.tsx`), but full offline behavior only works on a build (`npm run build && npm start`); under `npm run dev` the cached shell goes stale. `CACHE_VERSION` no longer needs a manual bump: `scripts/stamp-sw.mjs` (last step of `npm run build`) stamps the package version and the build time into `dist/client/sw.js`, so `sw.js` differs on every build and the browser always re-runs `install` — the only moment the precache manifest is read. Under `npm run dev` the file is served unstamped and never changes, so clear a stale shell from DevTools → Application → Service Workers instead.
+- **App version & reload prompt** — `public/sw.js` deliberately does NOT call `skipWaiting()` in `install`, because activating immediately deletes the previous cache version and pulls route chunks out from under an open scan session. Details in [docs/invariants/app-version-update.md](docs/invariants/app-version-update.md).
 - `crypto.subtle` and service workers need a secure context: `localhost` works, but a PDT opening `http://<LAN-IP>` cannot log in or work offline.
 
 ## Architecture
 
-Three layers, with a strict dependency direction: `routes/components → client → shared ← server`. The client reaches the server **only** through server functions.
+Seven layers with one dependency direction. `src/server/` is a technical layer on purpose, not a
+feature slice: a single `~/server/db/client` import from a component would pull `mysql2` and
+`drizzle-orm` into the browser bundle, and TanStack Start only tree-shakes server code across the
+`createServerFn` boundary.
 
-- `src/shared/` — pure logic used on both sides: bigint ID scheme, document numbering, UOM conversion, barcode matching, over-receive math, receive financial recalculation, `note`/`memo` conventions, and the Zod contracts (`schemas.ts`) for every server function.
-- `src/server/` — `functions/*` are thin `createServerFn` wrappers (Zod-validate → call a service). Business logic lives in `services/` (`auth-service`, `pull-service`, `sync-service`). `db/schema.ts` *mirrors* the admin DDL (only used columns).
-- `src/client/` — `db/local-db.ts` (Dexie schema) + `db/local-repo.ts` (`LocalRepository`, all IndexedDB access); `sync/engine.ts` (pull master/PO data in chunks, push finalized sessions from the outbox); `sync/transport.ts` (`SyncTransport` interface — `serverTransport` calls server functions, tests inject a transport that calls services directly against the test DB); `auth/offline-auth.ts` (PBKDF2-cached credentials, 7-day offline login); `state/store/` (Zustand store split into auth/sync/app slices, provided via an SSR-safe `AppStoreProvider` that also triggers auto-sync on reconnect).
-- `src/routes/` — file-based routes; `routeTree.gen.ts` is generated by the TanStack plugin (don't edit by hand).
+```
+routes  →  features  →  { ui, app, data, platform, core }
+                  app  →  { features, ui, data, platform, core }
+                 data  →  core
+             platform  →  core
+                   ui  →  { core, platform }
+               server  →  core
+```
+
+- `src/core/` — pure logic, no I/O, no React, no Dexie, no database driver. `contracts/` holds what
+  both runtimes share (`schemas.ts`, `constants.ts`, `diag-events.ts`); `money/`, `receiving/`,
+  `identity/` and `format.ts` hold the rest. Enforced by Biome, not by discipline.
+- `src/data/` — the single door to IndexedDB: `local-db.ts` (Dexie schema), `local-repo.ts`
+  (`LocalRepository`, every IndexedDB access), `use-live.ts` (prerender-safe `useLiveQuery`).
+  It imports `core` and nothing else. `local-repo.ts` is deliberately NOT split per feature:
+  `markSynced` writes five tables in one transaction and `getPurchaseProgress` reads four.
+- `src/platform/` — browser adapters and module singletons: `toast`, `theme`, `preferences`,
+  `feedback`, `scan-focus`, `secure-context`, `download`.
+- `src/ui/` — the design system. Knows no domain. `virtual/` holds the three-part virtualisation
+  mechanism (scroller context, forced row heights, threshold).
+- `src/app/` — the application frame: `shell`, `top-bar`, `bottom-nav`, `app-bar`, `pwa`,
+  `update-banner`, `theme-toggle`, `app-version`, and `store/` (the Zustand slices). `store/` is the
+  composition root of client state, which is why it is the one place allowed to import features
+  while features import `useAppStore` back — two-way between folders, acyclic between files.
+- `src/features/` — vertical slices: `auth`, `purchase-orders`, `receiving` (with `cockpit/`,
+  `session/`, `review/`, `over-receive/`, `hooks/`, `logic/`), `sync`, `diagnostics`, `settings`.
+  Cross-feature imports are allowed one way and must be named; today there is exactly one,
+  `purchase-orders → receiving`, because starting a receiving session from a PO belongs to
+  receiving.
+- `src/server/` — `functions/*` are thin `createServerFn` wrappers (Zod-validate → call a service).
+  Business logic lives in `services/`; `crypto/credentials.ts` holds the HMAC fingerprint;
+  `db/schema.ts` *mirrors* the admin DDL (only used columns). `functions/**` is the ONLY part of
+  `server/` client code may import.
+- `src/routes/` — file-based routes only. Every route file is 5–12 lines: a `createFileRoute` plus
+  the feature component it renders. Routes with a param read `Route.useParams()` and pass it down as
+  a prop. `routeTree.gen.ts` is generated by the TanStack plugin (don't edit by hand).
 - `public/sw.js` — hand-written service worker; `/_serverFn/*` and `/api/*` are always network-only. `scripts/serve.mjs` serves `dist/client` statically and forwards server-function requests to `dist/server/server.js`.
 
 ### Data flow
@@ -51,10 +86,10 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
 
 ### Invariants that are easy to break
 
-- **Never alter the admin schema** (no migrations, no Drizzle Kit against the real DB). Only read/write rows in existing tables. Any extra state must fit into existing columns — e.g. session idempotency key in `pos_receive.note` (`PDT|SESS=<uuid>;DEV=…;USR=…`) and over-receive flags in `pos_receive_item.memo` (`PDT|OVER;ORD=…;TOT=…;EXC=…`); see `src/shared/memo.ts`.
-- **Bigint IDs are always strings/BigInt, never `number`** — real IDs exceed 2^53. IDs are generated server-side: `(millis + 2^56 × appIdx) × 10 + randomDigit`, with PDT appIdx = 2 and admin = 1 (`src/shared/ids.ts`).
+- **Never alter the admin schema** (no migrations, no Drizzle Kit against the real DB). Only read/write rows in existing tables. Any extra state must fit into existing columns — e.g. session idempotency key in `pos_receive.note` (`PDT|SESS=<uuid>;DEV=…;USR=…`) and over-receive flags in `pos_receive_item.memo` (`PDT|OVER;ORD=…;TOT=…;EXC=…`); see `src/core/receiving/memo.ts`.
+- **Bigint IDs are always strings/BigInt, never `number`** — real IDs exceed 2^53. IDs are generated server-side: `(millis + 2^56 × appIdx) × 10 + randomDigit`, with PDT appIdx = 2 and admin = 1 (`src/core/identity/ids.ts`).
 - Document numbers `IN<MMYY><NNNN>` use a per-month counter and are assigned only at sync time.
-- Financial fields (`amount`, discounts, `total_amount`, `total_tax`) are **recomputed server-side** from PO data at sync, prorated by received qty, rounded half-up to 2 decimals (`src/shared/receive-finance.ts`).
+- Financial fields (`amount`, discounts, `total_amount`, `total_tax`) are **recomputed server-side** from PO data at sync, prorated by received qty, rounded half-up to 2 decimals (`src/core/money/receive-finance.ts`).
 - Over-receive is **flagged, not rejected**, using totals aggregated across all devices/documents.
 - If the server rejects a session (PO closed/deleted/validation), it becomes `REJECTED` locally, leaves the queue, and the PO list is refreshed. `UNAUTHORIZED` is deliberately *not* permanent: the session stays `FAILED` in the queue.
 - **Device authentication:** server functions that read or write ERP data (`pullDataFn`, `syncPushFn`, `overReceiveWorklistFn`) require the fingerprint of at least one still-valid cached user (`assertAuthorizedDevice` in `src/server/services/auth-service.ts`; `syncPush` checks it inline). Any new server function touching ERP data must do the same. Sessions of a user whose own credential was revoked are still accepted (product decision) as long as the device is authorized.
@@ -64,164 +99,19 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
 - Payload limits: push ≤ 200 sessions (`MAX_PUSH_SESSIONS`) and ≤ 5000 lines per session (`MAX_SESSION_LINES`); credentials ≤ 500; pull `limit` ≤ 2000; worklist `limit` ≤ 200. The client sends the oldest 200 outbox sessions per sync.
 - `npm start` (`scripts/serve.mjs`) sets `NODE_ENV=production` only if it is unset (a shell `NODE_ENV=development` silently disables the checks), which makes `getPool()` refuse weak `CREDENTIAL_HMAC_SECRET` or unset DB credentials. The refusal happens lazily on the first database request, not at start-up. Changing the secret revokes every cached credential on every device.
 - `serve.mjs` reads `TLS_CERT_FILE`/`TLS_KEY_FILE`/`PORT` from the shell environment only (it does not load `.env`; `src/server/env.ts` loads it lazily via `dotenv/config`). Exactly one TLS variable set, or unreadable TLS files, exit the process instead of falling back to http.
-- `sync()`, `downloadData()` and `refreshPurchases()` in the store share ONE queue (`runExclusive` in `sync-slice.ts`): a download can never overwrite the `receivedQty` that `markSynced` just updated. Repeated `downloadData()`/`refreshPurchases()` calls join the one already queued/running. `runSync` calls the engine's `refreshPurchases` directly (not the store action) — keep it that way to avoid a deadlock on the queue.
-- Every `pull` chunk has a timeout (`PULL_TIMEOUT_MS` in `engine.ts`, option `timeoutMs`), so a hung fetch cannot block the queue forever. Pulls download everything first and swap local tables in one Dexie transaction (`replaceMasterData` / `replacePurchases`), so a timeout or error leaves the old data intact.
+- `sync()`, `downloadData()` and `refreshPurchases()` in the store share ONE queue (`runExclusive` in `src/app/store/sync-slice.ts`): a download can never overwrite the `receivedQty` that `markSynced` just updated. Repeated `downloadData()`/`refreshPurchases()` calls join the one already queued/running. `runSync` calls the engine's `refreshPurchases` directly (not the store action) — keep it that way to avoid a deadlock on the queue.
+- Every `pull` chunk has a timeout (`PULL_TIMEOUT_MS` in `src/features/sync/engine.ts`, option `timeoutMs`), so a hung fetch cannot block the queue forever. Pulls download everything first and swap local tables in one Dexie transaction (`replaceMasterData` / `replacePurchases`), so a timeout or error leaves the old data intact.
 - `markSynced` is idempotent and skips the local `receivedQty` increment on `IDEMPOTENT_REPLAY`; the PO list is then refreshed from the server. `runSync` raises the local `meta` flag `purchasesStale` (`PURCHASES_STALE_META_KEY`) BEFORE that refresh and clears it only once the refresh succeeds, so a crash or closed tab mid-refresh still leaves a trace. The flag is also raised when the refresh is skipped (right after a failed push, or when the current user's credential was revoked, because the pull would fail anyway). If the refresh fails, `runSync` tells the operator; it is retried on every later `sync()` and on auto-sync when the device is online again, and any successful refresh/download also clears the flag.
 - `syncOutbox` handles the server's answer per session: a local write error (or a failing log write) never reverts a session that is already `SYNCED`, a session the server did not answer for becomes `FAILED` instead of staying `SYNCING`, and `markFailed`/`markRejected` never override `SYNCED`. Answers for an unknown or an already answered session id are ignored (and logged), so `synced`/`failed` never exceed `attempted`. Every `syncOutbox` run first calls `resetStaleSyncingSessions()` (atomic, one transaction): sync runs never overlap, so anything still `SYNCING` is stale and goes back to the queue.
-- Code that touches IndexedDB must tolerate running without it (SPA prerender in Node): use `useLive` (`src/client/hooks/use-live.ts`) instead of raw `useLiveQuery`, and `isBrowser()` guards in the store.
-- **UI invariants (plans/implementation-plan-ux-refresh-*):** the scan loop must fit 360×640 without
-  scrolling; only a successful scan result disappears on its own, the other three scan states wait for
-  the operator; undo subtracts the last scanned qty from the line (`addOrIncrementLine` merges repeated
-  scans, so `removeLine` would delete too much); progress bars are `SegmentedProgress` — the old
-  `Progress` component is gone from `ui.tsx` and from its tests.
-- **Themes (plans/implementation-plan-tema-terang-suara-scan.md):** colour lives in ~49 semantic
-  tokens in `src/styles/app.css` declared with `@theme` — NOT `@theme inline`, which would bake the
-  values into the utilities and make a theme impossible — so the light theme is ONE
-  `:root[data-theme='light']` block and no component is touched. `data-theme` is written twice: by
-  an inline script in `src/routes/__root.tsx` before the first paint (without it every app start
-  flashes dark) and by `src/client/theme.ts` for the rest of the session; both read the same
-  `stockops.preferences` key and change together. That module is a subscriber singleton like
-  `toast.ts`, because the same switch exists in two places never in one subtree — the app-bar
-  button (`theme-toggle.tsx`) and the Pengaturan row. Dark is the ABSENCE of the attribute. BOTH
-  screens must READ that singleton, not just write it: Pengaturan takes the theme from
-  `useSyncExternalStore`, never from its own mount-time `preferences` snapshot, and
-  `updatePreferences` rebases on `getTheme()` — otherwise flipping the theme from the app bar while
-  Pengaturan is open leaves its row contradicting the screen, and the next flip of any OTHER
-  preference persists the stale theme, so the choice silently reverts on the next app start (locked
-  by `tests/component/settings-screen.test.tsx`, describe "sinkronisasi tema dengan ikon app bar").
-  Three traps in the light block: `--color-scrim` must stay DARK (it dims content, it is not a
-  surface); the `*-fill`/`on-*-fill` pairs, the `*-solid` fills and the two status dots are
-  deliberately NOT redefined (self-contained, and the dots live inside the fills); and the `line-*`
-  ladder runs the other way — "strong" means darker. The old `data-contrast="high"` layer is GONE:
-  the light theme is the bright-dock mode now, so there is no contrast booster left for the dark
-  theme. The app-bar button is `h-10` PLUS `-my-1.5`, and the margin is not cosmetic: the title row
-  is `items-center` with `py-2`, so its height is (tallest child) + 16px and that child was 28px,
-  making the row 44px. A bare 40px button makes it 56px — +12px on every screen, taken from the
-  scan cockpit's only scroller. It also calls `requestScanFocus()` for the same reason
-  `UpdateBanner` does. `public/offline.html` is outside the token system and stays dark in both
-  themes.
-- **Scan feedback (same plan):** every tone in `src/client/feedback.ts` sits at or above 950 Hz and
-  uses a `square` wave. A 220 Hz sine was inaudible on a PDT speaker, which rolls off steeply below
-  ~400 Hz — the failure sound was silent in the field for a long time because success (1000 Hz) was
-  heard, so it read as "no sound on failure" rather than as a frequency problem. Lowering those
-  numbers makes the beeps silent, not gentle. `warn` and `danger` share ONE sound and vibration
-  (the operator asked for a single failure signal, and the card on screen carries the difference),
-  but both names stay because the call sites mean different things — which is also why
-  `routes/sessions/$sessionId.tsx` needs no edit. `over` keeps its own signal on purpose: the line
-  IS saved, and sounding it as a failure teaches operators to scan the box twice. A suspended
-  AudioContext does not advance `currentTime`, so the tone is scheduled INSIDE the `resume()`
-  callback; scheduling first and resuming after loses the first beep.
-- **Session ownership (plans/implementation-plan-pemilik-sesi-mvp.md):** one PDT is shared between
-  operators, so `LocalSession` carries the owner's denormalized name (`userFullName`,
-  `userLoginId`, backfilled by the Dexie v2 upgrade) and every screen asks
-  `src/shared/session-owner.ts` instead of comparing ids — `canEditSession` means "RUNNING AND
-  mine", which is what the cockpit's `editable` now is. A non-owner gets `SessionOwnerGate` and
-  then a read-only cockpit; the two focus/wedge effects must guard on the same value or a
-  read-only screen keeps stealing the scanner. Mind the inverse: the cockpit's `!editable` blocks
-  render for a colleague's document as well, so anything in them that WRITES — today the
-  "Hapus sesi dari perangkat" button on a REJECTED session — needs its own `isOwner` check
-  (`tests/component/session-cockpit-ownership.test.tsx` locks both directions), and their copy must
-  not claim that only the owner can send. Sending is deliberately NOT restricted (the outbox
-  is device-level), and there is no takeover or purge for a colleague's stranded session. It is a
-  mistake guard, not access control: the server never checks the owner.
-- **Dedupe per PO (plans/implementation-plan-dedupe-sesi-per-po.md):** `createSession` still checks
-  nothing — the rule lives in `findRunningSessionForPurchase` (`src/shared/session-owner.ts`) and is
-  applied by its callers, so the ±44 `createSession` calls in `tests/` stay valid. Its scope is
-  deliberately narrow and both edges are load-bearing: only `RUNNING` (a PENDING/SYNCING/FAILED
-  document for the same PO is a finished one, and a PO may be received in several deliveries) and
-  only the current operator's own (a colleague's session for the same PO must NOT block them, or
-  they are left with no way to start at all). `routes/pos/$purchaseId.tsx` re-reads
-  `runningSessions()` at click time rather than trusting its own `useLive` snapshot, and `busy` plus
-  `duplicate !== null` are the only race guards — there is no atomic Dexie transaction. The second
-  one matters: `busy` is released the moment the sheet opens, so without it the primary action is
-  live behind the scrim. "Buat dokumen baru" must stay: it is
-  the escape hatch for a genuine second delivery, and it leaves no trace anywhere.
-  `DuplicateSessionSheet` may be a bottom sheet (not a full-screen gate like `SessionOwnerGate`)
-  ONLY because the PO detail screen has no scan field and no scanner wedge to steal focus from.
-  Three things in that sheet are load-bearing for NF-8 (keypad-first) and each has a test:
-  `onKeyDown` lives on the OUTER container (a React handler only sees events passing through its own
-  node, so one mounted on the panel alone goes deaf as soon as the focus is elsewhere in the sheet),
-  the panel carries `tabIndex={-1}` (a tap on its text would otherwise park the focus on `<body>`,
-  where no keystroke reaches any handler and Escape dies), and the scrim carries `tabIndex={-1}`
-  (it sits before the panel in document order, so as a tab stop it is the way OUT of the dialog).
-  The focus-in effect also restores the previous `activeElement` on unmount — without it every
-  cancel drops the operator at the top of the document. `LineEditSheet` in
-  `routes/sessions/$sessionId.tsx` is the older twin and still has all four holes.
-- **Pick from the PO list (plans/implementation-plan-pilih-item-dari-po.md):** a line can now also
-  arrive without a barcode, and both paths end in ONE place on purpose — `addPickedItem` returns the
-  same `AddScanResult` as `addScannedItem`, they share `resolveWithConversion` (the conv factor is
-  what silently changes a stored qty) and `qtyRejection`, and the cockpit renders both results
-  through one `addedHero`, so over-receive cannot be announced by one path only. The qty ADDS, never
-  replaces: `addOrIncrementLine` merges a scan and a pick for one PO item into a single row
-  (`[sessionId+purchaseItemId]`), which is also why `pickedManually` is sticky and means "part of
-  this qty was never scanned" — the only thing that lowers it is undo of the addition that raised it
-  (`clearPickedOnUndo` on `lastScanRef`), and the flag never leaves the device, because
-  `buildSessionPayload` maps line fields one by one. `ItemPicker` is a full-screen overlay rendered
-  BY the cockpit, not a route: the hero card is cockpit state, and the overlay has to switch off the
-  cockpit's focus effect AND the scanner wedge — `pickerOpen` belongs in the condition and the deps
-  of BOTH, or the picker's search field cannot be typed into at all (it reads as a broken keyboard,
-  not as a focus bug). Three of `DuplicateSessionSheet`'s four NF-8 rules apply verbatim; the scrim
-  one has nothing to apply to, since the overlay is opaque and has no scrim. The picker's door sits
-  in the "+" slot of `ScanBar` while the barcode field is empty, because a fifth 56px button would
-  leave that field 80px at 360px — and it is offered on the `NOT_FOUND` card but deliberately NOT on
-  `NOT_IN_PO`, where the item is known to be absent from this PO and the picker lists only this PO.
-
-- **Diagnostics trail (plans/implementation-plan-diagnostik-log-ekspor.md):** `syncLog` is written
-  through ONE door, `LocalRepository.logEvent`, which is also where truncation and the 2000-entry
-  ring buffer live — a second `add()` into that table bypasses both. Entries are ordered by the
-  primary key `id`, never by `at`: a PDT clock can be wrong or jump, and `at` is read, not trusted.
-  `category`, `event` and `detail` are deliberately NOT indexed and therefore added without a new
-  Dexie version (the schema needs declarations for indexes, not for stored fields); the screen's
-  level filter rides the existing `level` index and its category filter runs in memory. An `event`
-  code travels out of the device as a CSV column, so add codes rather than renaming them. Writing
-  the trail may never throw at its caller — `safeLog` (engine, uses the INJECTED repo so the sync
-  tests hit their own database) and `recordDiag` (`src/client/diagnostics/trail.ts`, singleton,
-  fire-and-forget, self-disables after 3 consecutive write failures so a failing write cannot feed
-  the global error listener back into itself). Per-session SUCCESS is deliberately not logged —
-  one push carries up to 200 documents and would evict the failures the trail exists for; the
-  per-run `PUSH_RUN` summary carries the totals, and over-receive keeps its own `warn` entry.
-  Export is local-only: nothing is ever sent to the server, the CSV is `;`-separated with a UTF-8
-  BOM for Excel, and `downloadTextFile` returns a boolean because some Android WebViews swallow a
-  Blob download silently — the clipboard fallback is the only reason that failure is visible.
-- **Virtualized lists (plans/implementation-plan-virtualisasi-daftar-*):** six lists render only
-  the rows on screen, all through ONE component, `src/components/virtual-list.tsx`. Three things
-  about it are load-bearing. (1) It finds the scrolling element through
-  `ScrollContainerContext` (`src/components/scroll-container.tsx`), never by walking the DOM: the
-  scroller is the shell's `<main>` on most screens but the route's own element in the cockpit and
-  in `ItemPicker`, and the context value is a REF because `AppShell` renders `<main>` in the same
-  pass as the route inside it. The default value means "no scroller", which is what keeps the
-  component tests that render routes without `AppShell` working. (2) Row heights are COMPUTED from
-  the row's data in `src/components/row-heights.ts` and then FORCED with an inline style plus
-  `overflow-hidden` — nothing is ever measured, so every line of text inside a virtual row needs
-  an explicit `leading-*` (`body` is `font-size: 18px` with no line-height, so an element with no
-  text-size class has a height the font decides) and anything that may wrap is `truncate` or
-  `line-clamp-2`. Where `line-clamp-2` was added, `block` had to go: both set `display`.
-  `tests/unit/row-heights.test.ts` locks the arithmetic, and totals are rounded UP to a multiple of
-  4 because a height that is too small clips text while one that is too large is invisible.
-  (3) Below `VIRTUAL_THRESHOLD` rows, or with no scroller, it renders every row plainly through the
-  SAME `renderRow` and the same height — which is why ±45 existing component tests with 2–5 row
-  fixtures needed no changes at all. (4) The identity of the `rows` array is the list's MEASUREMENT
-  identity: virtual-core rebuilds measurements when `getItemKey` changes and never because
-  `estimateSize` would now answer differently, so every input `rowHeight` reads must live inside
-  `rows` — a height that depends on a closure keeps the value it had when the rows last changed,
-  and since rows are clipped to their measured height the extra line vanishes silently, on every
-  row at once. The cockpit is the worked example (`lineRows` in `routes/sessions/$sessionId.tsx`
-  folds in a PO map that loads a Dexie round later than the lines). `divide-y` cannot be used on
-  these lists, and not for the reason it looks like: its selector is `& > :not(:last-child)`, which
-  absolutely positioned rows still match — so the border IS drawn, just on the last row OF THE
-  WINDOW, which moves as the operator scrolls. Separators are `border-b` per row. `restoreKey` carries the ACTIVE FILTER, so narrowing a list jumps to the top
-  while returning from a detail screen keeps the position — one mechanism, both behaviours; the
-  offset is saved in a LAYOUT effect cleanup so switching filter stores the position of the filter
-  being left, not the one being entered. `scrollRestoration: true` in `src/router.tsx` is unrelated
-  and inert (no `data-scroll-restoration-id`, and the scroller is not `window`). In jsdom the
-  virtualizer sees a viewport of ZERO height, because virtual-core measures the scroll element with
-  `offsetWidth`/`offsetHeight` and jsdom performs no layout — that is why
-  `tests/component/virtual-layout.tsx` fakes those two (and `clientHeight`/`scrollHeight` for the
-  scroll-restore check), and why faking only `getBoundingClientRect` renders nothing at all. The
-  no-op `ResizeObserver` in `tests/setup.ts` is NOT what keeps those tests from throwing —
-  virtual-core 3.17 returns early when the window has none — it is insurance, because virtual-core
-  is a transitive `^3` dependency and a minor release dropping that guard would turn every
-  component test red at once.
+- Code that touches IndexedDB must tolerate running without it (SPA prerender in Node): use `useLive` (`src/data/use-live.ts`) instead of raw `useLiveQuery`, and `isBrowser()` guards in the store.
+- **UI invariants (scan loop)** — the scan loop must fit 360×640 without scrolling, and only a successful scan result disappears on its own while the other three wait for the operator. Details in [docs/invariants/ui-scan-loop.md](docs/invariants/ui-scan-loop.md).
+- **Themes** — colour lives in semantic tokens in `src/styles/app.css` declared with `@theme` (not inline), the light theme is a single `:root[data-theme='light']` block, and both the app bar and settings must read the subscriber singleton or preferences revert on next start. Details in [docs/invariants/themes.md](docs/invariants/themes.md).
+- **Scan feedback** — every tone sits at or above 950 Hz and uses a square wave; lower frequencies are inaudible on PDT hardware, making failure signals silent in the field. Details in [docs/invariants/scan-feedback.md](docs/invariants/scan-feedback.md).
+- **Session ownership** — screens ask `src/features/receiving/logic/session-owner.ts` instead of comparing IDs, non-owners get `SessionOwnerGate` and a read-only cockpit, and non-owner write controls are blocked to prevent deleting colleagues' data. Details in [docs/invariants/session-ownership.md](docs/invariants/session-ownership.md).
+- **Dedupe per PO** — only RUNNING sessions belonging to the current operator are deduped, allowing colleagues to work concurrently and preserving escape hatches for genuine multiple deliveries. Details in [docs/invariants/dedupe-session-per-po.md](docs/invariants/dedupe-session-per-po.md).
+- **Pick from the PO list** — lines added without barcodes share `AddScanResult`, conversion logic, and `addedHero` with scans, and `pickedManually` stays sticky to record that unverified quantities were received. Details in [docs/invariants/pick-from-po.md](docs/invariants/pick-from-po.md).
+- **Diagnostics trail** — `syncLog` is written strictly through `LocalRepository.logEvent` with a 2000-entry ring buffer, never throwing to callers, and exports are local-only CSVs with clipboard fallback. Details in [docs/invariants/diagnostics-trail.md](docs/invariants/diagnostics-trail.md).
+- **Virtualized lists** — row heights are precomputed and forced, below threshold lists render simply, and row identity is measurement identity so all inputs must live inside rows or text lines vanish silently across all rows. Details in [docs/invariants/virtual-lists.md](docs/invariants/virtual-lists.md).
 
 ## Repo conventions
 

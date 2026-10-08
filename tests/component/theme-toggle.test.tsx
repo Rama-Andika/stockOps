@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ThemeToggle } from '~/components/theme-toggle'
-import { applyThemePreference } from '~/client/theme'
-import { loadPreferences } from '~/client/preferences'
-import { setScanFocusHandler } from '~/client/scan-focus'
+import { ThemeToggle } from '~/app/theme-toggle'
+import { applyThemePreference } from '~/platform/theme'
+import { loadPreferences } from '~/platform/preferences'
+import { setScanFocusHandler } from '~/platform/scan-focus'
 
 /**
- * `src/client/theme.ts` is a module singleton that reads localStorage once at import time, so
+ * `src/platform/theme.ts` is a module singleton that reads localStorage once at import time, so
  * every test resets BOTH sides of it: storage, and the attribute on <html>. `applyThemePreference`
  * is what pulls the module's own value back in step after storage is cleared.
  */

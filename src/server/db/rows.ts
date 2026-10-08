@@ -5,11 +5,7 @@
  */
 export function rowsOf<T extends Record<string, unknown>>(result: unknown): T[] {
   if (Array.isArray(result)) {
-    if (
-      result.length === 2 &&
-      Array.isArray(result[0]) &&
-      Array.isArray(result[1])
-    ) {
+    if (result.length === 2 && Array.isArray(result[0]) && Array.isArray(result[1])) {
       return result[0] as T[]
     }
     return result as T[]

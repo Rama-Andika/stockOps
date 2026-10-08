@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { ReviewSummary } from '~/components/review-summary'
-import { VendorDocCard } from '~/components/vendor-doc-card'
+import { ReviewSummary } from '~/features/receiving/review/review-summary'
+import { VendorDocCard } from '~/features/receiving/session/vendor-doc-card'
 
 describe('ReviewSummary', () => {
   it('menampilkan PO, vendor, jumlah item, dan total per satuan', () => {
@@ -110,7 +110,9 @@ describe('VendorDocCard', () => {
   })
 
   it('menampilkan pesan wajib pada kolom yang kosong saja', () => {
-    render(<VendorDocCard invoice="" doNumber="DO-77" editable invoiceError doNumberError={false} />)
+    render(
+      <VendorDocCard invoice="" doNumber="DO-77" editable invoiceError doNumberError={false} />,
+    )
 
     expect(screen.getByText('Nomor invoice wajib diisi.')).toBeInTheDocument()
     expect(screen.queryByText('Nomor surat jalan (DO) wajib diisi.')).toBeNull()

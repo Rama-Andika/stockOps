@@ -7,7 +7,7 @@ import {
   sortPickerItems,
   type PickerItem,
   type PickerSourceRow,
-} from '~/shared/item-picker'
+} from '~/features/receiving/logic/item-picker'
 
 const UNITS: Record<string, string> = { 'U-KRT': 'KRT', 'U-PCS': 'PCS' }
 const unitOf = (uomId: string): string => UNITS[uomId] ?? uomId
@@ -144,9 +144,7 @@ describe('isPickerItemComplete & pickerTotalReceived', () => {
   })
 
   it('lengkap ketika total diterima mencapai qty dipesan', () => {
-    expect(
-      isPickerItemComplete(pickerItem({ orderedQty: 40, serverReceivedQty: 40 })),
-    ).toBe(true)
+    expect(isPickerItemComplete(pickerItem({ orderedQty: 40, serverReceivedQty: 40 }))).toBe(true)
     expect(
       isPickerItemComplete(
         pickerItem({ orderedQty: 40, serverReceivedQty: 30, sessionQty: 6, otherSessionQty: 4 }),
@@ -155,15 +153,13 @@ describe('isPickerItemComplete & pickerTotalReceived', () => {
   })
 
   it('belum lengkap ketika masih ada sisa', () => {
-    expect(
-      isPickerItemComplete(pickerItem({ orderedQty: 40, serverReceivedQty: 39.99 })),
-    ).toBe(false)
+    expect(isPickerItemComplete(pickerItem({ orderedQty: 40, serverReceivedQty: 39.99 }))).toBe(
+      false,
+    )
   })
 
   it('melebihi pesanan tetap dihitung lengkap (over-receive ditandai, bukan ditolak)', () => {
-    expect(
-      isPickerItemComplete(pickerItem({ orderedQty: 10, serverReceivedQty: 12 })),
-    ).toBe(true)
+    expect(isPickerItemComplete(pickerItem({ orderedQty: 10, serverReceivedQty: 12 }))).toBe(true)
   })
 })
 
@@ -199,7 +195,12 @@ describe('filterPickerItems', () => {
       code: '48000124',
       barcodes: [null, '8991002199999', null],
     }),
-    pickerItem({ purchaseItemId: 'C', name: 'TEPUNG SEGITIGA 1KG', code: null, barcodes: [null, null, null] }),
+    pickerItem({
+      purchaseItemId: 'C',
+      name: 'TEPUNG SEGITIGA 1KG',
+      code: null,
+      barcodes: [null, null, null],
+    }),
   ]
 
   it('kata kunci kosong mengembalikan semuanya', () => {

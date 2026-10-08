@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import { checkCredentialsInputSchema, loginInputSchema } from '~/shared/schemas'
-import { checkCredentialRevocations, loginOnline } from '../services/auth-service'
+import { checkCredentialsInputSchema, loginInputSchema } from '~/core/contracts/schemas'
+import { checkCredentialRevocations, loginOnline } from '~/server/services/auth-service'
 
 /**
  * Online login. Required the first time a user signs in on a device, because it is the only

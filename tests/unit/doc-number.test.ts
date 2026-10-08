@@ -5,7 +5,7 @@ import {
   docPeriod,
   pad2,
   parseDocNumber,
-} from '~/shared/doc-number'
+} from '~/core/identity/doc-number'
 
 describe('doc-number', () => {
   it('pad2', () => {

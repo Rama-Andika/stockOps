@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { ScrollContainerProvider } from '~/components/scroll-container'
+import { ScrollContainerProvider } from '~/ui/virtual/scroll-container'
 
 /**
  * Fake layout for jsdom, so a test can exercise VirtualList's VIRTUAL path.

@@ -28,9 +28,11 @@ export default defineConfig({
   // without the quotes the build would emit a bare identifier and fail.
   define: {
     __APP_VERSION__: JSON.stringify(
-      (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
-        version: string
-      }).version,
+      (
+        JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+          version: string
+        }
+      ).version,
     ),
     // Evaluated once, when this config is loaded — i.e. per `vite build` or per `vite dev` start.
     // scripts/stamp-sw.mjs stamps its own timestamp into dist/client/sw.js a moment later; see the

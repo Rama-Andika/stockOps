@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { SendStatusStrip } from '~/components/send-status-strip'
+import { SendStatusStrip } from '~/features/sync/send-status-strip'
 
 describe('SendStatusStrip', () => {
   const base = {
@@ -30,13 +30,7 @@ describe('SendStatusStrip', () => {
     // jadi sesi RUNNING berisi scan yang belum difinalisasi tidak terlihat olehnya. Strip hijau
     // di keadaan ini adalah pernyataan yang salah, dan tidak ada permukaan lain yang
     // membantahnya — SyncStatus sunyi dan lencana nav kosong pada penghitung yang sama.
-    render(
-      <SendStatusStrip
-        {...base}
-        runningCount={1}
-        lastSyncedAt="2026-10-06T07:00:00.000Z"
-      />,
-    )
+    render(<SendStatusStrip {...base} runningCount={1} lastSyncedAt="2026-10-06T07:00:00.000Z" />)
 
     const strip = screen.getByRole('status')
     expect(strip).toHaveTextContent('1 sesi masih berjalan')

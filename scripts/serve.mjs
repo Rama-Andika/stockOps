@@ -32,7 +32,9 @@ const protocol = useTls ? 'https' : 'http'
 // Fail closed on a half-configured TLS setup: silently falling back to http would leave
 // the operator believing https is active while PDT devices still cannot log in.
 if (Boolean(tlsCertFile) !== Boolean(tlsKeyFile)) {
-  console.error('[serve] TLS_CERT_FILE dan TLS_KEY_FILE harus diisi bersamaan (hanya satu yang terisi).')
+  console.error(
+    '[serve] TLS_CERT_FILE dan TLS_KEY_FILE harus diisi bersamaan (hanya satu yang terisi).',
+  )
   console.error('[serve] Isi keduanya untuk https, atau kosongkan keduanya untuk http.')
   process.exit(1)
 }
@@ -129,9 +131,7 @@ async function serveStatic(res, pathname) {
     res.setHeader('Content-Type', MIME_TYPES[extname(filePath)] ?? 'application/octet-stream')
     res.setHeader(
       'Cache-Control',
-      filePath.includes(`${sep}assets${sep}`)
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache',
+      filePath.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
     )
     res.end(data)
   } catch {
@@ -172,7 +172,9 @@ async function loadTlsOptions() {
     console.error(`[serve] Gagal membaca file TLS (${code}).`)
     console.error(`[serve] TLS_CERT_FILE=${tlsCertFile}`)
     console.error(`[serve] TLS_KEY_FILE=${tlsKeyFile}`)
-    console.error('[serve] Periksa path, hak akses file, dan pastikan private key tidak terenkripsi (tanpa passphrase).')
+    console.error(
+      '[serve] Periksa path, hak akses file, dan pastikan private key tidak terenkripsi (tanpa passphrase).',
+    )
     process.exit(1)
   }
 }
@@ -184,7 +186,9 @@ server.listen(port, '0.0.0.0', () => {
   if (useTls) {
     console.log(`Akses dari PDT: https://<IP-komputer-ini>:${port}`)
   } else {
-    console.log('PERINGATAN: mode http. PDT yang membuka http://<IP-LAN> tidak bisa login maupun bekerja offline.')
+    console.log(
+      'PERINGATAN: mode http. PDT yang membuka http://<IP-LAN> tidak bisa login maupun bekerja offline.',
+    )
     console.log('Isi TLS_CERT_FILE dan TLS_KEY_FILE untuk mengaktifkan https (lihat README).')
   }
 })

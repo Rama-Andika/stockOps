@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { VirtualList, clearScrollMemory } from '~/components/virtual-list'
+import { VirtualList, clearScrollMemory } from '~/ui/virtual/virtual-list'
 import { ScrollHarness } from './virtual-layout'
 
 /**

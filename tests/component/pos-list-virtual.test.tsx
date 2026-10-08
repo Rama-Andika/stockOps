@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearScrollMemory } from '~/components/virtual-list'
+import { clearScrollMemory } from '~/ui/virtual/virtual-list'
 import { ScrollHarness } from './virtual-layout'
-import { PO_CARD_HEIGHT } from '~/components/row-heights'
+import { PO_CARD_HEIGHT } from '~/features/purchase-orders/row-heights'
 
 /**
  * Dua hal yang dijaga di sini, dan keduanya hanya bisa pecah di LAYAR ini, bukan di VirtualList:
@@ -67,7 +67,6 @@ function summary(index: number): Summary {
 let summaryRows: Summary[] = []
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (options: { component: ComponentType }) => ({ options }),
   // The PO card and the "continue session" banner render <Link>; a plain <a> is enough here.
   Link: ({ to, children, className }: { to: string; children: ReactNode; className?: string }) => (
     <a href={to} className={className}>
@@ -76,14 +75,14 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 
-vi.mock('~/client/db/local-repo', () => ({
+vi.mock('~/data/local-repo', () => ({
   localRepo: {
     listPurchaseSummaries: () => Promise.resolve(summaryRows),
     runningSessions: () => Promise.resolve([]),
   },
 }))
 
-vi.mock('~/client/state/store/app-store', () => ({
+vi.mock('~/app/store/app-store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       online: true,
@@ -98,7 +97,7 @@ vi.mock('~/client/state/store/app-store', () => ({
  * menyimpan hasilnya di state. Alternatif yang lebih pendek — nilai kalengan menurut urutan
  * pemanggilan — akan pecah begitu jumlah atau urutan live query berubah.
  */
-vi.mock('~/client/hooks/use-live', async () => {
+vi.mock('~/data/use-live', async () => {
   const { useEffect, useState } = await import('react')
   return {
     useLive: <T,>(querier: () => Promise<T>, deps: readonly unknown[], fallback: T) => {
@@ -124,8 +123,7 @@ vi.mock('~/client/hooks/use-live', async () => {
  * pabrik itu berjalan sebelum konstanta tersebut ada dan test langsung mati dengan "Cannot access
  * before initialization". Jangan "disederhanakan" menjadi impor biasa di atas.
  */
-const { Route } = await import('~/routes/pos/index')
-const PosListPage = Route.options.component as ComponentType
+const { PoList } = await import('~/features/purchase-orders/po-list')
 
 const searchField = () => screen.getByLabelText('Cari PO')
 
@@ -140,7 +138,7 @@ describe('daftar PO tervirtualisasi', () => {
 
     render(
       <ScrollHarness contentHeight={5 * PO_CARD_HEIGHT}>
-        <PosListPage />
+        <PoList />
       </ScrollHarness>,
     )
 
@@ -155,7 +153,7 @@ describe('daftar PO tervirtualisasi', () => {
 
     render(
       <ScrollHarness contentHeight={80 * PO_CARD_HEIGHT}>
-        <PosListPage />
+        <PoList />
       </ScrollHarness>,
     )
 
@@ -174,7 +172,7 @@ describe('daftar PO tervirtualisasi', () => {
 
     render(
       <ScrollHarness contentHeight={80 * PO_CARD_HEIGHT}>
-        <PosListPage />
+        <PoList />
       </ScrollHarness>,
     )
     await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))
@@ -196,7 +194,7 @@ describe('daftar PO tervirtualisasi', () => {
 
     render(
       <ScrollHarness contentHeight={80 * PO_CARD_HEIGHT}>
-        <PosListPage />
+        <PoList />
       </ScrollHarness>,
     )
     await waitFor(() => expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0))

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LocalSession } from '~/client/db/local-db'
-import { requestScanFocus } from '~/client/scan-focus'
-import { SESSION_STATUS, type SessionStatus } from '~/shared/constants'
+import type { LocalSession } from '~/data/local-db'
+import { requestScanFocus } from '~/platform/scan-focus'
+import { SESSION_STATUS, type SessionStatus } from '~/core/contracts/constants'
 
 /**
  * The ownership rule as the SCAN COCKPIT applies it, not as `session-owner.ts` defines it. Both
@@ -13,10 +13,10 @@ import { SESSION_STATUS, type SessionStatus } from '~/shared/constants'
  * `!editable` — so a block that is meant for "a document that can no longer be edited" also
  * renders for "a colleague's document", and one of those blocks deletes data.
  *
- * The route is rendered through `Route.options.component`, the way tests/component/
- * settings-screen.test.tsx does it. Three modules are stubbed so no router, no IndexedDB and no
- * store are needed: the router (the route calls `createFileRoute`, `Route.useParams`, `useNavigate`
- * and renders a `Link`), the store hook (the route reads only `state.user`) and `useSessionData`
+ * The cockpit component is rendered directly with its `sessionId` prop, the way
+ * tests/component/settings-screen.test.tsx renders the settings screen. Three modules are stubbed
+ * so no router, no IndexedDB and no store are needed: the router (the component renders a `Link`
+ * and calls `useNavigate`), the store hook (it reads only `state.user`) and `useSessionData`
  * (the single place the cockpit gets its session from).
  */
 
@@ -25,20 +25,16 @@ let currentUser: { userId: string; loginId: string; fullName: string; companyId:
 let currentSession: LocalSession | undefined
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (options: { component: ComponentType }) => ({
-    options,
-    useParams: () => ({ sessionId: 'S1' }),
-  }),
   useNavigate: () => () => undefined,
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
 
-vi.mock('~/client/state/store/app-store', () => ({
+vi.mock('~/app/store/app-store', () => ({
   useAppStore: (selector: (state: { user: typeof currentUser }) => unknown) =>
     selector({ user: currentUser }),
 }))
 
-vi.mock('~/client/hooks/use-session-data', () => ({
+vi.mock('~/features/receiving/hooks/use-session-data', () => ({
   useSessionData: () => ({
     session: currentSession,
     lines: [],
@@ -52,8 +48,7 @@ vi.mock('~/client/hooks/use-session-data', () => ({
   }),
 }))
 
-const { Route } = await import('~/routes/sessions/$sessionId')
-const Cockpit = Route.options.component as ComponentType
+const { SessionCockpit } = await import('~/features/receiving/cockpit/session-cockpit')
 
 const BUDI = { userId: 'U9', loginId: 'op_budi', fullName: 'Budi Santoso', companyId: '0' }
 const RAMA = { userId: 'U1', loginId: 'op_rama', fullName: 'Rama', companyId: '0' }
@@ -105,7 +100,7 @@ describe('kokpit: sesi milik operator lain', () => {
     // justru muncul untuk rekan kerja.
     currentUser = RAMA
     currentSession = budiSession(SESSION_STATUS.REJECTED)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.getByRole('dialog')).toHaveTextContent('Sesi ini milik Budi Santoso')
     acknowledgeGate()
@@ -124,20 +119,18 @@ describe('kokpit: sesi milik operator lain', () => {
     // mengatakan hal yang benar — dan membuat operator membiarkan dokumen rekannya tidak terkirim.
     currentUser = RAMA
     currentSession = budiSession(SESSION_STATUS.PENDING)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
     acknowledgeGate()
 
     expect(screen.getByText(/sudah difinalisasi/)).toBeInTheDocument()
-    expect(
-      screen.getByText(/Pengiriman berlaku untuk semua dokumen sekaligus/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Pengiriman berlaku untuk semua dokumen sekaligus/)).toBeInTheDocument()
     expect(screen.queryByText(/kirim hanya bisa dilakukan oleh pemiliknya/)).toBeNull()
   })
 
   it('RUNNING milik orang lain: baca-saja — tanpa field scan dan tanpa tab bar', () => {
     currentUser = RAMA
     currentSession = budiSession(SESSION_STATUS.RUNNING)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
     acknowledgeGate()
 
     expect(screen.queryByRole('tablist')).toBeNull()
@@ -154,12 +147,10 @@ describe('kokpit: sesi milik sendiri tidak ikut terkunci', () => {
   it('REJECTED milik sendiri: tanpa gerbang, tombol hapus tetap ada', () => {
     currentUser = BUDI
     currentSession = budiSession(SESSION_STATUS.REJECTED)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /Hapus sesi dari perangkat/ }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Hapus sesi dari perangkat/ })).toBeInTheDocument()
   })
 
   it('RUNNING milik sendiri: requestScanFocus() mengembalikan fokus ke field barcode', () => {
@@ -169,7 +160,7 @@ describe('kokpit: sesi milik sendiri tidak ikut terkunci', () => {
     // Enter penutup dari scanner akan menekan elemen ITU, bukan mengirim hasil scan.
     currentUser = BUDI
     currentSession = budiSession(SESSION_STATUS.RUNNING)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     const field = screen.getByLabelText('Barcode atau kode barang')
     const elsewhere = document.createElement('button')
@@ -187,7 +178,7 @@ describe('kokpit: sesi milik sendiri tidak ikut terkunci', () => {
     // Penjaga arah sebaliknya: aturan kepemilikan tidak boleh mengunci pemiliknya sendiri.
     currentUser = BUDI
     currentSession = budiSession(SESSION_STATUS.RUNNING)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(screen.getByRole('tablist')).toBeInTheDocument()

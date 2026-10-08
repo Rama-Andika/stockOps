@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LocalSession, LocalSessionItem } from '~/client/db/local-db'
-import { savePreferences } from '~/client/preferences'
-import { SESSION_STATUS, type SessionStatus } from '~/shared/constants'
+import type { LocalSession, LocalSessionItem } from '~/data/local-db'
+import { savePreferences } from '~/platform/preferences'
+import { SESSION_STATUS, type SessionStatus } from '~/core/contracts/constants'
 
 /**
  * How the two session screens behave once a line can also arrive WITHOUT a scan.
@@ -22,15 +22,11 @@ let currentSession: LocalSession | undefined
 let currentLines: LocalSessionItem[] = []
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (options: { component: ComponentType }) => ({
-    options,
-    useParams: () => ({ sessionId: 'S1' }),
-  }),
   useNavigate: () => () => undefined,
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
 
-vi.mock('~/client/state/store/app-store', () => ({
+vi.mock('~/app/store/app-store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       user: RAMA,
@@ -39,7 +35,7 @@ vi.mock('~/client/state/store/app-store', () => ({
     }),
 }))
 
-vi.mock('~/client/hooks/use-session-data', () => ({
+vi.mock('~/features/receiving/hooks/use-session-data', () => ({
   useSessionData: () => ({
     session: currentSession,
     lines: currentLines,
@@ -55,10 +51,8 @@ vi.mock('~/client/hooks/use-session-data', () => ({
   }),
 }))
 
-const { Route: CockpitRoute } = await import('~/routes/sessions/$sessionId')
-const { Route: ReviewRoute } = await import('~/routes/sessions/review.$sessionId')
-const Cockpit = CockpitRoute.options.component as ComponentType
-const Review = ReviewRoute.options.component as ComponentType
+const { SessionCockpit } = await import('~/features/receiving/cockpit/session-cockpit')
+const { SessionReview } = await import('~/features/receiving/review/session-review')
 
 function session(status: SessionStatus): LocalSession {
   return {
@@ -123,7 +117,7 @@ beforeEach(() => {
 
 describe('kokpit — pintu masuk picker', () => {
   it('slot kanan menawarkan picker selama field barcode kosong', () => {
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.getByLabelText('Pilih item dari daftar PO')).toBeInTheDocument()
     // Satu slot, dua fungsi: tombol tambah tidak ikut dirender.
@@ -131,7 +125,7 @@ describe('kokpit — pintu masuk picker', () => {
   })
 
   it('begitu ada isi di field barcode, slot itu kembali jadi tombol tambah', () => {
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     fireEvent.change(screen.getByLabelText('Barcode atau kode barang'), {
       target: { value: '8991002103458' },
@@ -143,7 +137,7 @@ describe('kokpit — pintu masuk picker', () => {
 
   it('saklar Pengaturan OFF menutup kedua pintu masuk', () => {
     setPreference(false)
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.queryByLabelText('Pilih item dari daftar PO')).toBeNull()
     // Perilaku lama kembali utuh: tombol tambah ada, dan mati karena field masih kosong.
@@ -151,7 +145,7 @@ describe('kokpit — pintu masuk picker', () => {
   })
 
   it('scanner wedge mati selama picker terbuka, dan hidup lagi setelah ditutup', () => {
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
     const barcode = screen.getByLabelText('Barcode atau kode barang')
 
     fireEvent.click(screen.getByLabelText('Pilih item dari daftar PO'))
@@ -183,7 +177,7 @@ describe('kokpit — pintu masuk picker', () => {
    * pencurian fokusnya tidak terjadi pada commit render yang sama.
    */
   it('effect penarik fokus melepaskan fokus selama picker terbuka, dan mengambilnya lagi setelah ditutup', async () => {
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
     const barcode = screen.getByLabelText('Barcode atau kode barang')
     const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
 
@@ -207,7 +201,7 @@ describe('penanda baris manual', () => {
     // sesi yang masih berjalan butuh IndexedDB (lihat bagian 2.2 rencana).
     currentSession = session(SESSION_STATUS.SYNCED)
     currentLines = [line(true)]
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.getByText('Manual')).toBeInTheDocument()
   })
@@ -215,14 +209,14 @@ describe('penanda baris manual', () => {
   it('kokpit tidak menandai baris hasil scan', () => {
     currentSession = session(SESSION_STATUS.SYNCED)
     currentLines = [line(false)]
-    render(<Cockpit />)
+    render(<SessionCockpit sessionId="S1" />)
 
     expect(screen.queryByText('Manual')).toBeNull()
   })
 
   it('layar review menyebut baris manual tepat sebelum dokumen dikirim', () => {
     currentLines = [line(true)]
-    render(<Review />)
+    render(<SessionReview sessionId="S1" />)
 
     expect(
       screen.getByText(
@@ -233,7 +227,7 @@ describe('penanda baris manual', () => {
 
   it('layar review tidak menyebut apa pun untuk baris hasil scan', () => {
     currentLines = [line(false)]
-    render(<Review />)
+    render(<SessionReview sessionId="S1" />)
 
     expect(screen.queryByText(/dipilih manual dari daftar PO/)).toBeNull()
   })

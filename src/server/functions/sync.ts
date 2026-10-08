@@ -1,12 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { sql } from 'drizzle-orm'
-import {
-  overReceiveWorklistInputSchema,
-  pushInputSchema,
-} from '~/shared/schemas'
-import { getDb } from '../db/client'
-import { UNAUTHORIZED_MESSAGE, assertAuthorizedDevice } from '../services/auth-service'
-import { overReceiveWorklist, syncPush } from '../services/sync-service'
+import { overReceiveWorklistInputSchema, pushInputSchema } from '~/core/contracts/schemas'
+import { getDb } from '~/server/db/client'
+import { UNAUTHORIZED_MESSAGE, assertAuthorizedDevice } from '~/server/services/auth-service'
+import { overReceiveWorklist, syncPush } from '~/server/services/sync-service'
 
 /**
  * Pushes finalized sessions into the central database. Device authorization is checked inside

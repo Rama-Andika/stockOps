@@ -2,11 +2,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRef, useState } from 'react'
-import { ConfirmButton } from '~/components/confirm-button'
-import { NumericPad } from '~/components/numeric-pad'
-import { ScanBar } from '~/components/scan-bar'
-import { ScanHero } from '~/components/scan-hero'
-import { loadPreferences, savePreferences } from '~/client/preferences'
+import { ConfirmButton } from '~/ui/confirm-button'
+import { NumericPad } from '~/ui/numeric-pad'
+import { ScanBar } from '~/features/receiving/cockpit/scan-bar'
+import { ScanHero } from '~/features/receiving/cockpit/scan-hero'
+import { loadPreferences, savePreferences } from '~/platform/preferences'
 
 describe('NumericPad', () => {
   it('menambah digit dan menghapus dengan tombol backspace', () => {
@@ -130,10 +130,7 @@ describe('preferensi perangkat', () => {
   // A stored theme that is neither 'dark' nor 'light' (hand-edited storage, or a value from a
   // future version) falls back to the default instead of reaching <html> as an unknown attribute.
   it('nilai tema yang tidak dikenal jatuh ke default gelap', () => {
-    window.localStorage.setItem(
-      'stockops.preferences',
-      JSON.stringify({ theme: 'sepia' }),
-    )
+    window.localStorage.setItem('stockops.preferences', JSON.stringify({ theme: 'sepia' }))
     expect(loadPreferences().theme).toBe('dark')
   })
 })
@@ -444,4 +441,3 @@ describe('ScanHero — pintu picker pada kartu tidak dikenal', () => {
     expect(screen.getByRole('button', { name: 'Mengerti, lanjut scan' })).toBeInTheDocument()
   })
 })
-

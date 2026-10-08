@@ -26,7 +26,9 @@ try {
   source = await readFile(swPath, 'utf8')
 } catch {
   console.error('[stamp-sw] dist/client/sw.js tidak ditemukan.')
-  console.error('[stamp-sw] Jalankan `vite build` lebih dulu (lihat script "build" di package.json).')
+  console.error(
+    '[stamp-sw] Jalankan `vite build` lebih dulu (lihat script "build" di package.json).',
+  )
   process.exit(1)
 }
 
@@ -41,7 +43,9 @@ for (const marker of [VERSION_MARKER, BUILD_TIME_MARKER]) {
   if (count !== 1) {
     console.error(`[stamp-sw] Baris penanda harus ada tepat satu kali, ditemukan ${count}x:`)
     console.error(`[stamp-sw]   ${marker}`)
-    console.error('[stamp-sw] Perbaiki public/sw.js — bentuk kedua baris penanda tidak boleh diubah.')
+    console.error(
+      '[stamp-sw] Perbaiki public/sw.js — bentuk kedua baris penanda tidak boleh diubah.',
+    )
     process.exit(1)
   }
 }

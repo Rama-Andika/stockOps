@@ -1,19 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { diagnosticsRowHeight } from '~/features/diagnostics/row-heights'
+import { PO_CARD_HEIGHT, PO_ITEM_ROW_HEIGHT } from '~/features/purchase-orders/row-heights'
 import {
-  PO_CARD_HEIGHT,
-  PO_ITEM_ROW_HEIGHT,
-  diagnosticsRowHeight,
   pickerRowHeight,
   sessionLineRowHeight,
   sessionStatusRowHeight,
-} from '~/components/row-heights'
+} from '~/features/receiving/row-heights'
 
 /**
  * These numbers are a contract with the markup, not a calculation worth re-deriving here: the rows
  * are FORCED to this height with an inline style and clipped with `overflow-hidden`, so a height
  * that drifts below what the markup needs cuts text off on a PDT where nobody will file a bug.
  *
- * If a row's markup gains or loses a line of text, this file and row-heights.ts change together,
+ * If a row's markup gains or loses a line of text, this file and the features' row-heights.ts files change together,
  * in the same step. A failure here means exactly that: somebody changed one of the two.
  */
 describe('tinggi baris daftar tervirtualisasi', () => {

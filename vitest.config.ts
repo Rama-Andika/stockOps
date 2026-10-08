@@ -20,7 +20,15 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['src/shared/**', 'src/server/**', 'src/client/**', 'src/components/**'],
+      include: [
+        'src/core/**',
+        'src/data/**',
+        'src/platform/**',
+        'src/app/**',
+        'src/ui/**',
+        'src/features/**',
+        'src/server/**',
+      ],
       exclude: ['src/**/*.d.ts', 'src/routes/**'],
     },
     // Integration tests against MySQL need more time for seeding.

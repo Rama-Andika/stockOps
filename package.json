@@ -14,11 +14,13 @@
     "start": "node scripts/serve.mjs",
     "serve": "node scripts/serve.mjs",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:server": "vitest run tests/server",
-    "test:client": "vitest run tests/client",
+    "test:integration": "vitest run tests/integration",
     "test:coverage": "vitest run --coverage",
     "db:test:setup": "node scripts/setup-test-db.mjs",
     "db:test:teardown": "node scripts/teardown-test-db.mjs",
@@ -40,6 +42,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

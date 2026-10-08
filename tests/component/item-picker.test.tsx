@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ItemPicker } from '~/components/item-picker'
-import { pickerRowHeight } from '~/components/row-heights'
-import type { PickerItem } from '~/shared/item-picker'
+import { ItemPicker } from '~/features/receiving/cockpit/item-picker'
+import { pickerRowHeight } from '~/features/receiving/row-heights'
+import type { PickerItem } from '~/features/receiving/logic/item-picker'
 
 function item(overrides: Partial<PickerItem> = {}): PickerItem {
   return {
@@ -64,7 +64,9 @@ const ROWS: PickerItem[] = [
   }),
 ]
 
-function renderPicker(overrides: { onPick?: (id: string, qty: number) => void; onClose?: () => void } = {}) {
+function renderPicker(
+  overrides: { onPick?: (id: string, qty: number) => void; onClose?: () => void } = {},
+) {
   const onPick = overrides.onPick ?? vi.fn()
   const onClose = overrides.onClose ?? vi.fn()
   const result = render(
@@ -114,7 +116,9 @@ describe('ItemPicker — daftar', () => {
     renderPicker()
 
     fireEvent.change(searchField(), { target: { value: 'zzz' } })
-    expect(screen.getByText('Tidak ada item PO yang cocok dengan pencarian itu.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Tidak ada item PO yang cocok dengan pencarian itu.'),
+    ).toBeInTheDocument()
   })
 
   it('baris tanpa master barang dimatikan dan menyebutkan apa yang harus dilakukan', () => {
@@ -294,10 +298,7 @@ describe('ItemPicker — daftar panjang', () => {
     HTMLElement.prototype,
     'offsetHeight',
   )
-  const originalOffsetWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    'offsetWidth',
-  )
+  const originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')
 
   beforeEach(() => {
     Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
@@ -335,9 +336,7 @@ describe('ItemPicker — daftar panjang', () => {
   )
 
   it('tidak menaruh seluruh daftar di DOM, tapi tetap menyebut jumlah penuh', () => {
-    render(
-      <ItemPicker purchaseLabel="PO-1" items={MANY} onPick={vi.fn()} onClose={vi.fn()} />,
-    )
+    render(<ItemPicker purchaseLabel="PO-1" items={MANY} onPick={vi.fn()} onClose={vi.fn()} />)
 
     const rows = screen.getAllByRole('listitem')
     expect(rows.length).toBeGreaterThan(0)
@@ -347,9 +346,7 @@ describe('ItemPicker — daftar panjang', () => {
 
   it('panah bawah dua kali lalu Enter tetap membuka item KETIGA di daftar panjang', () => {
     const onPick = vi.fn()
-    render(
-      <ItemPicker purchaseLabel="PO-1" items={MANY} onPick={onPick} onClose={vi.fn()} />,
-    )
+    render(<ItemPicker purchaseLabel="PO-1" items={MANY} onPick={onPick} onClose={vi.fn()} />)
 
     const search = screen.getByLabelText('Cari nama, kode, atau barcode')
     fireEvent.keyDown(search, { key: 'ArrowDown' })

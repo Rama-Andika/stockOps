@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeQtyPurchase, resolveConvQty, type VendorItemRow } from '~/shared/uom'
+import { computeQtyPurchase, resolveConvQty, type VendorItemRow } from '~/core/receiving/uom'
 
 const VENDOR = '6000940'
 const ITEM = '4022854'

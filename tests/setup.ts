@@ -32,4 +32,3 @@ class NoopResizeObserver {
 }
 
 globalThis.ResizeObserver ??= NoopResizeObserver as unknown as typeof ResizeObserver
-

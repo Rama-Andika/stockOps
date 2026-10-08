@@ -31,7 +31,9 @@ describe('assertProductionSecrets', () => {
   })
 
   it('menolak secret yang terlalu pendek', () => {
-    expect(() => assertProductionSecrets(envWith('pendek'), RAW_OK)).toThrow(/CREDENTIAL_HMAC_SECRET/)
+    expect(() => assertProductionSecrets(envWith('pendek'), RAW_OK)).toThrow(
+      /CREDENTIAL_HMAC_SECRET/,
+    )
   })
 
   it('menolak bila DB_PASSWORD tidak diisi', () => {

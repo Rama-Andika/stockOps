@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SESSION_STATUS } from '~/shared/constants'
+import { SESSION_STATUS } from '~/core/contracts/constants'
 import {
   SELF_OWNER_LABEL,
   UNKNOWN_OWNER_LABEL,
@@ -9,7 +9,7 @@ import {
   ownerLabel,
   ownerName,
   splitByOwner,
-} from '~/shared/session-owner'
+} from '~/features/receiving/logic/session-owner'
 
 const budi = { userId: 'U1', userFullName: 'Budi Santoso', userLoginId: 'op_budi' }
 const tanpaNama = { userId: 'U9', userFullName: null, userLoginId: null }
@@ -22,7 +22,7 @@ describe('isOwnedBy', () => {
 
   it('tanpa user login, tidak ada sesi yang dianggap milik siapa pun', () => {
     // Memaku arah default. Kalau dibalik menjadi "semuanya milik saya", jendela singkat sebelum
-    // app-shell mengarahkan ke /login akan membuka seluruh sesi orang lain untuk diubah.
+    // app/shell mengarahkan ke /login akan membuka seluruh sesi orang lain untuk diubah.
     expect(isOwnedBy(budi, null)).toBe(false)
     expect(isOwnedBy(budi, undefined)).toBe(false)
     expect(isOwnedBy(budi, '')).toBe(false)

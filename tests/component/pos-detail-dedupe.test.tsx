@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,16 +35,12 @@ const navigate = vi.fn()
 const createSession = vi.fn(async (_input: unknown) => ({ sessionId: 'S-BARU' }))
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (options: { component: ComponentType }) => ({
-    options,
-    useParams: () => ({ purchaseId: 'P1' }),
-  }),
   useNavigate: () => navigate,
   // AppBar merender <Link> untuk tombol kembali; stub mengubahnya menjadi <a> biasa.
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
 
-vi.mock('~/client/state/store/app-store', () => ({
+vi.mock('~/app/store/app-store', () => ({
   useAppStore: (selector: (state: { user: typeof currentUser; deviceId: string }) => unknown) =>
     selector({ user: currentUser, deviceId: 'PDT-1' }),
 }))
@@ -55,7 +51,7 @@ vi.mock('~/client/state/store/app-store', () => ({
  * urutan pemanggilan — akan pecah begitu ada live query baru atau urutannya berubah, dan layar ini
  * punya tiga.
  */
-vi.mock('~/client/hooks/use-live', async () => {
+vi.mock('~/data/use-live', async () => {
   const { useEffect, useState } = await import('react')
   return {
     useLive: <T,>(querier: () => Promise<T>, deps: readonly unknown[], fallback: T) => {
@@ -74,7 +70,7 @@ vi.mock('~/client/hooks/use-live', async () => {
   }
 })
 
-vi.mock('~/client/db/local-repo', () => ({
+vi.mock('~/data/local-repo', () => ({
   localRepo: {
     getPurchaseDetail: async () => ({
       purchase: {
@@ -109,8 +105,7 @@ vi.mock('~/client/db/local-repo', () => ({
   },
 }))
 
-const { Route } = await import('~/routes/pos/$purchaseId')
-const PosDetail = Route.options.component as ComponentType
+const { PoDetail } = await import('~/features/purchase-orders/po-detail')
 
 const SAYA = { userId: 'U1', loginId: 'op_rama', fullName: 'Rama', companyId: '0' }
 
@@ -141,7 +136,7 @@ beforeEach(() => {
 
 describe('detail PO: tanpa duplikat, jalan seperti biasa', () => {
   it('tanpa sesi berjalan: sesi langsung dibuat, tanpa lembar konfirmasi', async () => {
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
     await tekanMulai()
 
     await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1))
@@ -165,7 +160,7 @@ describe('detail PO: tanpa duplikat, jalan seperti biasa', () => {
 
   it('sesi berjalan milik sendiri untuk PO LAIN bukan duplikat', async () => {
     runningRows = [sesi({ sessionId: 'S-PO-LAIN', purchaseId: 'P2' })]
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
     await tekanMulai()
 
     await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1))
@@ -183,7 +178,7 @@ describe('detail PO: tanpa duplikat, jalan seperti biasa', () => {
         userLoginId: 'op_budi',
       }),
     ]
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
 
     const peringatan = await screen.findByText(/sedang menerima PO ini di perangkat ini/)
     expect(peringatan).toHaveTextContent('Budi Santoso')
@@ -208,7 +203,7 @@ describe('detail PO: duplikat ditahan lembar konfirmasi', () => {
       { sessionId: 'S-BUDI', purchaseId: 'P1' },
       { sessionId: 'S-BUDI', purchaseId: 'P1' },
     ]
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
     await tekanMulai()
 
     const dialog = await screen.findByRole('dialog')
@@ -223,7 +218,7 @@ describe('detail PO: duplikat ditahan lembar konfirmasi', () => {
 
   it('"Lanjutkan sesi berjalan" membuka sesi LAMA, bukan sesi baru', async () => {
     runningRows = [sesi()]
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
     await tekanMulai()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Lanjutkan sesi berjalan' }))
@@ -239,7 +234,7 @@ describe('detail PO: duplikat ditahan lembar konfirmasi', () => {
   it('"Buat dokumen baru" tetap membuat sesi kedua — jalan keluarnya tidak dihapus', async () => {
     // Pengiriman terpisah untuk satu PO memang sah. Lembar ini pengingat, bukan larangan.
     runningRows = [sesi()]
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
     await tekanMulai()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Buat dokumen baru' }))
@@ -253,7 +248,7 @@ describe('detail PO: duplikat ditahan lembar konfirmasi', () => {
 
   it('menutup lembar tanpa memilih tidak membuat apa pun dan tidak berpindah layar', async () => {
     runningRows = [sesi()]
-    render(<PosDetail />)
+    render(<PoDetail purchaseId="P1" />)
     await tekanMulai()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Batal' }))

@@ -1,21 +1,21 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAppStore } from '~/client/state/store/app-store'
-import { AppStoreProvider } from '~/client/state/store/app-store-provider'
-import type { AppState } from '~/client/state/store/types'
-import { UpdateBanner } from '~/components/update-banner'
+import { createAppStore } from '~/app/store/app-store'
+import { AppStoreProvider } from '~/app/store/app-store-provider'
+import type { AppState } from '~/app/store/types'
+import { UpdateBanner } from '~/app/update-banner'
 
 /**
  * The reload offer as the app bar presents it. Three modules are mocked, each for a reason that
  * would otherwise make the test impossible rather than merely awkward:
  *
- *  - `~/client/pwa`: `activateUpdate()` calls `location.reload()`, which jsdom refuses
+ *  - `~/app/pwa`: `activateUpdate()` calls `location.reload()`, which jsdom refuses
  *    ("Not implemented: navigation").
- *  - `~/client/hooks/use-live`: jsdom has no IndexedDB, so the real hook always returns its
+ *  - `~/data/use-live`: jsdom has no IndexedDB, so the real hook always returns its
  *    fallback and the "ada sesi yang masih berjalan" branch could never be reached. The banner
  *    makes exactly ONE `useLive` call, so a blunt mock is safe here.
- *  - `~/client/scan-focus`: the focus handover is the thing being asserted, and the cockpit that
+ *  - `~/platform/scan-focus`: the focus handover is the thing being asserted, and the cockpit that
  *    would register a handler is not mounted in this file. Its other half is locked in
  *    tests/component/session-cockpit-ownership.test.tsx.
  */
@@ -25,17 +25,17 @@ const mocks = vi.hoisted(() => ({
   runningCount: { value: 0 },
 }))
 
-vi.mock('~/client/pwa', () => ({
+vi.mock('~/app/pwa', () => ({
   registerServiceWorker: () => undefined,
   checkForUpdate: async () => undefined,
   activateUpdate: mocks.activateUpdate,
 }))
 
-vi.mock('~/client/hooks/use-live', () => ({
+vi.mock('~/data/use-live', () => ({
   useLive: () => mocks.runningCount.value,
 }))
 
-vi.mock('~/client/scan-focus', () => ({
+vi.mock('~/platform/scan-focus', () => ({
   requestScanFocus: mocks.requestScanFocus,
 }))
 

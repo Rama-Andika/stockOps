@@ -1,8 +1,13 @@
 import mysql from 'mysql2/promise'
 import { drizzle, type MySql2Database } from 'drizzle-orm/mysql2'
 import type { RowDataPacket } from 'mysql2/promise'
-import * as schema from './schema'
-import { assertDistinctAppIdx, assertProductionSecrets, isProductionRuntime, serverEnv } from '../env'
+import * as schema from '~/server/db/schema'
+import {
+  assertDistinctAppIdx,
+  assertProductionSecrets,
+  isProductionRuntime,
+  serverEnv,
+} from '~/server/env'
 
 export type Database = MySql2Database<typeof schema>
 
@@ -80,10 +85,10 @@ export async function withNamedLock<T>(
 ): Promise<T> {
   const connection = await getPool().getConnection()
   try {
-    const [rows] = await connection.query<RowDataPacket[]>(
-      'SELECT GET_LOCK(?, ?) AS acquired',
-      [name, timeoutSeconds],
-    )
+    const [rows] = await connection.query<RowDataPacket[]>('SELECT GET_LOCK(?, ?) AS acquired', [
+      name,
+      timeoutSeconds,
+    ])
     const acquired = rows[0]?.acquired
     if (acquired !== 1 && acquired !== '1') {
       throw new Error(`Gagal memperoleh lock "${name}" (timeout ${timeoutSeconds}s)`)

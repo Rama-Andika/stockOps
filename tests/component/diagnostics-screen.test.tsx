@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_STATUS } from '~/shared/constants'
-import { getToasts } from '~/client/toast'
+import { SESSION_STATUS } from '~/core/contracts/constants'
+import { getToasts } from '~/platform/toast'
 
 /**
  * Layar ini hanya berguna kalau isinya benar-benar keluar dari perangkat. Karena itu yang diuji
@@ -63,17 +63,16 @@ const ENTRIES = [
 ]
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (options: { component: ComponentType }) => ({ options }),
   // AppBar merender <Link> untuk tombol kembali; stub mengubahnya menjadi <a> biasa.
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
 
-vi.mock('~/client/diagnostics/download', () => ({
+vi.mock('~/platform/download', () => ({
   downloadTextFile: (...args: unknown[]) => downloadTextFile(...(args as [])),
   copyText: (...args: unknown[]) => copyText(...(args as [])),
 }))
 
-vi.mock('~/client/diagnostics/read', () => ({
+vi.mock('~/features/diagnostics/read', () => ({
   EMPTY_DIAGNOSTICS: { snapshot: SNAPSHOT, entries: [] },
   readDiagnostics: (...args: unknown[]) => readDiagnostics(...(args as [])),
   collectDiagnosticsExport: () => collectDiagnosticsExport(),
@@ -85,7 +84,7 @@ vi.mock('~/client/diagnostics/read', () => ({
  * menyimpan hasilnya di state. Alternatif yang lebih pendek — nilai kalengan menurut urutan
  * pemanggilan — akan pecah begitu urutan atau jumlah live query berubah.
  */
-vi.mock('~/client/hooks/use-live', async () => {
+vi.mock('~/data/use-live', async () => {
   const { useEffect, useState } = await import('react')
   return {
     useLive: <T,>(querier: () => Promise<T>, deps: readonly unknown[], fallback: T) => {
@@ -112,8 +111,7 @@ vi.mock('~/client/hooks/use-live', async () => {
  * tersebut ada dan test langsung mati dengan "Cannot access before initialization". Jangan
  * "disederhanakan" menjadi impor biasa di atas.
  */
-const { Route } = await import('~/routes/diagnostics')
-const DiagnosticsPage = Route.options.component as ComponentType
+const { DiagnosticsScreen } = await import('~/features/diagnostics/diagnostics-screen')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -130,7 +128,7 @@ beforeEach(() => {
 
 describe('layar diagnostik', () => {
   it('menampilkan potret antrean, kirim terakhir, dan penanda PO basi', async () => {
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     expect(await screen.findByText('Belum terkirim')).toBeInTheDocument()
     expect(await screen.findByText('4')).toBeInTheDocument()
@@ -139,7 +137,7 @@ describe('layar diagnostik', () => {
   })
 
   it('menampilkan entri log beserta level dan kode event-nya', async () => {
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     expect(await screen.findByText(/Sinkronisasi gagal/)).toBeInTheDocument()
     expect(screen.getByText(/PUSH_TRANSPORT_FAILED/)).toBeInTheDocument()
@@ -147,7 +145,7 @@ describe('layar diagnostik', () => {
   })
 
   it('saringan meminta hanya entri bermasalah dan menandai dirinya aktif', async () => {
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
     await screen.findByText(/Sinkronisasi gagal/)
     const filter = screen.getByRole('button', { name: /Hanya warn/ })
     expect(filter).toHaveAttribute('aria-pressed', 'false')
@@ -164,7 +162,7 @@ describe('layar diagnostik', () => {
   })
 
   it('mengekspor CSV sebagai berkas unduhan', async () => {
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     fireEvent.click(screen.getByRole('button', { name: /Ekspor CSV/ }))
 
@@ -179,7 +177,7 @@ describe('layar diagnostik', () => {
 
   it('jatuh ke clipboard saat perangkat menolak unduhan', async () => {
     downloadTextFile.mockReturnValue(false)
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     fireEvent.click(screen.getByRole('button', { name: /Ekspor CSV/ }))
 
@@ -190,7 +188,7 @@ describe('layar diagnostik', () => {
   })
 
   it('menghapus log hanya setelah dua kali aktivasi tombol tahan', async () => {
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
     const button = screen.getByRole('button', { name: 'Hapus Log' })
 
     // Klik pertama hanya melenjarkan tombol (lihat ConfirmButton: event dengan detail === 0).
@@ -206,14 +204,14 @@ describe('layar diagnostik', () => {
 
   it('mengatakan apa adanya saat tidak ada entri', async () => {
     readDiagnostics.mockResolvedValue({ snapshot: SNAPSHOT, entries: [] })
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     expect(await screen.findByText('Belum ada entri log.')).toBeInTheDocument()
   })
 
   it('memberi tahu operator saat log perangkat tidak bisa dibaca', async () => {
     collectDiagnosticsExport.mockRejectedValue(new Error('UnknownError: IndexedDB'))
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     fireEvent.click(screen.getByRole('button', { name: /Ekspor CSV/ }))
 
@@ -229,7 +227,7 @@ describe('layar diagnostik', () => {
 
   it('memberi tahu operator saat log gagal dihapus', async () => {
     clearDiagnosticsLog.mockRejectedValue(new Error('QuotaExceededError'))
-    render(<DiagnosticsPage />)
+    render(<DiagnosticsScreen />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Hapus Log' }))
     fireEvent.click(screen.getByRole('button', { name: /Tekan lagi untuk mengonfirmasi/ }))

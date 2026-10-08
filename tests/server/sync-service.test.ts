@@ -3,17 +3,10 @@ import { sql } from 'drizzle-orm'
 import { closeDb, getDb } from '~/server/db/client'
 import { syncPush, overReceiveWorklist } from '~/server/services/sync-service'
 import { pullChunk } from '~/server/services/pull-service'
-import { computeFingerprint } from '~/server/auth/credentials'
-import { minIdForApp, maxIdForApp, type IdGenerator } from '~/shared/ids'
-import type { PushInput, ReceiveSessionInput } from '~/shared/schemas'
-import {
-  CREDENTIALS,
-  FIXTURE,
-  countRows,
-  makeSessionPayload,
-  queryRows,
-  seedAll,
-} from './helpers'
+import { computeFingerprint } from '~/server/crypto/credentials'
+import { minIdForApp, maxIdForApp, type IdGenerator } from '~/core/identity/ids'
+import type { PushInput, ReceiveSessionInput } from '~/core/contracts/schemas'
+import { CREDENTIALS, FIXTURE, countRows, makeSessionPayload, queryRows, seedAll } from './helpers'
 
 const NOW = () => new Date('2025-10-26T00:00:00')
 
@@ -144,7 +137,9 @@ describe('sync-service: push, nomor dokumen, namespace ID', () => {
 
     it('mengisi jatuh tempo dari termin vendor (vendor.due_date = 30 hari)', async () => {
       await syncPush(pushInput([session()]), { now: NOW })
-      const headers = await queryRows<Record<string, string>>(sql`SELECT due_date, date FROM pos_receive`)
+      const headers = await queryRows<Record<string, string>>(
+        sql`SELECT due_date, date FROM pos_receive`,
+      )
       expect(String(headers[0]?.due_date)).toContain('2025-11-24')
       expect(String(headers[0]?.date)).toContain('2025-10-25')
     })
@@ -445,7 +440,9 @@ describe('sync-service: push, nomor dokumen, namespace ID', () => {
       await syncPush(pushInput([session({ receiveDate: '2025-11-05 08:00:00' })]), {
         now: () => new Date('2025-11-06T00:00:00'),
       })
-      const headers = await queryRows<Record<string, string>>(sql`SELECT number, prefix_number FROM pos_receive`)
+      const headers = await queryRows<Record<string, string>>(
+        sql`SELECT number, prefix_number FROM pos_receive`,
+      )
       expect(headers[0]?.prefix_number).toBe('IN1125')
       expect(headers[0]?.number).toBe('IN11250001')
     })
@@ -610,14 +607,17 @@ describe('sync-service: push, nomor dokumen, namespace ID', () => {
   describe('kredensial & urutan', () => {
     it('mengembalikan daftar kredensial yang dicabut saat sinkronisasi', async () => {
       const result = await syncPush(
-        pushInput([session()], [
-          validCredential(),
-          {
-            userId: FIXTURE.user.ACTIVE_2,
-            loginId: CREDENTIALS.ACTIVE_2.loginId,
-            fingerprint: computeFingerprint('basi'),
-          },
-        ]),
+        pushInput(
+          [session()],
+          [
+            validCredential(),
+            {
+              userId: FIXTURE.user.ACTIVE_2,
+              loginId: CREDENTIALS.ACTIVE_2.loginId,
+              fingerprint: computeFingerprint('basi'),
+            },
+          ],
+        ),
         { now: NOW },
       )
       expect(result.revoked).toEqual([{ userId: FIXTURE.user.ACTIVE_2, reason: 'CHANGED' }])
@@ -645,13 +645,16 @@ describe('sync-service: push, nomor dokumen, namespace ID', () => {
 
     it('menolak bila semua kredensial sudah dicabut', async () => {
       const result = await syncPush(
-        pushInput([session()], [
-          {
-            userId: FIXTURE.user.ACTIVE_2,
-            loginId: CREDENTIALS.ACTIVE_2.loginId,
-            fingerprint: computeFingerprint('basi'),
-          },
-        ]),
+        pushInput(
+          [session()],
+          [
+            {
+              userId: FIXTURE.user.ACTIVE_2,
+              loginId: CREDENTIALS.ACTIVE_2.loginId,
+              fingerprint: computeFingerprint('basi'),
+            },
+          ],
+        ),
         { now: NOW },
       )
       expect(result.results[0]?.code).toBe('UNAUTHORIZED')
@@ -728,19 +731,22 @@ describe('sync-service: push, nomor dokumen, namespace ID', () => {
         { now: NOW },
       )
       expect(result.results[0]?.status).toBe('SYNCED')
-      const headers = await queryRows<{ location_id: string }>(sql`SELECT location_id FROM pos_receive`)
+      const headers = await queryRows<{ location_id: string }>(
+        sql`SELECT location_id FROM pos_receive`,
+      )
       expect(String(headers[0]?.location_id)).toBe(FIXTURE.location.L1)
-      const items = await queryRows<{ company_id: string }>(sql`SELECT company_id FROM pos_receive_item`)
+      const items = await queryRows<{ company_id: string }>(
+        sql`SELECT company_id FROM pos_receive_item`,
+      )
       expect(String(items[0]?.company_id)).toBe('0')
     })
   })
 
   describe('sanitasi tanggal (jam device salah)', () => {
     it('memakai waktu server bila tanggal penerimaan di masa depan', async () => {
-      const result = await syncPush(
-        pushInput([session({ receiveDate: '2030-01-01 00:00:00' })]),
-        { now: NOW },
-      )
+      const result = await syncPush(pushInput([session({ receiveDate: '2030-01-01 00:00:00' })]), {
+        now: NOW,
+      })
       expect(result.results[0]?.number).toBe('IN10250001')
       const headers = await queryRows<Record<string, string>>(sql`SELECT date FROM pos_receive`)
       expect(String(headers[0]?.date)).toContain('2025-10-26')

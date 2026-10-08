@@ -6,9 +6,9 @@ import {
   buildDiagnosticsSummary,
   csvCell,
   diagnosticsFileName,
-} from '~/client/diagnostics/csv'
-import type { DiagnosticsExport } from '~/client/diagnostics/read'
-import { SESSION_STATUS } from '~/shared/constants'
+} from '~/features/diagnostics/csv'
+import type { DiagnosticsExport } from '~/features/diagnostics/read'
+import { SESSION_STATUS } from '~/core/contracts/constants'
 
 /**
  * Berkas inilah yang beredar ke luar perangkat: operator mengirimkannya ke tim IT, dan tim IT
@@ -85,7 +85,10 @@ const PAYLOAD: DiagnosticsExport = {
 }
 
 function lines(csv: string): string[] {
-  return csv.replace(/^\uFEFF/, '').split('\r\n').filter((line) => line.length > 0)
+  return csv
+    .replace(/^\uFEFF/, '')
+    .split('\r\n')
+    .filter((line) => line.length > 0)
 }
 
 describe('buildDiagnosticsCsv', () => {

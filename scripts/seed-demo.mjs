@@ -44,11 +44,17 @@ const config = {
 }
 
 async function clean(connection) {
-  await connection.query('DELETE FROM pos_receive_item WHERE purchase_item_id IN (?, ?)', DEMO.purchaseItemIds)
+  await connection.query(
+    'DELETE FROM pos_receive_item WHERE purchase_item_id IN (?, ?)',
+    DEMO.purchaseItemIds,
+  )
   await connection.query('DELETE FROM pos_receive WHERE purchase_id = ?', [DEMO.purchaseId])
   await connection.query('DELETE FROM pos_purchase_item WHERE purchase_id = ?', [DEMO.purchaseId])
   await connection.query('DELETE FROM pos_purchase WHERE purchase_id = ?', [DEMO.purchaseId])
-  await connection.query('DELETE FROM pos_vendor_item WHERE vendor_item_id IN (?, ?)', DEMO.vendorItemIds)
+  await connection.query(
+    'DELETE FROM pos_vendor_item WHERE vendor_item_id IN (?, ?)',
+    DEMO.vendorItemIds,
+  )
   await connection.query('DELETE FROM vendor WHERE vendor_id = ?', [DEMO.vendorId])
   await connection.query('DELETE FROM sysuser WHERE user_id = ?', [DEMO.userId])
   console.log('Data demo StockOps dihapus (master barang yang dipakai ulang tidak disentuh).')
@@ -97,8 +103,14 @@ async function seed(connection) {
      VALUES (?, ?, ?, ?, 12, 0), (?, ?, ?, ?, 6, 0)
      ON DUPLICATE KEY UPDATE conv_qty = VALUES(conv_qty)`,
     [
-      DEMO.vendorItemIds[0], DEMO.vendorId, DEMO.itemIds[0], units.KARTON,
-      DEMO.vendorItemIds[1], DEMO.vendorId, DEMO.itemIds[1], units.PACK,
+      DEMO.vendorItemIds[0],
+      DEMO.vendorId,
+      DEMO.itemIds[0],
+      units.KARTON,
+      DEMO.vendorItemIds[1],
+      DEMO.vendorId,
+      DEMO.itemIds[1],
+      units.PACK,
     ],
   )
 
@@ -108,7 +120,14 @@ async function seed(connection) {
         include_tax, tax_percent, discount_percent, payment_type, currency_id, price_include_tax)
      VALUES (?, ?, 'CHECKED', ?, ?, ?, 0, NOW(), 1000000, 1, 11.00, 0.00, 'Cash', ?, 0)
      ON DUPLICATE KEY UPDATE status = 'CHECKED', vendor_id = VALUES(vendor_id)`,
-    [DEMO.purchaseId, DEMO.purchaseNumber, DEMO.vendorId, DEMO.locationId, DEMO.userId, DEMO.currencyId],
+    [
+      DEMO.purchaseId,
+      DEMO.purchaseNumber,
+      DEMO.vendorId,
+      DEMO.locationId,
+      DEMO.userId,
+      DEMO.currencyId,
+    ],
   )
 
   await connection.query(
@@ -117,8 +136,14 @@ async function seed(connection) {
      VALUES (?, ?, ?, 10, ?, 'OPEN', 100000.00, 0.00), (?, ?, ?, 5, ?, 'OPEN', 100000.00, 0.00)
      ON DUPLICATE KEY UPDATE qty = VALUES(qty), uom_id = VALUES(uom_id), amount = VALUES(amount)`,
     [
-      DEMO.purchaseItemIds[0], DEMO.purchaseId, DEMO.itemIds[0], units.KARTON,
-      DEMO.purchaseItemIds[1], DEMO.purchaseId, DEMO.itemIds[1], units.PACK,
+      DEMO.purchaseItemIds[0],
+      DEMO.purchaseId,
+      DEMO.itemIds[0],
+      units.KARTON,
+      DEMO.purchaseItemIds[1],
+      DEMO.purchaseId,
+      DEMO.itemIds[1],
+      units.PACK,
     ],
   )
 }
@@ -133,7 +158,9 @@ try {
     console.log(`Seed demo selesai di database "${config.database}":`)
     console.log(`  PO          : ${DEMO.purchaseNumber} (status CHECKED, id ${DEMO.purchaseId})`)
     console.log(`  Vendor      : VENDOR DEMO STOCKOPS (id ${DEMO.vendorId})`)
-    console.log(`  Barang 1     : ${items[0].name} — barcode ${items[0].barcode} (1 KARTON = 12 PCS)`)
+    console.log(
+      `  Barang 1     : ${items[0].name} — barcode ${items[0].barcode} (1 KARTON = 12 PCS)`,
+    )
     console.log(`  Barang 2     : ${items[1].name} — barcode ${items[1].barcode} (1 PACK = 6 PCS)`)
     console.log(`  Login PDT   : ${DEMO.loginId} / ${DEMO.password}`)
   }

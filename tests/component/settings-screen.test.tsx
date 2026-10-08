@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAppStore } from '~/client/state/store/app-store'
-import { AppStoreProvider } from '~/client/state/store/app-store-provider'
-import type { AppState } from '~/client/state/store/types'
-import { Route } from '~/routes/settings'
-import { getToasts } from '~/client/toast'
-import { ThemeToggle } from '~/components/theme-toggle'
-import { applyThemePreference } from '~/client/theme'
-import { loadPreferences } from '~/client/preferences'
+import { createAppStore } from '~/app/store/app-store'
+import { AppStoreProvider } from '~/app/store/app-store-provider'
+import type { AppState } from '~/app/store/types'
+import { SettingsScreen } from '~/features/settings/settings-screen'
+import { getToasts } from '~/platform/toast'
+import { ThemeToggle } from '~/app/theme-toggle'
+import { applyThemePreference } from '~/platform/theme'
+import { loadPreferences } from '~/platform/preferences'
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -21,8 +21,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     ),
   }
 })
-
-const SettingsPage = Route.options.component as React.ComponentType
 
 const baseState = {
   ready: true,
@@ -66,17 +64,17 @@ function renderSettings(overrides: Partial<AppState> = {}) {
   })
   return render(
     <AppStoreProvider store={store}>
-      <SettingsPage />
+      <SettingsScreen />
     </AppStoreProvider>,
   )
 }
 
-describe('SettingsPage UI & UX', () => {
+describe('SettingsScreen UI & UX', () => {
   beforeEach(() => {
     localStorage.clear()
     // The theme row writes to <html>, and jsdom shares one document across this whole file.
     document.documentElement.removeAttribute('data-theme')
-    // src/client/theme.ts is a module singleton that survives between tests, so clearing storage
+    // src/platform/theme.ts is a module singleton that survives between tests, so clearing storage
     // is not enough — this is what pulls its in-memory value back to the default. Without it the
     // first test to switch the theme leaves every later one running against 'light', and the
     // failures land in whichever test happens to run next.
@@ -139,7 +137,7 @@ describe('SettingsPage UI & UX', () => {
 
     fireEvent.click(themeSwitch)
     expect(themeSwitch).toHaveAttribute('aria-checked', 'true')
-    // The row writes through src/client/theme.ts, so the DOCUMENT itself has to have changed, not
+    // The row writes through src/platform/theme.ts, so the DOCUMENT itself has to have changed, not
     // just the switch. Without this line the two could drift apart and no test would fail.
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
 
@@ -207,7 +205,7 @@ describe('SettingsPage UI & UX', () => {
 /**
  * Satu sakelar, dua tempat: ikon di app bar (`ThemeToggle`, dirender oleh `AppShell`) dan baris
  * "Tema Terang" di Pengaturan. Keduanya TIDAK pernah berada dalam satu subtree React, jadi
- * satu-satunya yang menyatukannya adalah singleton di `src/client/theme.ts`.
+ * satu-satunya yang menyatukannya adalah singleton di `src/platform/theme.ts`.
  *
  * Arah Pengaturan → app bar sudah dijaga test di atas (sakelarnya memasang `data-theme`). Dua test
  * di bawah menjaga arah sebaliknya, yang sempat hilang dan lolos sampai review: ikon app bar
@@ -217,7 +215,7 @@ describe('SettingsPage UI & UX', () => {
  * sama sekali — tema tetap terang — dan baru muncul sebagai "temanya tidak mau tersimpan" saat
  * aplikasi dibuka lagi besok paginya.
  */
-describe('SettingsPage — sinkronisasi tema dengan ikon app bar', () => {
+describe('SettingsScreen — sinkronisasi tema dengan ikon app bar', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
@@ -238,7 +236,7 @@ describe('SettingsPage — sinkronisasi tema dengan ikon app bar', () => {
     return render(
       <AppStoreProvider store={store}>
         <ThemeToggle />
-        <SettingsPage />
+        <SettingsScreen />
       </AppStoreProvider>,
     )
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dec2, eqDec2, gtDec2, ltDec2, sumDec2, toNumber } from '~/shared/num'
+import { dec2, eqDec2, gtDec2, ltDec2, sumDec2, toNumber } from '~/core/money/num'
 
 describe('num', () => {
   it('toNumber menangani string & nilai tak valid', () => {

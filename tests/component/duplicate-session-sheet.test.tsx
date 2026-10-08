@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { DuplicateSessionSheet } from '~/components/duplicate-session-sheet'
+import { DuplicateSessionSheet } from '~/features/receiving/session/duplicate-session-sheet'
 
 /**
  * Dedupe sesi per PO — lembar konfirmasinya. Yang dipaku di sini bukan tampilannya, tapi ARAH

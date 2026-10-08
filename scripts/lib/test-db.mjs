@@ -70,7 +70,9 @@ export async function createTestSchema(options = {}) {
     await connection.query('SET FOREIGN_KEY_CHECKS = 0')
 
     for (const table of CLONED_TABLES) {
-      const [rows] = await connection.query(`SHOW CREATE TABLE \`${config.production}\`.\`${table}\``)
+      const [rows] = await connection.query(
+        `SHOW CREATE TABLE \`${config.production}\`.\`${table}\``,
+      )
       const ddlRaw = rows[0]?.['Create Table']
       if (!ddlRaw) throw new Error(`Gagal membaca DDL untuk tabel ${table}`)
       const ddl = stripForeignKeys(ddlRaw)
@@ -105,7 +107,8 @@ export async function dropTestSchema(options = {}) {
 
 // Run directly: `node scripts/setup-test-db.mjs`
 const invokedDirectly =
-  process.argv[1] && import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href
+  process.argv[1] &&
+  import.meta.url === new URL(`file://${process.argv[1].replace(/\\/g, '/')}`).href
 if (invokedDirectly) {
   createTestSchema({ log: console.log })
     .then((config) => {

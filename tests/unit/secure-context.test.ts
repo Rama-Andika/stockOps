@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { hasWebCrypto, isInsecureContext } from '~/client/secure-context'
+import { hasWebCrypto, isInsecureContext } from '~/platform/secure-context'
 
 afterEach(() => {
   vi.unstubAllGlobals()

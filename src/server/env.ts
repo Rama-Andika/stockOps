@@ -76,7 +76,9 @@ export function assertProductionSecrets(
   const problems: string[] = []
   const secret = env.credentialHmacSecret
   if (WEAK_HMAC_SECRETS.has(secret) || secret.length < MIN_HMAC_SECRET_LENGTH) {
-    problems.push(`CREDENTIAL_HMAC_SECRET wajib berisi nilai acak minimal ${MIN_HMAC_SECRET_LENGTH} karakter`)
+    problems.push(
+      `CREDENTIAL_HMAC_SECRET wajib berisi nilai acak minimal ${MIN_HMAC_SECRET_LENGTH} karakter`,
+    )
   }
   for (const name of ['DB_USER', 'DB_PASSWORD', 'DB_NAME'] as const) {
     const value = raw[name]

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  evaluateLine,
-  evaluateSession,
-  progressOf,
-} from '~/shared/over-receive'
-import { PROGRESS_STATUS } from '~/shared/constants'
+import { evaluateLine, evaluateSession, progressOf } from '~/core/receiving/over-receive'
+import { PROGRESS_STATUS } from '~/core/contracts/constants'
 
 describe('evaluateLine', () => {
   const ordered = new Map([['PI-1', 10]])
@@ -67,14 +63,10 @@ describe('evaluateSession', () => {
   })
 
   it('agregasi receivedQty duplikat untuk item yang sama', () => {
-    const summary = evaluateSession(
-      [{ purchaseItemId: 'B', qty: 1 }],
-      ordered,
-      [
-        { purchaseItemId: 'B', receivedQty: 2 },
-        { purchaseItemId: 'B', receivedQty: 2 },
-      ],
-    )
+    const summary = evaluateSession([{ purchaseItemId: 'B', qty: 1 }], ordered, [
+      { purchaseItemId: 'B', receivedQty: 2 },
+      { purchaseItemId: 'B', receivedQty: 2 },
+    ])
     expect(summary.lines[0]?.previousQty).toBe(4)
     expect(summary.lines[0]?.newTotal).toBe(5)
     expect(summary.overReceive).toBe(false)

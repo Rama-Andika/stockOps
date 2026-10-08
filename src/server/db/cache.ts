@@ -7,7 +7,11 @@ interface CacheEntry<T> {
 
 const store = new Map<string, CacheEntry<unknown>>()
 
-export async function memoize<T>(key: string, ttlMs: number, factory: () => Promise<T>): Promise<T> {
+export async function memoize<T>(
+  key: string,
+  ttlMs: number,
+  factory: () => Promise<T>,
+): Promise<T> {
   const now = Date.now()
   const hit = store.get(key)
   if (hit && hit.expiresAt > now) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeHeaderFinance, computeLineFinance } from '~/shared/receive-finance'
+import { computeHeaderFinance, computeLineFinance } from '~/core/money/receive-finance'
 
 describe('computeLineFinance (finansial per baris penerimaan)', () => {
   it('memprorata diskon item sesuai qty diterima (contoh Receive1 admin)', () => {

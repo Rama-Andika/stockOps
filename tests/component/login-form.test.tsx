@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { createAppStore } from '~/client/state/store/app-store'
-import { AppStoreProvider } from '~/client/state/store/app-store-provider'
-import type { AppState } from '~/client/state/store/types'
-import { LoginForm } from '~/components/login-form'
+import { createAppStore } from '~/app/store/app-store'
+import { AppStoreProvider } from '~/app/store/app-store-provider'
+import type { AppState } from '~/app/store/types'
+import { LoginForm } from '~/features/auth/login-form'
 
 const baseState = {
   ready: true,

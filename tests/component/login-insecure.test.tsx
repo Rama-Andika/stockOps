@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createAppStore } from '~/client/state/store/app-store'
-import { AppStoreProvider } from '~/client/state/store/app-store-provider'
-import { LoginForm } from '~/components/login-form'
+import { createAppStore } from '~/app/store/app-store'
+import { AppStoreProvider } from '~/app/store/app-store-provider'
+import { LoginForm } from '~/features/auth/login-form'
 
 // vi.mock is hoisted above the imports, so the flag it reads must be hoisted too.
 const secure = vi.hoisted(() => ({ insecure: true }))
 
-vi.mock('~/client/secure-context', () => ({
+vi.mock('~/platform/secure-context', () => ({
   isInsecureContext: () => secure.insecure,
   hasWebCrypto: () => true,
   INSECURE_CONTEXT_MESSAGE: 'Koneksi tidak aman',

@@ -1,0 +1,212 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!src/routeTree.gen.ts",
+      "!public/sw.js",
+      "!public/offline.html",
+      "!package-lock.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "correctness": {
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "warn"
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "overrides": [
+    {
+      "includes": ["src/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "~/app/**",
+                      "~/data/**",
+                      "~/platform/**",
+                      "~/ui/**",
+                      "~/features/**",
+                      "~/server/**",
+                      "~/routes/**",
+                      "react",
+                      "react-dom",
+                      "dexie",
+                      "dexie-react-hooks",
+                      "mysql2",
+                      "drizzle-orm"
+                    ],
+                    "message": "src/core harus murni: hanya boleh mengimpor ~/core/** dan zod. Tanpa I/O, tanpa React, tanpa Dexie, tanpa driver database."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/data/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "~/app/**",
+                      "~/platform/**",
+                      "~/ui/**",
+                      "~/features/**",
+                      "~/server/**",
+                      "~/routes/**"
+                    ],
+                    "message": "src/data hanya boleh mengimpor ~/core/** (dan ~/data/**). Kosakata yang dibutuhkan schema Dexie tinggal di core/contracts."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/platform/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "~/app/**",
+                      "~/data/**",
+                      "~/ui/**",
+                      "~/features/**",
+                      "~/server/**",
+                      "~/routes/**"
+                    ],
+                    "message": "src/platform adalah adapter browser: hanya boleh mengimpor ~/platform/** dan ~/core/**."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/ui/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "~/app/**",
+                      "~/data/**",
+                      "~/features/**",
+                      "~/server/**",
+                      "~/routes/**"
+                    ],
+                    "message": "src/ui tidak boleh tahu apa pun tentang domain: hanya ~/ui/**, ~/core/**, dan ~/platform/**."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/features/**", "src/app/**", "src/routes/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["~/server/**", "!~/server/functions/**"],
+                    "message": "Satu-satunya pintu klien ke server adalah ~/server/functions/**. Mengimpor ~/server/db/** atau ~/server/services/** dari kode klien menarik mysql2 dan drizzle-orm ke bundle browser."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/server/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "~/app/**",
+                      "~/data/**",
+                      "~/platform/**",
+                      "~/ui/**",
+                      "~/features/**",
+                      "~/routes/**",
+                      "react",
+                      "react-dom",
+                      "dexie"
+                    ],
+                    "message": "src/server hanya boleh mengimpor ~/core/** dan ~/server/**."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

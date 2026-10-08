@@ -2,10 +2,10 @@
 import type { ReactNode } from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { SessionGroupList } from '~/components/session-group-list'
-import { SessionOwnerGate } from '~/components/session-owner-gate'
-import type { SessionRowInput } from '~/components/session-status-row'
-import { SESSION_STATUS } from '~/shared/constants'
+import { SessionGroupList } from '~/features/receiving/session/session-group-list'
+import { SessionOwnerGate } from '~/features/receiving/session/session-owner-gate'
+import type { SessionRowInput } from '~/features/receiving/session/session-status-row'
+import { SESSION_STATUS } from '~/core/contracts/constants'
 
 // Both components under test render a router <Link>, and a real one needs a route tree, a history
 // and a RouterProvider around every case. The stub turns `to` into a plain href so the markup
@@ -177,7 +177,7 @@ describe('SessionOwnerGate', () => {
 /**
  * Tinggi baris dokumen dihitung dari data, bukan diukur, jadi tiga kondisi yang membuat baris
  * tumbuh harus benar-benar tercermin di tingginya. Kalau markup `SessionStatusRow` menambah atau
- * mengurangi satu baris teks tanpa `row-heights.ts` ikut berubah, baris akan terpotong di perangkat
+ * mengurangi satu baris teks tanpa `features/receiving/row-heights.ts` ikut berubah, baris akan terpotong di perangkat
  * yang tidak dipakai siapa pun untuk melaporkan bug.
  *
  * Yang diperiksa adalah PERBANDINGAN, bukan angkanya: angka pastinya sudah dikunci

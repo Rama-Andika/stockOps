@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateTime, formatDate, formatRelativeDateTime } from '~/shared/format'
+import { formatDateTime, formatDate, formatRelativeDateTime } from '~/core/format'
 
 describe('formatRelativeDateTime', () => {
   const baseDate = new Date('2026-10-05T14:16:00')
@@ -25,7 +25,9 @@ describe('formatRelativeDateTime', () => {
 
   it('mengembalikan "Hari ini, pukul HH.mm (X jam yang lalu)" untuk hari ini di atas 1 jam', () => {
     const twoHoursAgo = new Date('2026-10-05T12:00:00')
-    expect(formatRelativeDateTime(twoHoursAgo, baseDate)).toBe('Hari ini, pukul 12.00 (2 jam yang lalu)')
+    expect(formatRelativeDateTime(twoHoursAgo, baseDate)).toBe(
+      'Hari ini, pukul 12.00 (2 jam yang lalu)',
+    )
   })
 
   it('mengembalikan "Kemarin, pukul HH.mm" untuk tanggal kemarin', () => {

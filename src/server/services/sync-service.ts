@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, like, lte, sql } from 'drizzle-orm'
-import { getDb, withNamedLock, type Database } from '../db/client'
-import { invalidateCache } from '../db/cache'
-import { rowsOf } from '../db/rows'
+import { getDb, withNamedLock, type Database } from '~/server/db/client'
+import { invalidateCache } from '~/server/db/cache'
+import { rowsOf } from '~/server/db/rows'
 import {
   documentHistory,
   posItemMaster,
@@ -11,35 +11,35 @@ import {
   posReceiveItem,
   posVendorItem,
   vendor,
-} from '../db/schema'
-import { addDays, toMysqlDate, toMysqlDateTime } from '../db/sql-utils'
-import { serverEnv } from '../env'
-import { checkCredentialRevocations, UNAUTHORIZED_MESSAGE } from './auth-service'
-import { buildNumber, buildPrefix } from '~/shared/doc-number'
-import { IdGenerator, maxIdForApp, minIdForApp } from '~/shared/ids'
+} from '~/server/db/schema'
+import { addDays, toMysqlDate, toMysqlDateTime } from '~/server/db/sql-utils'
+import { serverEnv } from '~/server/env'
+import { checkCredentialRevocations, UNAUTHORIZED_MESSAGE } from '~/server/services/auth-service'
+import { buildNumber, buildPrefix } from '~/core/identity/doc-number'
+import { IdGenerator, maxIdForApp, minIdForApp } from '~/core/identity/ids'
 import {
   buildOverReceiveMemo,
   buildSessionNote,
   extractSessionId,
   isOverReceiveMemo,
   parseOverReceiveMemo,
-} from '~/shared/memo'
-import { resolveConvQty, type VendorItemRow } from '~/shared/uom'
-import { computeHeaderFinance, computeLineFinance } from '~/shared/receive-finance'
-import { dec2 } from '~/shared/num'
-import { evaluateSession, type LineEvaluation } from '~/shared/over-receive'
-import { sanitizeReceiveDate } from '~/shared/receive-date'
+} from '~/core/receiving/memo'
+import { resolveConvQty, type VendorItemRow } from '~/core/receiving/uom'
+import { computeHeaderFinance, computeLineFinance } from '~/core/money/receive-finance'
+import { dec2 } from '~/core/money/num'
+import { evaluateSession, type LineEvaluation } from '~/core/receiving/over-receive'
+import { sanitizeReceiveDate } from '~/core/receiving/receive-date'
 import {
   PULLABLE_PURCHASE_STATUS,
   RECEIVE_STATUS_DRAFT,
   NOTE_SESSION_PREFIX,
-} from '~/shared/constants'
+} from '~/core/contracts/constants'
 import type {
   PushInput,
   PushResult,
   ReceiveSessionInput,
   SyncSessionResult,
-} from '~/shared/schemas'
+} from '~/core/contracts/schemas'
 
 type Row = Record<string, unknown>
 
@@ -179,11 +179,7 @@ function failed(
   }
 }
 
-function lineResult(
-  clientLineId: string,
-  evaluation: LineEvaluation,
-  memo: string | null,
-) {
+function lineResult(clientLineId: string, evaluation: LineEvaluation, memo: string | null) {
   return {
     clientLineId,
     purchaseItemId: evaluation.purchaseItemId,
@@ -367,13 +363,15 @@ async function processSession(
     }
 
     // 4) Smallest stock unit per item, which is what pos_receive_item.uom_id stores. The qty
-    //    itself stays in the PO unit — src/shared/uom.ts explains which column holds which.
+    //    itself stays in the PO unit — src/core/receiving/uom.ts explains which column holds which.
     const itemIds = [...new Set(session.items.map((item) => BigInt(item.itemMasterId)))]
     const itemRows = await ctx.db
       .select({ itemMasterId: posItemMaster.itemMasterId, uomStockId: posItemMaster.uomStockId })
       .from(posItemMaster)
       .where(inArray(posItemMaster.itemMasterId, itemIds))
-    const stockUomByItem = new Map(itemRows.map((row) => [String(row.itemMasterId), row.uomStockId]))
+    const stockUomByItem = new Map(
+      itemRows.map((row) => [String(row.itemMasterId), row.uomStockId]),
+    )
 
     // 5) Qty already received for these PO lines, summed over every document and device. Read
     //    here rather than trusted from the payload: several PDTs may be receiving one PO at the
@@ -456,7 +454,9 @@ async function processSession(
           .where(eq(vendor.vendorId, vendorId))
           .limit(1)
         const dueDays = Number(vendorRows[0]?.dueDate ?? 0)
-        const dueDate = toMysqlDate(dueDays > 0 ? addDays(sanitized.parsed, dueDays) : sanitized.parsed)
+        const dueDate = toMysqlDate(
+          dueDays > 0 ? addDays(sanitized.parsed, dueDays) : sanitized.parsed,
+        )
 
         await tx.insert(posReceive).values({
           receiveId,
@@ -565,9 +565,7 @@ async function processSession(
             expiredCheckId: BigInt(0),
           })
 
-          resultLines.push(
-            lineResult(input.clientLineId, line, memo),
-          )
+          resultLines.push(lineResult(input.clientLineId, line, memo))
           void conv
         }
 
@@ -602,10 +600,14 @@ export async function syncPush(input: PushInput, options: SyncOptions = {}): Pro
   // Sessions of a user whose own credential was revoked are still accepted (the goods
   // were physically received), as long as the device itself is trusted.
   const revokedIds = new Set(revoked.map((entry) => entry.userId))
-  const deviceAuthorized = input.credentials.some((credential) => !revokedIds.has(credential.userId))
+  const deviceAuthorized = input.credentials.some(
+    (credential) => !revokedIds.has(credential.userId),
+  )
   if (!deviceAuthorized) {
     return {
-      results: input.sessions.map((session) => failed(session, 'UNAUTHORIZED', UNAUTHORIZED_MESSAGE)),
+      results: input.sessions.map((session) =>
+        failed(session, 'UNAUTHORIZED', UNAUTHORIZED_MESSAGE),
+      ),
       revoked,
       serverTime: new Date().toISOString(),
     }
@@ -619,7 +621,11 @@ export async function syncPush(input: PushInput, options: SyncOptions = {}): Pro
       // Internal details (SQL, lock names) stay in the server log only.
       console.error(`[sync] sesi ${session.sessionId} gagal:`, error)
       results.push(
-        failed(session, 'SERVER_ERROR', 'Kesalahan server saat menyimpan dokumen. Coba kirim ulang.'),
+        failed(
+          session,
+          'SERVER_ERROR',
+          'Kesalahan server saat menyimpan dokumen. Coba kirim ulang.',
+        ),
       )
     }
   }

@@ -1,13 +1,13 @@
 import { eq, inArray } from 'drizzle-orm'
-import { getDb, type Database } from '../db/client'
-import { sysuser } from '../db/schema'
-import { computeFingerprint, safeEqual, verifyLegacyPassword } from '../auth/credentials'
-import { serverEnv } from '../env'
+import { getDb, type Database } from '~/server/db/client'
+import { sysuser } from '~/server/db/schema'
+import { computeFingerprint, safeEqual, verifyLegacyPassword } from '~/server/crypto/credentials'
+import { serverEnv } from '~/server/env'
 import type {
   CheckCredentialsResult,
   CredentialFingerprint,
   LoginResult,
-} from '~/shared/schemas'
+} from '~/core/contracts/schemas'
 
 export interface LoginInput {
   loginId: string
