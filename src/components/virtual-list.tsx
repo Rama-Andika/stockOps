@@ -106,11 +106,40 @@ export function VirtualList<T>({
    * type ONE ref for both <ul> and <div> without a cast.
    */
   const [container, setContainer] = useState<HTMLElement | null>(null)
-  const [scroller, setScroller] = useState<HTMLElement | null>(null)
+  const [attachedScroller, setAttachedScroller] = useState<HTMLElement | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
 
-  useEffect(() => {
-    setScroller(scrollRef.current)
+  /**
+   * The scrolling element, preferring what the ref holds RIGHT NOW over what the effect below
+   * captured.
+   *
+   * Reading the ref during render is what keeps a list from rendering every one of its rows once
+   * before the window takes over. Whether that happens depends on one thing: whether the scroller
+   * was committed before this component mounted.
+   *
+   * - Mounted earlier (the shell's <main>, the cockpit's tab panel when the operator switches to
+   *   the item tab): the ref already holds the element, so the very first render is already
+   *   windowed. This is a fully defined read — the node exists and this render is not the one
+   *   attaching it.
+   * - Mounted in the same commit (ItemPicker renders its own scroller next to the list): the ref
+   *   is still null here, so this render falls back to the plain path and the layout effect below
+   *   swaps it one pass later.
+   *
+   * The state is not a second source of truth; it is the only way to ask React for that second
+   * pass. Reading a ref during render is impure, and the impurity is bounded on purpose: all it
+   * can decide is plain versus windowed, and those two paths are built to look identical.
+   */
+  const scroller = scrollRef.current ?? attachedScroller
+
+  /**
+   * A LAYOUT effect, not a passive one. In the same-commit case above, the plain path has just put
+   * every row in the DOM; running as a layout effect means the swap to the window happens before
+   * the browser paints, so a thousand rows are reconciled but never drawn. As a passive effect
+   * they would be painted first and thrown away on the next frame — on a PDT that is the visible
+   * part of the cost.
+   */
+  useIsomorphicLayoutEffect(() => {
+    setAttachedScroller(scrollRef.current)
   }, [scrollRef])
 
   const virtualize = scroller !== null && rows.length >= threshold

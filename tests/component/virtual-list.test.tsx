@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { VirtualList, clearScrollMemory } from '~/components/virtual-list'
 import { ScrollHarness } from './virtual-layout'
 
@@ -131,5 +131,42 @@ describe('VirtualList', () => {
       </ScrollHarness>,
     )
     expect(scroller.scrollTop).toBe(1500)
+  })
+
+  /**
+   * Scroller yang sudah ter-commit lebih dulu harus membuat render PERTAMA sudah berjendela.
+   *
+   * Ini bentuk yang dipakai kokpit: panel scroll-nya tetap ter-mount saat operator pindah ke tab
+   * "Item", jadi hanya daftarnya yang baru. Tanpa membaca `scrollRef.current` saat render,
+   * `VirtualList` harus menunggu effect-nya dan karena itu merender SELURUH baris satu kali dulu —
+   * persis hang yang virtualisasi ada untuk mencegahnya, pada perangkat yang paling tidak bisa
+   * membayarnya.
+   *
+   * Yang dihitung adalah pemanggilan `renderRow`, bukan isi DOM: perbedaannya bersifat sementara
+   * dan sudah hilang begitu commit selesai, jadi DOM akhir terlihat sama di kedua keadaan.
+   */
+  it('scroller yang sudah ada membuat render pertama langsung berjendela', () => {
+    const renderRow = vi.fn((row: Row) => <span>{row.label}</span>)
+    const data = rows(300)
+
+    // Satu commit untuk scroller-nya saja, persis seperti panel tab kokpit yang sudah terbuka.
+    const view = render(<ScrollHarness contentHeight={300 * ROW_HEIGHT}>{null}</ScrollHarness>)
+
+    view.rerender(
+      <ScrollHarness contentHeight={300 * ROW_HEIGHT}>
+        <VirtualList
+          as="ul"
+          rows={data}
+          getKey={(row) => row.id}
+          rowHeight={() => ROW_HEIGHT}
+          label="Daftar uji"
+          renderRow={renderRow}
+        />
+      </ScrollHarness>,
+    )
+
+    expect(screen.getAllByRole('listitem').length).toBeLessThan(40)
+    // Jauh di bawah 300: tidak pernah ada satu pass pun yang merender seluruh daftar.
+    expect(renderRow.mock.calls.length).toBeLessThan(40)
   })
 })
