@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ItemPicker } from '~/components/item-picker'
+import { pickerRowHeight } from '~/components/row-heights'
 import type { PickerItem } from '~/shared/item-picker'
 
 function item(overrides: Partial<PickerItem> = {}): PickerItem {
@@ -265,5 +266,135 @@ describe('ItemPicker — panel qty', () => {
     fireEvent.keyDown(screen.getByLabelText('Qty dalam satuan PO'), { key: 'Enter' })
 
     expect(onPick).toHaveBeenCalledWith('PI1', 2)
+  })
+})
+
+/**
+ * Picker-nya menyediakan scroller sendiri, jadi tidak perlu ScrollHarness di sini — dan justru itu
+ * yang diuji: jalur virtual harus hidup dari dalam komponen, bukan dari context yang kebetulan
+ * disediakan layar di belakangnya.
+ *
+ * Jumlah baris yang ter-render TIDAK diperiksa angkanya. jsdom tidak melakukan layout, jadi
+ * viewport yang dilihat virtualizer nol tinggi dan jendelanya hanya sebesar `overscan`. Yang
+ * bermakna di sini adalah pernyataan yang lebih lemah dan jauh lebih stabil: jumlahnya di bawah
+ * jumlah penuh, sementara `aria-setsize` tetap menyebut jumlah penuh.
+ */
+describe('ItemPicker — daftar panjang', () => {
+  /**
+   * Layout dipalsukan di PROTOTYPE, bukan di instance seperti `fakeScrollerLayout`, dan itu memang
+   * satu-satunya cara di sini: scroller-nya dibuat di dalam `ItemPicker`, jadi tidak ada elemen
+   * yang bisa dipegang SEBELUM virtualizer mengukurnya — dan tanpa ResizeObserver sungguhan, ukuran
+   * yang dipalsukan setelah render tidak pernah dibaca ulang.
+   *
+   * Karena itu ia WAJIB dipulihkan: tanpa `afterEach`, setiap elemen di berkas ini melaporkan
+   * 640x360 selamanya, dan test berikutnya yang ditulis di bawah blok ini akan mewarisi ukuran
+   * palsu itu tanpa tahu dari mana asalnya.
+   */
+  const originalOffsetHeight = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    'offsetHeight',
+  )
+  const originalOffsetWidth = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    'offsetWidth',
+  )
+
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      value: 640,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      value: 360,
+    })
+  })
+
+  afterEach(() => {
+    if (originalOffsetHeight) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', originalOffsetHeight)
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, 'offsetHeight')
+    }
+    if (originalOffsetWidth) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth)
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, 'offsetWidth')
+    }
+  })
+
+  const MANY: PickerItem[] = Array.from({ length: 80 }, (_, index) =>
+    item({
+      purchaseItemId: `PI${index}`,
+      itemMasterId: `IM${index}`,
+      name: `BARANG ${String(index).padStart(3, '0')}`,
+      code: `4800${String(index).padStart(4, '0')}`,
+      barcodes: [`899100000${String(index).padStart(4, '0')}`, null, null],
+      orderedQty: 10,
+    }),
+  )
+
+  it('tidak menaruh seluruh daftar di DOM, tapi tetap menyebut jumlah penuh', () => {
+    render(
+      <ItemPicker purchaseLabel="PO-1" items={MANY} onPick={vi.fn()} onClose={vi.fn()} />,
+    )
+
+    const rows = screen.getAllByRole('listitem')
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.length).toBeLessThan(MANY.length)
+    expect(rows[0]).toHaveAttribute('aria-setsize', String(MANY.length))
+  })
+
+  it('panah bawah dua kali lalu Enter tetap membuka item KETIGA di daftar panjang', () => {
+    const onPick = vi.fn()
+    render(
+      <ItemPicker purchaseLabel="PO-1" items={MANY} onPick={onPick} onClose={vi.fn()} />,
+    )
+
+    const search = screen.getByLabelText('Cari nama, kode, atau barcode')
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'Enter' })
+
+    // Panel qty item ketiga. Highlight dibaca dari array `visible`, bukan dari DOM — itulah
+    // sebabnya ini tetap benar walau barisnya belum ter-mount.
+    expect(screen.getByRole('heading', { name: 'BARANG 002' })).toBeInTheDocument()
+  })
+
+  it('tinggi baris diambil dari row-heights, termasuk varian master barang hilang', () => {
+    const rows: PickerItem[] = [
+      item({ purchaseItemId: 'PA', name: 'LENGKAP', selectable: true }),
+      item({ purchaseItemId: 'PB', name: 'TANPA MASTER', selectable: false }),
+    ]
+    render(<ItemPicker purchaseLabel="PO-1" items={rows} onPick={vi.fn()} onClose={vi.fn()} />)
+
+    const listItems = screen.getAllByRole('listitem')
+    expect(listItems).toHaveLength(2)
+    expect(listItems[0]).toHaveStyle({ height: `${pickerRowHeight({ selectable: true })}px` })
+    expect(listItems[1]).toHaveStyle({ height: `${pickerRowHeight({ selectable: false })}px` })
+  })
+
+  /**
+   * Regresi yang hanya bisa terjadi setelah daftar ini divirtualisasi.
+   *
+   * Tab memarkir fokus di sebuah tombol baris. Menggeser highlight menggerakkan jendela, dan baris
+   * yang fokus itu akhirnya ter-unmount — React tidak memindahkan fokus saat itu terjadi, ia jatuh
+   * ke <body>. Dari sana tidak ada keystroke yang sampai ke handler di container, sehingga Escape,
+   * panah, dan jebakan Tab mati sekaligus: overlay yang tidak bisa ditinggalkan di perangkat tanpa
+   * pointer. Karena itu setiap penekanan panah menarik fokus kembali ke kotak cari.
+   */
+  it('panah mengembalikan fokus ke kotak cari, agar dialog tidak pernah kehilangan keyboard', () => {
+    render(<ItemPicker purchaseLabel="PO-1" items={MANY} onPick={vi.fn()} onClose={vi.fn()} />)
+
+    const rowButton = screen
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes('BARANG 000'))
+    expect(rowButton).toBeDefined()
+    rowButton?.focus()
+    expect(document.activeElement).toBe(rowButton)
+
+    fireEvent.keyDown(rowButton as HTMLElement, { key: 'ArrowDown' })
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Cari nama, kode, atau barcode'))
   })
 })

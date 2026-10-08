@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowLeft, Search } from 'lucide-react'
+import { pickerRowHeight } from './row-heights'
+import { ScrollContainerProvider } from './scroll-container'
 import { SegmentedProgress } from './segmented-progress'
 import { Badge, Button, EmptyState, inputClass } from './ui'
+import { VirtualList } from './virtual-list'
 import { formatQty } from '~/shared/format'
 import { dec2 } from '~/shared/num'
 import {
@@ -61,7 +64,13 @@ export function ItemPicker({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLUListElement>(null)
+  /**
+   * The scrolling element, which is no longer the <ul>: VirtualList sets the list's height to the
+   * height of all rows, so the element that scrolls has to be its parent. It is also what this
+   * component hands to ScrollContainerProvider — the cockpit behind this overlay provides its own
+   * scroller, and a list inside a dialog must never virtualise against it.
+   */
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const visible = useMemo(() => sortPickerItems(filterPickerItems(items, term)), [items, term])
   /**
@@ -100,19 +109,10 @@ export function ItemPicker({
   }, [term])
 
   /**
-   * Keep the highlighted row on screen while the operator walks the list with the arrow keys.
-   *
-   * `typeof … === 'function'` is not defensive programming for its own sake: jsdom does not
-   * implement `scrollIntoView`, so without the check every component test that presses ArrowDown
-   * would throw a TypeError instead of testing anything.
+   * Keeping the highlighted row on screen is VirtualList's job now (`activeIndex` below): at a
+   * thousand lines the highlighted row may not be mounted at all, so there is no element here to
+   * call scrollIntoView on. It still does exactly that on its plain path, jsdom guard included.
    */
-  useEffect(() => {
-    if (selectedId) return
-    const row = listRef.current?.children[highlight]
-    if (row instanceof HTMLElement && typeof row.scrollIntoView === 'function') {
-      row.scrollIntoView({ block: 'nearest' })
-    }
-  }, [highlight, selectedId])
 
   const openQtyFor = (row: PickerItem) => {
     if (!row.selectable) return
@@ -138,6 +138,19 @@ export function ItemPicker({
       // Wraps around on purpose: on a keypad, getting from the last row back to the first must not
       // cost twenty-nine presses.
       setHighlight((current) => (current + delta + count) % count)
+      /**
+       * Park the focus back on the search field on every arrow press.
+       *
+       * Without this the dialog can become impossible to leave. Tab puts the focus on a ROW button;
+       * moving the highlight scrolls the window; the list is virtualised, so the focused button is
+       * eventually unmounted — and React does not move focus when that happens, it drops to
+       * <body>. From there nothing reaches the handler on the container, so Escape, the arrows and
+       * Tab all die at once, on a device whose only other way out is a reload.
+       *
+       * It is also the honest model of this list: `highlight` is the canonical selection, and Enter
+       * only acts when the keystroke came from the search field (see the branch below).
+       */
+      searchRef.current?.focus()
       return
     }
 
@@ -242,68 +255,85 @@ export function ItemPicker({
             </p>
           </div>
 
-          <ul
-            ref={listRef}
-            className="min-h-0 flex-1 divide-y divide-line-soft overflow-y-auto px-3"
-          >
-            {visible.map((row, index) => (
-              <li key={row.purchaseItemId}>
-                <button
-                  type="button"
-                  disabled={!row.selectable}
-                  aria-current={index === highlight}
-                  /* The highlight is written as a ternary so only ONE `bg-*` class is ever present:
-                     Tailwind v4 resolves two classes for the same property by stylesheet order, not
-                     by the order in this string. */
-                  className={`touch-target w-full py-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
-                    index === highlight ? 'bg-raised' : 'bg-transparent'
-                  }`}
-                  onClick={() => openQtyFor(row)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      {/* `line-clamp-2` is a height guarantee, not styling: a 40-character ERP item
-                          name is ordinary, and at thirty rows an unbounded name turns the list into
-                          a scroll marathon. */}
-                      <p className="line-clamp-2 font-semibold text-fg">{row.name}</p>
-                      <p className="text-sm text-fg-subtle">
-                        {row.code ?? '-'} · dipesan {formatQty(row.orderedQty)} {row.unit}
-                      </p>
-                      <p className="text-sm tabular-nums text-fg-muted">
-                        Sudah {formatQty(row.sessionQty)} di sesi ini
-                        {row.otherSessionQty > 0
-                          ? ` · ${formatQty(row.otherSessionQty)} di sesi lain`
-                          : ''}
-                        {row.serverReceivedQty > 0
-                          ? ` · ${formatQty(row.serverReceivedQty)} di sistem`
-                          : ''}
-                      </p>
-                      {row.selectable ? null : (
-                        <p className="text-sm font-semibold text-warn-text">
-                          Data barang belum lengkap — unduh ulang data lewat Pengaturan.
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      {isPickerItemComplete(row) ? <Badge tone="success">Lengkap</Badge> : null}
-                      {row.sessionPickedManually ? <Badge tone="neutral">Manual</Badge> : null}
-                    </div>
-                  </div>
-                </button>
-              </li>
-            ))}
-            {visible.length === 0 ? (
-              <li>
-                {/* Wrapped in <li>: a <p> as a direct child of <ul> is invalid, and a screen reader
-                    walking the list role can skip it. */}
+          {/* The scroller is this <div>, not the list: VirtualList gives the <ul> the height of ALL
+              rows, so something above it has to do the scrolling. The provider makes this element
+              the scroller for everything inside the overlay — the cockpit behind it has a scroller
+              of its own, and virtualising against THAT would compute a window for the wrong
+              viewport. */}
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3">
+            <ScrollContainerProvider value={scrollRef}>
+              {visible.length === 0 ? (
                 <EmptyState>
                   {term.trim()
                     ? 'Tidak ada item PO yang cocok dengan pencarian itu.'
                     : 'PO ini tidak punya item.'}
                 </EmptyState>
-              </li>
-            ) : null}
-          </ul>
+              ) : (
+                <VirtualList
+                  as="ul"
+                  rows={visible}
+                  label={`Item PO ${purchaseLabel}`}
+                  getKey={(row) => row.purchaseItemId}
+                  rowHeight={(row) => pickerRowHeight(row)}
+                  rowClassName="border-b border-line-soft"
+                  /**
+                   * `selectedId` is checked, not `selected`: the two differ for one render when the
+                   * chosen row disappears from `items` (a live query re-ran), and the effect this
+                   * replaced bailed out on exactly that condition. `highlight` is the index into
+                   * `visible`, which is the array handed to `rows` — the same index VirtualList
+                   * uses.
+                   */
+                  activeIndex={selectedId ? null : highlight}
+                  renderRow={(row, index) => (
+                    <button
+                      type="button"
+                      disabled={!row.selectable}
+                      aria-current={index === highlight}
+                      /* The highlight is written as a ternary so only ONE `bg-*` class is ever
+                         present: Tailwind v4 resolves two classes for the same property by
+                         stylesheet order, not by the order in this string. */
+                      className={`touch-target h-full w-full overflow-hidden py-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
+                        index === highlight ? 'bg-raised' : 'bg-transparent'
+                      }`}
+                      onClick={() => openQtyFor(row)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          {/* `line-clamp-2` is a height guarantee, not styling: a 40-character ERP
+                              item name is ordinary, and the row's height is computed from the data
+                              and then forced — so two lines are both the budget and the limit. */}
+                          <p className="line-clamp-2 font-semibold leading-6 text-fg">{row.name}</p>
+                          <p className="truncate text-sm leading-5 text-fg-subtle">
+                            {row.code ?? '-'} · dipesan {formatQty(row.orderedQty)} {row.unit}
+                          </p>
+                          {/* Two lines are reserved for this one: with all three clauses present it
+                              does not fit one line at 360px. */}
+                          <p className="line-clamp-2 text-sm leading-5 tabular-nums text-fg-muted">
+                            Sudah {formatQty(row.sessionQty)} di sesi ini
+                            {row.otherSessionQty > 0
+                              ? ` · ${formatQty(row.otherSessionQty)} di sesi lain`
+                              : ''}
+                            {row.serverReceivedQty > 0
+                              ? ` · ${formatQty(row.serverReceivedQty)} di sistem`
+                              : ''}
+                          </p>
+                          {row.selectable ? null : (
+                            <p className="line-clamp-2 text-sm leading-5 font-semibold text-warn-text">
+                              Data barang belum lengkap — unduh ulang data lewat Pengaturan.
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          {isPickerItemComplete(row) ? <Badge tone="success">Lengkap</Badge> : null}
+                          {row.sessionPickedManually ? <Badge tone="neutral">Manual</Badge> : null}
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                />
+              )}
+            </ScrollContainerProvider>
+          </div>
         </>
       )}
     </div>

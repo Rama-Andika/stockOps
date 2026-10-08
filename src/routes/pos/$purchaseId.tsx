@@ -5,8 +5,10 @@ import { useAppStore } from '~/client/state/store/app-store'
 import { useLive } from '~/client/hooks/use-live'
 import { AppBar } from '~/components/app-bar'
 import { DuplicateSessionSheet } from '~/components/duplicate-session-sheet'
+import { PO_ITEM_ROW_HEIGHT } from '~/components/row-heights'
 import { SegmentedProgress } from '~/components/segmented-progress'
 import { Badge, Button, Card, EmptyState, Loading, Notice } from '~/components/ui'
+import { VirtualList } from '~/components/virtual-list'
 import { PROGRESS_LABEL, type ProgressStatus } from '~/shared/constants'
 import { formatDate } from '~/shared/format'
 import { findRunningSessionForPurchase, isOwnedBy, ownerName } from '~/shared/session-owner'
@@ -188,28 +190,54 @@ function PosDetailPage() {
       </Card>
 
       <Card title="Item PO">
-        <ul className="flex flex-col divide-y divide-line-soft">
-          {detail.items.map((row) => (
-            <li key={row.purchaseItemId} className="flex flex-col gap-1 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-fg">{row.item?.name ?? row.itemMasterId}</p>
-                  <p className="text-sm text-fg-subtle">
-                    {row.item?.code ?? '-'} • {unitMap.get(row.uomId) ?? row.uomId}
-                  </p>
+        {/* The empty state moved OUT of the list: it used to be a <p> directly inside <ul>, which
+            is invalid markup, and VirtualList owns the <ul> now. */}
+        {detail.items.length === 0 ? (
+          <EmptyState>Tidak ada item pada PO ini.</EmptyState>
+        ) : (
+          /* Windowed: a PO may carry a thousand lines. This list sits in the MIDDLE of the page —
+             the progress card above it, a Notice and a sticky action bar below — so the scroller is
+             still the shell's <main> and VirtualList measures how far down the page the list starts
+             (scrollMargin). It re-measures on every render, which matters here: the "operator lain
+             sedang menerima PO ini" Notice appears and disappears above this card.
+
+             Two lines are RESERVED for the item name (`line-clamp-2`): that name is what the
+             operator matches against the box in their hands, so the row's computed height pays for
+             two lines whether or not they are used. The progress meter lives in a fixed `h-9` box
+             because its number line ("18 dari 40 · 5 belum terkirim · +3 lebih") can wrap at 360px,
+             and a wrapping line is the one source of height that cannot be computed from data. */
+          <VirtualList
+            as="ul"
+            rows={detail.items}
+            label="Item PO"
+            getKey={(row) => row.purchaseItemId}
+            rowHeight={() => PO_ITEM_ROW_HEIGHT}
+            rowClassName="border-b border-line-soft"
+            renderRow={(row) => (
+              <div className="flex h-full flex-col gap-1 overflow-hidden py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 font-semibold leading-6 text-fg">
+                      {row.item?.name ?? row.itemMasterId}
+                    </p>
+                    <p className="truncate text-sm leading-5 text-fg-subtle">
+                      {row.item?.code ?? '-'} • {unitMap.get(row.uomId) ?? row.uomId}
+                    </p>
+                  </div>
+                  <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
                 </div>
-                <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
+                <div className="h-9 overflow-hidden">
+                  <SegmentedProgress
+                    ordered={row.orderedQty}
+                    serverReceived={row.serverReceivedQty}
+                    localPending={row.localPendingQty}
+                    unit={unitMap.get(row.uomId) ?? ''}
+                  />
+                </div>
               </div>
-              <SegmentedProgress
-                ordered={row.orderedQty}
-                serverReceived={row.serverReceivedQty}
-                localPending={row.localPendingQty}
-                unit={unitMap.get(row.uomId) ?? ''}
-              />
-            </li>
-          ))}
-          {detail.items.length === 0 ? <EmptyState>Tidak ada item pada PO ini.</EmptyState> : null}
-        </ul>
+            )}
+          />
+        )}
       </Card>
 
       {foreignOwnerLabel ? (

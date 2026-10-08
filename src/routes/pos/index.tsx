@@ -5,8 +5,10 @@ import { localRepo } from "~/client/db/local-repo";
 import { useLive } from "~/client/hooks/use-live";
 import { useAppStore } from "~/client/state/store/app-store";
 import { toast } from "~/client/toast";
+import { PO_CARD_HEIGHT } from "~/components/row-heights";
 import { SegmentedProgress } from "~/components/segmented-progress";
 import { Badge, Button, Card, EmptyState, inputClass } from "~/components/ui";
+import { VirtualList } from "~/components/virtual-list";
 import { PROGRESS_LABEL, type ProgressStatus } from "~/shared/constants";
 import { formatDate } from "~/shared/format";
 import { splitByOwner } from "~/shared/session-owner";
@@ -196,37 +198,57 @@ function PosListPage() {
         </Card>
       ) : null}
 
-      {filtered.map((row) => (
-        <Link
-          key={row.purchaseId}
-          to="/pos/$purchaseId"
-          params={{ purchaseId: row.purchaseId }}
-          className="block rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
-        >
-          <div className="flex  items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-lg font-bold text-fg">
-                {row.number ?? row.purchaseId}
-              </p>
-              <p className="text-fg-muted">{row.vendorName}</p>
-              <p className="text-sm text-fg-subtle">
-                {formatDate(row.purchDate)}
-              </p>
-            </div>
-            <Badge tone={toneFor(row.progress)}>
-              <div className="whitespace-nowrap">{PROGRESS_LABEL[row.progress]}</div>
-            </Badge>
-          </div>
+      {/* Windowed: a device may hold 2000 POs (`limit <= 2000` per pull), and rendering 2000 cards
+          is a hang on a PDT. The scroller is the shell's <main>, handed down through
+          ScrollContainerContext, so this is still ONE page scroll — the search card above scrolls
+          away with the list, exactly as before.
 
-          <div className="mt-3">
-            <SegmentedProgress
-              ordered={row.orderedTotal}
-              serverReceived={row.serverReceivedTotal}
-              localPending={row.localPendingTotal}
-            />
-          </div>
-        </Link>
-      ))}
+          Every line of text is `truncate` with an explicit `leading-*`, and the progress meter
+          lives in a fixed `h-9` box. That is not styling: the row's height is COMPUTED
+          (PO_CARD_HEIGHT) and forced, never measured, so a line that is allowed to wrap would be
+          clipped instead of pushing the card taller. See components/row-heights.ts.
+
+          The restore key folds the active filter and search term in, which is what makes narrowing
+          the list jump back to the top while coming back from a PO detail keeps the operator where
+          they were — one mechanism, both behaviours. */}
+      <VirtualList
+        rows={filtered}
+        label="Daftar PO"
+        getKey={(row) => row.purchaseId}
+        rowHeight={() => PO_CARD_HEIGHT}
+        rowClassName="pb-3"
+        restoreKey={`pos:${filter}:${term.trim().toLowerCase()}`}
+        renderRow={(row) => (
+          <Link
+            to="/pos/$purchaseId"
+            params={{ purchaseId: row.purchaseId }}
+            className="block h-full overflow-hidden rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-lg leading-7 font-bold text-fg">
+                  {row.number ?? row.purchaseId}
+                </p>
+                <p className="truncate leading-6 text-fg-muted">{row.vendorName}</p>
+                <p className="truncate text-sm leading-5 text-fg-subtle">
+                  {formatDate(row.purchDate)}
+                </p>
+              </div>
+              <Badge tone={toneFor(row.progress)}>
+                <div className="whitespace-nowrap">{PROGRESS_LABEL[row.progress]}</div>
+              </Badge>
+            </div>
+
+            <div className="mt-3 h-9 overflow-hidden">
+              <SegmentedProgress
+                ordered={row.orderedTotal}
+                serverReceived={row.serverReceivedTotal}
+                localPending={row.localPendingTotal}
+              />
+            </div>
+          </Link>
+        )}
+      />
     </div>
   );
 }

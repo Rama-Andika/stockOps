@@ -115,22 +115,47 @@ export function VirtualList<T>({
 
   const virtualize = scroller !== null && rows.length >= threshold
 
+  /**
+   * `rowHeight` and `getKey` are read through refs so that the two callbacks below keep a STABLE
+   * identity across renders that do not change `rows`.
+   *
+   * That stability is load-bearing, not tidiness. react-virtual calls `setOptions` from its render
+   * body, and virtual-core memoises its measurements on `options.getItemKey` among other things —
+   * so a getItemKey whose identity changes every render makes it rebuild EVERY row's measurement
+   * on every render: at 2000 POs that is 2000 getKey plus 2000 estimateSize calls and two array
+   * allocations, on renders where nothing about the data changed (a sync progress tick, an
+   * online/offline toggle, a live-query re-emit). Callers pass inline arrows, which is ordinary
+   * React and should stay cheap, so the stability is bought here once instead of becoming a rule
+   * every call site has to remember.
+   *
+   * `[rows]` is deliberately the ONLY dependency. A new rows array is exactly when measurements
+   * must be rebuilt, and it is the only signal available: virtual-core's own key is `count`, which
+   * cannot see a list that changed its contents without changing its length.
+   *
+   * The refs are assigned during render on purpose — the virtualizer calls estimateSize while
+   * rendering, so a ref updated from an effect would be one render behind.
+   */
+  const rowHeightRef = useRef(rowHeight)
+  const getKeyRef = useRef(getKey)
+  rowHeightRef.current = rowHeight
+  getKeyRef.current = getKey
+
   const estimateSize = useCallback(
     (index: number) => {
       const row = rows[index]
       // `noUncheckedIndexedAccess` is on, and this really can be undefined for one render while a
       // filter shortens the list.
-      return row ? rowHeight(row, index) : 0
+      return row ? rowHeightRef.current(row, index) : 0
     },
-    [rows, rowHeight],
+    [rows],
   )
 
   const getItemKey = useCallback(
     (index: number) => {
       const row = rows[index]
-      return row ? getKey(row) : index
+      return row ? getKeyRef.current(row) : index
     },
-    [rows, getKey],
+    [rows],
   )
 
   /**
