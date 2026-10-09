@@ -65,9 +65,9 @@ function UpdateBannerBody() {
    */
   const heldReason =
     pendingCount > 0
-      ? `${pendingCount} dokumen belum terkirim`
+      ? `${pendingCount} belum terkirim`
       : runningCount > 0
-        ? 'ada sesi yang masih berjalan'
+        ? 'ada sesi berjalan'
         : null
 
   const handleSnooze = () => {
@@ -76,7 +76,7 @@ function UpdateBannerBody() {
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 px-3 pb-2">
+    <div className="flex items-center justify-between gap-1.5 px-3 pb-2 sm:gap-2">
       {/* `role="status"` belongs on the TEXT, not on this container. As a live region the
           container would also contain the two buttons, and `ConfirmButton` rewrites its own label
           while the operator arms it ("Muat ulang" → "Tekan lagi untuk mengonfirmasi") — so every
@@ -85,37 +85,37 @@ function UpdateBannerBody() {
         role="status"
         className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-info-text"
       >
-        <RefreshCw className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <RefreshCw className="h-4 w-4 shrink-0 text-brand-bright" aria-hidden="true" />
         <span className="truncate">Versi baru siap</span>
       </span>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {/* Both branches are 56px tall (`touch-target`, see src/styles/app.css), so switching
             between them never moves the layout — which is the only reason the confirmation is
-            allowed to be conditional at all.
-
-            No colour, width or padding class is passed to ConfirmButton: it carries all of them
-            itself, and Tailwind v4 resolves such conflicts by stylesheet order rather than by the
-            order written here. */}
+            allowed to be conditional at all. */}
         {heldReason ? (
           <ConfirmButton
             tone="primary"
-            className="shrink-0 font-semibold"
+            className="shrink-0 px-3 font-semibold sm:px-5"
             label="Muat ulang"
             confirmLabel={`Tahan terus… ${heldReason}`}
             onConfirm={activateUpdate}
           />
         ) : (
-          <Button variant="primary" className="shrink-0" onClick={activateUpdate}>
+          <Button
+            variant="primary"
+            className="shrink-0 px-3 font-semibold sm:px-5"
+            onClick={activateUpdate}
+          >
             Muat ulang
           </Button>
         )}
         <button
           type="button"
           aria-label="Nanti — sembunyikan tawaran ini 15 menit"
-          className="touch-target w-14 shrink-0 rounded-lg bg-control text-fg transition hover:bg-control-off"
+          className="touch-target flex w-11 shrink-0 items-center justify-center rounded-lg bg-control text-fg transition hover:bg-control-off sm:w-14"
           onClick={handleSnooze}
         >
-          <X className="mx-auto h-5 w-5" aria-hidden="true" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
     </div>

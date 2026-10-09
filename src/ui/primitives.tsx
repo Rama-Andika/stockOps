@@ -14,10 +14,12 @@ export function Button({
   className = '',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+  const px = className.includes('px-') ? '' : 'px-5'
+  const py = className.includes('py-') ? '' : 'py-3'
   return (
     <button
       type="button"
-      className={`touch-target rounded-lg px-5 py-3 font-semibold transition ${BUTTON_STYLES[variant]} disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft ${className}`}
+      className={`touch-target rounded-lg ${px} ${py} font-semibold transition ${BUTTON_STYLES[variant]} disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft ${className}`.trim()}
       {...props}
     />
   )
