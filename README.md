@@ -174,6 +174,14 @@ Prinsip yang dijaga: **server adalah sumber kebenaran** (P-2), **idempoten** (P-
   diverifikasi barcode"), tampil sebagai penanda "Manual" di daftar item sesi dan di layar review,
   dan **tidak dikirim ke server** — `pos_receive_item.memo` tetap hanya memuat `PDT|OVER`. Penanda
   itu hanya turun kembali bila penambahan yang menyalakannya dibatalkan lewat tombol undo.
+- **Keyboard layar di kolom scan (opsional):** Pengaturan → Cara Input Barang → **Sembunyikan Keyboard
+  Layar saat Scan**. Mati secara default; disimpan per perangkat di `localStorage` (`stockops.preferences`,
+  field `hideScanKeyboard`). Saat menyala, kolom barcode dan kolom qty di layar scan tidak memunculkan
+  keyboard layar: scanner tetap mengisi kolom barcode, dan qty diisi lewat tombol **123** (atau tombol
+  angka fisik PDT). Kolom lain — login, cari PO, cari item, nomor invoice/DO, serta kolom qty di editor
+  baris dan pemilih item — tetap memunculkan keyboard, karena di sana mengetik adalah tujuannya. Saklar ini
+  tidak mengubah pengaturan Android, jadi tetap bisa dipakai pada perangkat yang opsi keyboard layar
+  Android-nya terkunci. Perubahan berlaku saat operator kembali membuka sesi penerimaan.
 
 ### 3.3 Keputusan untuk celah yang ada di PRD (didokumentasikan, bukan disembunyikan)
 

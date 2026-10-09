@@ -86,6 +86,7 @@ describe('preferensi perangkat', () => {
       feedbackVibrate: true,
       theme: 'light',
       manualPick: true,
+      hideScanKeyboard: false,
     })
   })
 
@@ -95,12 +96,14 @@ describe('preferensi perangkat', () => {
       feedbackVibrate: true,
       theme: 'light',
       manualPick: true,
+      hideScanKeyboard: true,
     })
     expect(loadPreferences()).toEqual({
       feedbackBeep: false,
       feedbackVibrate: true,
       theme: 'light',
       manualPick: true,
+      hideScanKeyboard: true,
     })
   })
 
@@ -124,6 +127,7 @@ describe('preferensi perangkat', () => {
       feedbackVibrate: false,
       theme: 'light',
       manualPick: true,
+      hideScanKeyboard: false,
     })
   })
 
@@ -132,6 +136,13 @@ describe('preferensi perangkat', () => {
   it('nilai tema yang tidak dikenal jatuh ke default terang', () => {
     window.localStorage.setItem('stockops.preferences', JSON.stringify({ theme: 'sepia' }))
     expect(loadPreferences().theme).toBe('light')
+  })
+
+  // The switch is a boolean, but storage is hand-editable and other versions may write other things.
+  // Anything that is not a real boolean must read as the default (OFF), never as "truthy".
+  it('nilai hideScanKeyboard yang bukan boolean jatuh ke default mati', () => {
+    window.localStorage.setItem('stockops.preferences', JSON.stringify({ hideScanKeyboard: 'ya' }))
+    expect(loadPreferences().hideScanKeyboard).toBe(false)
   })
 })
 
@@ -439,5 +450,57 @@ describe('ScanHero — pintu picker pada kartu tidak dikenal', () => {
     // hanya memuat baris PO ini — dijamin tidak memuatnya. Test ini yang menjaga keputusan itu.
     expect(screen.queryByRole('button', { name: 'Pilih dari PO' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Mengerti, lanjut scan' })).toBeInTheDocument()
+  })
+})
+
+describe('ScanBar — keyboard layar', () => {
+  // A harness of its own: the prop under test is one the two harnesses above never pass, and
+  // adding it to them would widen helpers that unrelated tests share.
+  function KeyboardHarness({ hideKeyboard }: { hideKeyboard?: boolean }) {
+    const scanRef = useRef<HTMLInputElement>(null)
+    return (
+      <ScanBar
+        scan=""
+        qty="1"
+        qtyTouched={false}
+        scanRef={scanRef}
+        padOpen={false}
+        onPadOpenChange={() => undefined}
+        onScanChange={() => undefined}
+        onQtyChange={() => undefined}
+        onAdd={() => undefined}
+        hideKeyboard={hideKeyboard}
+      />
+    )
+  }
+
+  it('tanpa prop, kolom barcode tidak membawa inputmode dan kolom qty tetap decimal', () => {
+    render(<KeyboardHarness />)
+
+    expect(screen.getByLabelText('Barcode atau kode barang')).not.toHaveAttribute('inputmode')
+    expect(screen.getByLabelText('Qty dalam satuan PO')).toHaveAttribute('inputmode', 'decimal')
+  })
+
+  it('hideKeyboard menyetel inputmode none pada kolom barcode DAN kolom qty', () => {
+    render(<KeyboardHarness hideKeyboard />)
+
+    expect(screen.getByLabelText('Barcode atau kode barang')).toHaveAttribute('inputmode', 'none')
+    expect(screen.getByLabelText('Qty dalam satuan PO')).toHaveAttribute('inputmode', 'none')
+  })
+
+  it('hideKeyboard tidak membuat kolom barcode read-only atau disabled', () => {
+    render(<KeyboardHarness hideKeyboard />)
+    const barcode = screen.getByLabelText('Barcode atau kode barang')
+
+    // The scanner types into this field like a physical keyboard. A read-only or disabled field
+    // would swallow every scan without a sound, which is the one way this feature can go wrong.
+    expect(barcode).toBeEnabled()
+    expect(barcode).not.toHaveAttribute('readonly')
+  })
+
+  it('tombol keypad 123 tetap tersedia saat keyboard disembunyikan', () => {
+    render(<KeyboardHarness hideKeyboard />)
+
+    expect(screen.getByRole('button', { name: 'Buka keypad angka' })).toBeInTheDocument()
   })
 })

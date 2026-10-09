@@ -64,6 +64,22 @@ Aplikasi ini berjalan di browser/WebView, dan aplikasi web **tidak bisa menerima
 4. **Alamat aplikasi harus `https://`** (atau `localhost`). `crypto.subtle` dan service worker
    menuntut secure context: tanpa itu login dan mode offline tidak bekerja sama sekali.
 
+### Keyboard layar di PDT
+
+Keyboard layar bisa menutupi kartu hasil scan dan memakan ruang di layar kecil. Aplikasi menyediakan
+saklar **Pengaturan → Cara Input Barang → Sembunyikan Keyboard Layar saat Scan** (mati secara default,
+berlaku per perangkat). Saklar ini hanya berlaku untuk kolom barcode dan kolom qty di layar scan.
+
+Saklar ini tidak menggantikan pengaturan Android. Opsi "Tampilkan keyboard di layar" milik Android
+umumnya hanya aktif ketika perangkat mendeteksi keyboard fisik, sehingga di sejumlah PDT opsi itu abu-abu
+dan tidak bisa diubah. Saklar di aplikasi tidak bergantung pada opsi itu maupun pada keyboard (IME) yang
+terpasang.
+
+Setelah menyalakannya di sebuah PDT, uji langsung di perangkat itu: buka sesi, ketuk kolom barcode lalu
+kolom qty (keyboard tidak boleh muncul), kemudian scan satu barang dan pastikan kodenya masuk serta item
+bertambah. Bila keyboard masih muncul, catat model perangkat dan versi Android/WebView-nya dan laporkan —
+jangan menambal dengan membuat kolom barcode read-only.
+
 ### Kenapa tidak ada kode tombol hardware di aplikasi ini
 
 Pemetaan tombol berbeda-beda antar merek PDT, jadi memetakan satu merek akan merusak merek lain.

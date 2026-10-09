@@ -99,12 +99,13 @@ function line(pickedManually: boolean): LocalSessionItem {
   }
 }
 
-function setPreference(manualPick: boolean) {
+function setPreference(manualPick: boolean, hideScanKeyboard = false) {
   savePreferences({
     feedbackBeep: false,
     feedbackVibrate: false,
     theme: 'dark',
     manualPick,
+    hideScanKeyboard,
   })
 }
 
@@ -230,5 +231,41 @@ describe('penanda baris manual', () => {
     render(<SessionReview sessionId="S1" />)
 
     expect(screen.queryByText(/dipilih manual dari daftar PO/)).toBeNull()
+  })
+})
+
+describe('kokpit — keyboard layar', () => {
+  it('preferensi mati (default): kolom scan memakai perilaku lama', () => {
+    render(<SessionCockpit sessionId="S1" />)
+
+    expect(screen.getByLabelText('Barcode atau kode barang')).not.toHaveAttribute('inputmode')
+    expect(screen.getByLabelText('Qty dalam satuan PO')).toHaveAttribute('inputmode', 'decimal')
+  })
+
+  it('preferensi menyala: kolom barcode dan qty tidak memunculkan keyboard layar', () => {
+    setPreference(true, true)
+    render(<SessionCockpit sessionId="S1" />)
+
+    expect(screen.getByLabelText('Barcode atau kode barang')).toHaveAttribute('inputmode', 'none')
+    expect(screen.getByLabelText('Qty dalam satuan PO')).toHaveAttribute('inputmode', 'none')
+  })
+
+  it('preferensi menyala tidak mengganggu scanner wedge', () => {
+    setPreference(true, true)
+    render(<SessionCockpit sessionId="S1" />)
+    const barcode = screen.getByLabelText('Barcode atau kode barang')
+
+    // A keystroke that lands outside any text field is still redirected into the barcode field.
+    // If hiding the keyboard ever became "make the field unusable", scans would vanish here.
+    fireEvent.keyDown(document.body, { key: 'a' })
+    expect(barcode).toHaveValue('a')
+  })
+
+  it('keypad 123 tetap membuka keypad pada layar saat keyboard disembunyikan', () => {
+    setPreference(true, true)
+    render(<SessionCockpit sessionId="S1" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Buka keypad angka' }))
+    expect(screen.getByRole('button', { name: 'Hapus digit terakhir' })).toBeInTheDocument()
   })
 })

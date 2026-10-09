@@ -26,6 +26,19 @@ export interface Preferences {
    * in this app that runs on the device.
    */
   manualPick: boolean
+  /**
+   * Keep the on-screen keyboard from opening on the scan bar's two fields: the barcode field and
+   * the qty field (`ScanBar` sets `inputMode="none"` on both).
+   *
+   * Default OFF, so a device that is updated in the field behaves exactly as before and IT turns
+   * it on per PDT. It lives in the app instead of in Android settings because the Android toggle
+   * ("show the on-screen keyboard") was greyed out on the Sunmi PDT this was written for.
+   *
+   * It only asks the browser not to open the SOFT keyboard. The fields stay focusable, enabled and
+   * writable — the scanner types into them like a physical keyboard — and qty entry still has the
+   * "123" keypad. Fields where typing is the whole point (login, search, invoice/DO) never read it.
+   */
+  hideScanKeyboard: boolean
 }
 
 const STORAGE_KEY = 'stockops.preferences'
@@ -35,6 +48,7 @@ const DEFAULTS: Preferences = {
   feedbackVibrate: true,
   theme: 'light',
   manualPick: true,
+  hideScanKeyboard: false,
 }
 
 /** Read preferences from localStorage. Safe to call during prerender (without `window`). */
@@ -67,6 +81,12 @@ export function loadPreferences(): Preferences {
       // Same treatment as every other key here: missing reads as the default, ON — the one that
       // leaves the feature discoverable.
       manualPick: typeof value.manualPick === 'boolean' ? value.manualPick : DEFAULTS.manualPick,
+      // Same treatment as every other key here: a missing or non-boolean value reads as the
+      // default, which is OFF — a device that never touched this switch keeps its soft keyboard.
+      hideScanKeyboard:
+        typeof value.hideScanKeyboard === 'boolean'
+          ? value.hideScanKeyboard
+          : DEFAULTS.hideScanKeyboard,
     }
   } catch {
     return { ...DEFAULTS }

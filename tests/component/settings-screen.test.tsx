@@ -168,6 +168,32 @@ describe('SettingsScreen UI & UX', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
 
+  it('saklar sembunyikan keyboard layar mati secara default, bisa dinyalakan, dan tersimpan', () => {
+    renderSettings()
+
+    const toggle = screen.getByRole('switch', { name: 'Sembunyikan Keyboard Layar saat Scan' })
+    // Default OFF: a device that is updated in the field keeps its soft keyboard until IT turns
+    // this on, so the update changes nothing for an operator who never opens Pengaturan.
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(loadPreferences().hideScanKeyboard).toBe(false)
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(loadPreferences().hideScanKeyboard).toBe(true)
+  })
+
+  it('menyalakan saklar keyboard tidak menimpa preferensi lain', () => {
+    renderSettings()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Bunyi Scanner' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Sembunyikan Keyboard Layar saat Scan' }))
+
+    const stored = loadPreferences()
+    expect(stored.hideScanKeyboard).toBe(true)
+    expect(stored.feedbackBeep).toBe(false)
+    expect(stored.manualPick).toBe(true)
+  })
+
   // Paragraf penjelas di bawah saklar "Pilih Item dari Daftar PO" sengaja dihapus dari layar, jadi
   // test yang mengunci copy-nya ikut dihapus — bukan dilonggarkan. Aturannya sendiri tidak
   // bergantung pada copy itu: `pickedManually` tidak pernah meninggalkan perangkat karena

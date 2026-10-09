@@ -24,6 +24,8 @@ import {
   Database,
   Download,
   HardDrive,
+  Keyboard,
+  KeyboardOff,
   ListChecks,
   Play,
   RefreshCw,
@@ -403,6 +405,14 @@ export function SettingsScreen() {
             description="Izinkan menambah item tanpa scan, dipilih langsung dari daftar item PO. Untuk barang tanpa barcode atau label rusak."
             checked={preferences.manualPick}
             onChange={(checked) => updatePreferences({ manualPick: checked })}
+          />
+
+          <SettingRow
+            icon={preferences.hideScanKeyboard ? KeyboardOff : Keyboard}
+            title="Sembunyikan Keyboard Layar saat Scan"
+            description="Keyboard layar tidak muncul di kolom barcode dan kolom qty pada layar scan."
+            checked={preferences.hideScanKeyboard}
+            onChange={(checked) => updatePreferences({ hideScanKeyboard: checked })}
           />
         </div>
       </Card>

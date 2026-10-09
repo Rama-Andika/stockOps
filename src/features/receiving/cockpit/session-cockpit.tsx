@@ -96,6 +96,12 @@ export function SessionCockpit({ sessionId }: { sessionId: string }) {
    * way, on every call, with no subscription anywhere.
    */
   const [manualPickEnabled] = useState(() => loadPreferences().manualPick)
+  /**
+   * Read ONCE per mount, exactly like `manualPickEnabled` above, so a change made in Pengaturan
+   * applies when the operator comes back to the session and never in the middle of a scan.
+   * It is only handed to `ScanBar`; no other field on this screen reads it.
+   */
+  const [hideKeyboardEnabled] = useState(() => loadPreferences().hideScanKeyboard)
   // Lives here, not in ScanBar: ScanBar unmounts on every tab switch, so keeping it there would
   // reopen the keypad each time the operator comes back to the scan tab. It always starts closed —
   // the "123" button is the only way in, and the qty field itself is always typable.
@@ -849,6 +855,7 @@ export function SessionCockpit({ sessionId }: { sessionId: string }) {
                   setQtyTouched(true)
                 }}
                 onAdd={() => void handleAdd()}
+                hideKeyboard={hideKeyboardEnabled}
                 // `undefined` when the operator turned the feature off in Pengaturan: that is the
                 // whole switch, and ScanBar then renders exactly the old disabled "+".
                 onOpenPicker={manualPickEnabled ? () => setPickerOpen(true) : undefined}

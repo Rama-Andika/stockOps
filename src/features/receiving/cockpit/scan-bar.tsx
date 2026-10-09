@@ -20,6 +20,7 @@ export function ScanBar({
   onAdd,
   onEscape,
   onOpenPicker,
+  hideKeyboard = false,
 }: {
   scan: string
   qty: string
@@ -39,6 +40,17 @@ export function ScanBar({
    * second boolean prop that could disagree with it.
    */
   onOpenPicker?: () => void
+  /**
+   * Keeps the on-screen keyboard closed on BOTH fields of this bar (`inputMode="none"`). Optional
+   * and false by default: it is how the "Sembunyikan Keyboard Layar saat Scan" switch in Pengaturan
+   * reaches this component, and every caller that does not pass it keeps today's behaviour.
+   *
+   * It must stay an input-mode hint and nothing stronger. The scanner types into the barcode field
+   * like a physical keyboard, so `readOnly`, `disabled` or a `blur()` on focus would drop every scan
+   * without a sound. Qty entry on a screen with no soft keyboard goes through the "123" keypad
+   * below, or through the PDT's own keys.
+   */
+  hideKeyboard?: boolean
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -77,6 +89,7 @@ export function ScanBar({
         <input
           id="scan-barcode"
           ref={scanRef}
+          inputMode={hideKeyboard ? 'none' : undefined}
           className={`${inputClass} min-w-0 flex-1 border-line-strong px-2`}
           placeholder="Scan kode…"
           value={scan}
@@ -111,7 +124,7 @@ export function ScanBar({
           className={`touch-target w-14 shrink-0 rounded-lg border bg-field px-1 py-3 text-center font-bold tabular-nums text-fg ${
             Number(qty) > 0 ? 'border-line-strong' : 'border-danger-line'
           }`}
-          inputMode="decimal"
+          inputMode={hideKeyboard ? 'none' : 'decimal'}
           maxLength={8}
           aria-invalid={!(Number(qty) > 0)}
           value={qty}
