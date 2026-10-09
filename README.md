@@ -256,7 +256,7 @@ src/
     diagnostics/          Diagnostik, ring buffer log, ekspor CSV
     settings/             Pengaturan perangkat & preferensi
   routes/                 File-based routes tipis (createFileRoute + komponen fitur)
-public/                   icon.svg, manifest.webmanifest, sw.js, offline.html
+public/                   icon.svg + icon-*.png (PNG wajib untuk instal WebAPK di Android), manifest.webmanifest, sw.js, offline.html
 scripts/                  seed demo, setup/teardown DB uji, server produksi
 tests/                    unit, server, integration, component
 ```

@@ -34,7 +34,7 @@ const ASSET_CACHE = `${CACHE_VERSION}-assets`
 const SHELL_URL = '/_shell.html'
 const PRECACHE_MANIFEST = '/precache-manifest.json'
 
-const PRECACHE_URLS = ['/', SHELL_URL, '/manifest.webmanifest', '/icon.svg', '/offline.html']
+const PRECACHE_URLS = ['/', SHELL_URL, '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/offline.html']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
