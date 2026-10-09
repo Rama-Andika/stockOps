@@ -83,13 +83,15 @@ export function PoList() {
         <Link
           to="/sessions/$sessionId"
           params={{ sessionId: activeSession.sessionId }}
-          className="touch-target flex items-center gap-3 rounded-xl border border-brand bg-brand-wash/40 p-3"
+          className="touch-target flex items-center gap-2.5 rounded-xl border border-brand bg-brand-wash/40 p-3"
         >
-          <Play className="h-6 w-6 shrink-0 text-brand-soft" aria-hidden="true" />
+          <Play className="h-5 w-5 shrink-0 text-brand-soft" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block font-bold text-fg">Lanjutkan sesi berjalan</span>
+            <span className="block truncate text-sm font-semibold text-brand-bright">
+              {activeSession.purchaseNumber ?? activeSession.purchaseId}
+            </span>
             <span className="block truncate text-sm text-fg-muted">
-              {activeSession.purchaseNumber ?? activeSession.purchaseId} ·{' '}
               {activeSession.vendorName ?? '-'}
             </span>
             {/* `runningSessions()` orders newest first (local-repo.ts), so this banner points at
@@ -110,7 +112,7 @@ export function PoList() {
               </span>
             ) : null}
           </span>
-          <ChevronRight className="h-6 w-6 shrink-0 text-brand-soft" aria-hidden="true" />
+          <ChevronRight className="h-5 w-5 shrink-0 text-brand-soft" aria-hidden="true" />
         </Link>
       ) : null}
 
@@ -139,7 +141,7 @@ export function PoList() {
               key={option.id}
               type="button"
               aria-pressed={filter === option.id}
-              className={`touch-target flex-1 rounded-full px-1 text-xs font-semibold transition sm:text-sm ${
+              className={`touch-target flex-1 rounded-lg px-1 text-xs font-semibold transition sm:text-sm ${
                 filter === option.id
                   ? 'bg-brand text-on-brand'
                   : 'bg-control text-fg hover:bg-control-off'
@@ -202,18 +204,14 @@ export function PoList() {
             params={{ purchaseId: row.purchaseId }}
             className="block h-full overflow-hidden rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-lg leading-7 font-bold text-fg">
-                  {row.number ?? row.purchaseId}
-                </p>
-                <p className="truncate leading-6 text-fg-muted">{row.vendorName}</p>
-                <p className="truncate text-sm leading-5 text-fg-subtle">
-                  {formatDate(row.purchDate)}
-                </p>
-              </div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="min-w-0 truncate text-lg leading-7 font-bold text-fg">
+                {row.number ?? row.purchaseId}
+              </p>
               <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
             </div>
+            <p className="truncate leading-6 text-fg-muted">{row.vendorName}</p>
+            <p className="truncate text-sm leading-5 text-fg-subtle">{formatDate(row.purchDate)}</p>
 
             <div className="mt-3 h-9 overflow-hidden">
               <SegmentedProgress
