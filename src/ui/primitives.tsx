@@ -57,10 +57,19 @@ const TONE_STYLES: Record<Tone, string> = {
   danger: 'bg-danger-fill text-on-danger-fill',
 }
 
-export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+export function Badge({
+  tone = 'neutral',
+  className = '',
+  children,
+}: {
+  tone?: Tone
+  className?: string
+  children: ReactNode
+}) {
+  const whitespace = className.includes('whitespace-') ? '' : 'whitespace-nowrap'
   return (
     <span
-      className={`inline-block rounded-full px-3 py-1 text-sm font-semibold ${TONE_STYLES[tone]}`}
+      className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${whitespace} ${TONE_STYLES[tone]} ${className}`.trim()}
     >
       {children}
     </span>

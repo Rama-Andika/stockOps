@@ -54,10 +54,10 @@ export type SessionStatus = (typeof SESSION_STATUS)[keyof typeof SESSION_STATUS]
 export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
   RUNNING: 'Berjalan',
   PENDING: 'Belum terkirim',
-  SYNCING: 'Sedang dikirim',
-  SYNCED: 'Sudah masuk sistem',
+  SYNCING: 'Mengirim…',
+  SYNCED: 'Tersinkron',
   FAILED: 'Gagal kirim',
-  REJECTED: 'Ditolak server',
+  REJECTED: 'Ditolak',
 }
 
 /**
@@ -86,10 +86,10 @@ export const PROGRESS_STATUS = {
 export type ProgressStatus = (typeof PROGRESS_STATUS)[keyof typeof PROGRESS_STATUS]
 
 export const PROGRESS_LABEL: Record<ProgressStatus, string> = {
-  NONE: 'Belum diterima',
+  NONE: 'Belum',
   PARTIAL: 'Sebagian',
   FULL: 'Lengkap',
-  OVER: 'Lebih dari pesanan',
+  OVER: 'Lebih',
 }
 
 /**

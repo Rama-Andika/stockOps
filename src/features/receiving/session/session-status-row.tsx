@@ -97,7 +97,7 @@ export function SessionStatusRow({
       className="touch-target flex h-full items-start gap-2 overflow-hidden rounded-xl border border-line bg-surface/60 p-3 transition hover:border-line-hover"
     >
       <span className="min-w-0 flex-1">
-        <span className="flex items-start justify-between gap-2">
+        <span className="flex items-center justify-between gap-1.5">
           {/* The official number once the server assigned one, the PO number until then: that is
               the identifier the operator can actually match against paperwork at each stage. */}
           <span className="min-w-0 truncate text-base leading-6 font-bold tabular-nums text-fg">
@@ -134,7 +134,7 @@ export function SessionStatusRow({
           </span>
         ) : null}
       </span>
-      <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-fg-subtle" aria-hidden="true" />
+      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-fg-subtle" aria-hidden="true" />
     </Link>
   )
 }

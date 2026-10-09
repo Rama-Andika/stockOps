@@ -212,9 +212,7 @@ export function PoList() {
                   {formatDate(row.purchDate)}
                 </p>
               </div>
-              <Badge tone={toneFor(row.progress)}>
-                <div className="whitespace-nowrap">{PROGRESS_LABEL[row.progress]}</div>
-              </Badge>
+              <Badge tone={toneFor(row.progress)}>{PROGRESS_LABEL[row.progress]}</Badge>
             </div>
 
             <div className="mt-3 h-9 overflow-hidden">

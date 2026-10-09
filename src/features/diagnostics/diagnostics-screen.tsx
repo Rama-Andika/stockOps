@@ -160,7 +160,9 @@ export function DiagnosticsScreen() {
           </dl>
 
           {snapshot.purchasesStale ? (
-            <Badge tone="warn">Daftar PO belum disegarkan — akan dicoba lagi saat kirim</Badge>
+            <Badge tone="warn" className="whitespace-normal text-left">
+              Daftar PO belum disegarkan — akan dicoba lagi saat kirim
+            </Badge>
           ) : null}
 
           <div className="flex flex-col gap-2 border-t border-line-soft pt-3">
