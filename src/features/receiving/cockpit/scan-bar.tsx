@@ -82,7 +82,7 @@ export function ScanBar({
         </div>
       ) : null}
 
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         <label htmlFor="scan-barcode" className="sr-only">
           Barcode atau kode barang
         </label>
@@ -90,7 +90,7 @@ export function ScanBar({
           id="scan-barcode"
           ref={scanRef}
           inputMode={hideKeyboard ? 'none' : undefined}
-          className={`${inputClass} min-w-0 flex-1 border-line-strong px-2`}
+          className="touch-target min-w-0 flex-1 rounded-lg border border-line-strong bg-field px-2.5 py-3 text-fg placeholder:text-fg-subtle"
           placeholder="Scan kode…"
           value={scan}
           onKeyDown={(event) => {
@@ -113,15 +113,12 @@ export function ScanBar({
         <label htmlFor="scan-qty" className="sr-only">
           Qty dalam satuan PO
         </label>
-        {/* Classes are written out instead of reusing `inputClass` — which the barcode field right
-            beside this one DOES use. That string carries `w-full` and `px-4`, and Tailwind resolves
-            conflicting utilities by stylesheet order, not by className order: `w-full` would win
-            over `w-14` and push the "123" and "+" buttons off screen. Making the two fields
-            "consistent" is exactly the refactor that brings that bug back. The border colour is a
-            ternary so only one colour class is ever present for that property. */}
+        {/* Classes are written out explicitly to avoid conflicting utility overrides.
+            w-11 on small screens provides touch-target height (56px) while maximizing
+            available width for the barcode field. */}
         <input
           id="scan-qty"
-          className={`touch-target w-14 shrink-0 rounded-lg border bg-field px-1 py-3 text-center font-bold tabular-nums text-fg ${
+          className={`touch-target w-11 shrink-0 rounded-lg border bg-field px-1 py-3 text-center font-bold tabular-nums text-fg sm:w-14 ${
             Number(qty) > 0 ? 'border-line-strong' : 'border-danger-line'
           }`}
           inputMode={hideKeyboard ? 'none' : 'decimal'}
@@ -148,7 +145,7 @@ export function ScanBar({
           type="button"
           aria-expanded={padOpen}
           aria-label={padOpen ? 'Tutup keypad angka' : 'Buka keypad angka'}
-          className="touch-target w-14 shrink-0 rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off"
+          className="touch-target w-11 shrink-0 rounded-lg bg-control font-semibold text-fg transition hover:bg-control-off sm:w-14"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onPadOpenChange(!padOpen)}
         >
@@ -158,10 +155,7 @@ export function ScanBar({
 
             With something in the barcode field this is "add". With the field EMPTY, "add" can do
             nothing at all — it was a dead, disabled square — so the same slot offers the other way
-            into a line instead. There is no fifth button on purpose: at 360px the four controls
-            beside the barcode field already leave it 144px
-            (360 − 24 padding − 24 gaps − 168 for three w-14 squares), and another 56px square would
-            cut that to 80px, too narrow to read a code being typed.
+            into a line instead.
 
             The trade-off, accepted: while the barcode field has content the picker is not reachable
             from this bar. Clearing the field brings it back, and the case that matters most —
@@ -170,22 +164,22 @@ export function ScanBar({
           <button
             type="button"
             aria-label="Pilih item dari daftar PO"
-            className="touch-target w-14 shrink-0 rounded-lg bg-control text-fg transition hover:bg-control-off"
+            className="touch-target w-11 shrink-0 rounded-lg bg-control text-fg transition hover:bg-control-off sm:w-14"
             onMouseDown={(event) => event.preventDefault()}
             onClick={onOpenPicker}
           >
-            <ListChecks className="mx-auto h-6 w-6" aria-hidden="true" />
+            <ListChecks className="mx-auto h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
           </button>
         ) : (
           <button
             type="button"
             aria-label="Tambah ke sesi"
-            className="touch-target w-14 shrink-0 rounded-lg bg-brand text-on-brand transition hover:bg-brand-bright disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft"
+            className="touch-target w-11 shrink-0 rounded-lg bg-brand text-on-brand transition hover:bg-brand-bright disabled:cursor-not-allowed disabled:bg-control-off disabled:text-fg-soft sm:w-14"
             disabled={!scan.trim()}
             onMouseDown={(event) => event.preventDefault()}
             onClick={onAdd}
           >
-            <Plus className="mx-auto h-6 w-6" aria-hidden="true" />
+            <Plus className="mx-auto h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
           </button>
         )}
       </div>

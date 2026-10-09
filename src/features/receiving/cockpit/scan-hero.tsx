@@ -65,10 +65,10 @@ export function ScanHero({
 }) {
   if (state.kind === 'IDLE') {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-line px-4 py-6 text-center">
-        <ScanLine className="h-8 w-8 text-brand-bright" aria-hidden="true" />
-        <p className="text-lg font-bold text-fg">Siap scan</p>
-        <p className="text-sm text-fg-subtle">
+      <div className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-line px-3 py-3.5 text-center">
+        <ScanLine className="h-6 w-6 text-brand-bright" aria-hidden="true" />
+        <p className="text-base font-bold text-fg">Siap scan</p>
+        <p className="text-xs text-fg-subtle">
           Arahkan scanner ke barcode. Hasil terakhir tampil di sini sampai scan berikutnya.
         </p>
       </div>
