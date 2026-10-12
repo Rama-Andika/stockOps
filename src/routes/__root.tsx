@@ -46,7 +46,7 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
       <head>
         <HeadContent />
         {/* Runs before the first paint, inside the prerendered SPA shell: `data-theme` has to be

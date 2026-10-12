@@ -36,6 +36,18 @@ function reloadOnce(): void {
 export function registerServiceWorker(onUpdateReady?: () => void): void {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
 
+  // In development mode, do not register the service worker:
+  // It caches stale HTML shells and invalidates Vite's HMR WebSocket tokens.
+  // Also unregister any leftover service worker from previous local production previews.
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+    void navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const reg of registrations) {
+        void reg.unregister()
+      }
+    })
+    return
+  }
+
   const notifyIfUpdate = () => {
     // No controller means this is the first install on this device, not a new version. Without
     // this guard a brand-new operator would be asked to reload an app that is already current.
