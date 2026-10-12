@@ -10,31 +10,38 @@
  * by scripts/generate-precache.mjs (run after `vite build`).
  */
 
-// APP_VERSION and BUILD_TIME are rewritten in dist/client/sw.js by scripts/stamp-sw.mjs, which
-// runs as the last step of `npm run build`. This file — public/sw.js — keeps the 'dev' values
-// and is never modified by the build.
+// APP_VERSION, BUILD_TIME, BASE_PATH, and TENANT_SLUG are rewritten in dist/client/sw.js by
+// scripts/stamp-sw.mjs, which runs as the last step of `npm run build`. This file — public/sw.js —
+// keeps the 'dev' / default values and is never modified by the build.
 //
-// Do NOT change the SHAPE of the next two lines (one declaration per line, single quotes, value
-// exactly 'dev'): stamp-sw.mjs matches them as literal text and FAILS the build when it cannot
-// find each of them exactly once.
-//
-// BUILD_TIME is part of CACHE_VERSION on purpose. It makes this file's bytes differ on every
-// build, and that is the only thing that makes the browser run `install` again — `install` being
-// the only moment the precache manifest is read. It replaces the old manual "bump CACHE_VERSION
-// before every release" step, which silently did nothing whenever it was forgotten.
-//
-// Consequence, accepted: every update invalidates every cache (see `activate` below) and the
-// device re-downloads all assets. Over a warehouse LAN that is fine, but a rollout does need the
-// PDT to be online.
+// Do NOT change the SHAPE of the next four marker lines (one declaration per line, literal matching):
+// stamp-sw.mjs matches them as literal text and FAILS the build when it cannot find each of them
+// exactly once.
 const APP_VERSION = 'dev'
 const BUILD_TIME = 'dev'
-const CACHE_VERSION = `stockops-${APP_VERSION}-${BUILD_TIME}`
+const BASE_PATH = '/'
+const TENANT_SLUG = ''
+
+// CACHE_PREFIX scopes the cache per tenant/client subpath (e.g. stockops-unclejo).
+// This guarantees that activating an update on one tenant will NEVER delete the cached
+// shell or assets of another tenant hosted under a different subpath on the same domain.
+const CACHE_PREFIX = TENANT_SLUG ? `stockops-${TENANT_SLUG}` : 'stockops'
+const CACHE_VERSION = `${CACHE_PREFIX}-${APP_VERSION}-${BUILD_TIME}`
 const SHELL_CACHE = `${CACHE_VERSION}-shell`
 const ASSET_CACHE = `${CACHE_VERSION}-assets`
-const SHELL_URL = '/_shell.html'
-const PRECACHE_MANIFEST = '/precache-manifest.json'
+const SHELL_URL = `${BASE_PATH}_shell.html`
+const OFFLINE_URL = `${BASE_PATH}offline.html`
+const PRECACHE_MANIFEST = `${BASE_PATH}precache-manifest.json`
 
-const PRECACHE_URLS = ['/', SHELL_URL, '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/offline.html']
+const PRECACHE_URLS = [
+  BASE_PATH,
+  SHELL_URL,
+  `${BASE_PATH}manifest.webmanifest`,
+  `${BASE_PATH}icon.svg`,
+  `${BASE_PATH}icon-192.png`,
+  `${BASE_PATH}icon-512.png`,
+  OFFLINE_URL,
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -78,11 +85,6 @@ self.addEventListener('install', (event) => {
       // NO skipWaiting() here, ON PURPOSE. This is the one line that turns a forced update into
       // a requested one: the new worker stops in `waiting` and changes nothing until the operator
       // accepts the banner (the 'message' listener below).
-      //
-      // What activating by itself used to do: `activate` deletes every cache that does not belong
-      // to the current CACHE_VERSION, so it pulled the route chunks out from under a tab that was
-      // still lazy-loading them — in the middle of a scan session, with no warning the operator
-      // could act on.
     })(),
   )
 })
@@ -91,8 +93,12 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys()
+      // Only delete older caches belonging to THIS tenant/client. Never delete caches of
+      // another tenant on the same origin.
       await Promise.all(
-        keys.filter((key) => !key.startsWith(CACHE_VERSION)).map((key) => caches.delete(key)),
+        keys
+          .filter((key) => key.startsWith(CACHE_PREFIX) && !key.startsWith(CACHE_VERSION))
+          .map((key) => caches.delete(key)),
       )
       await self.clients.claim()
     })(),
@@ -103,9 +109,6 @@ self.addEventListener('activate', (event) => {
  * The ONLY way this worker ever activates while another one is in control. The app posts
  * SKIP_WAITING when the operator accepts the "Versi baru siap" banner — see activateUpdate() in
  * src/client/pwa.ts.
- *
- * Deliberately narrow: one message type, no reply, no payload. The banner does not show the new
- * version number, which is precisely why no two-way protocol with this worker is needed.
  */
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -114,7 +117,7 @@ self.addEventListener('message', (event) => {
 })
 
 function isServerCall(pathname) {
-  return pathname.startsWith('/_serverFn/') || pathname.startsWith('/api/')
+  return pathname.includes('/_serverFn/') || pathname.includes('/api/')
 }
 
 self.addEventListener('fetch', (event) => {
@@ -130,6 +133,8 @@ self.addEventListener('fetch', (event) => {
 
   // Navigation: network-first, fallback to stored shell.
   if (request.mode === 'navigate') {
+    // Only handle navigation requests within this subpath scope.
+    if (!url.pathname.startsWith(BASE_PATH)) return
     event.respondWith(
       (async () => {
         try {
@@ -145,9 +150,9 @@ self.addEventListener('fetch', (event) => {
           return response
         } catch {
           const cache = await caches.open(SHELL_CACHE)
-          const shell = (await cache.match(SHELL_URL)) ?? (await cache.match('/'))
+          const shell = (await cache.match(SHELL_URL)) ?? (await cache.match(BASE_PATH))
           if (shell) return shell
-          const offline = await cache.match('/offline.html')
+          const offline = await cache.match(OFFLINE_URL)
           return offline ?? Response.error()
         }
       })(),
@@ -173,7 +178,7 @@ self.addEventListener('fetch', (event) => {
         return response
       } catch {
         const shellCache = await caches.open(SHELL_CACHE)
-        return (await shellCache.match('/offline.html')) ?? Response.error()
+        return (await shellCache.match(OFFLINE_URL)) ?? Response.error()
       }
     })(),
   )

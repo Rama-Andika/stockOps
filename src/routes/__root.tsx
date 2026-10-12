@@ -3,6 +3,7 @@ import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-r
 import { AppStoreProvider } from '~/app/store/app-store-provider'
 import { AppShell } from '~/app/shell'
 import appCss from '~/styles/app.css?url'
+import { getStorageKey, resolveAppUrl } from '~/core/base-path'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -24,8 +25,8 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: 'stylesheet', href: appCss },
-      { rel: 'manifest', href: '/manifest.webmanifest' },
-      { rel: 'icon', href: '/icon.svg', type: 'image/svg+xml' },
+      { rel: 'manifest', href: resolveAppUrl('/manifest.webmanifest') },
+      { rel: 'icon', href: resolveAppUrl('/icon.svg'), type: 'image/svg+xml' },
     ],
   }),
   component: RootComponent,
@@ -67,8 +68,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
             Running twice (prerender, then hydration) is idempotent either way. */}
         <script
           dangerouslySetInnerHTML={{
-            __html:
-              "document.documentElement.setAttribute('data-theme','light');try{var p=JSON.parse(localStorage.getItem('stockops.preferences')||'{}');if(p&&p.theme==='dark'){document.documentElement.removeAttribute('data-theme')}}catch(e){}",
+            __html: `document.documentElement.setAttribute('data-theme','light');try{var p=JSON.parse(localStorage.getItem('${getStorageKey('stockops.preferences')}')||'{}');if(p&&p.theme==='dark'){document.documentElement.removeAttribute('data-theme')}}catch(e){}`,
           }}
         />
       </head>

@@ -19,6 +19,7 @@
  */
 
 import { APP_VERSION } from '~/app/app-version'
+import { APP_BASE_PATH, resolveAppUrl } from '~/core/base-path'
 import { DIAG_EVENT } from '~/core/contracts/diag-events'
 import { recordDiag } from '~/features/diagnostics/trail'
 
@@ -53,7 +54,7 @@ export function registerServiceWorker(onUpdateReady?: () => void): void {
   // Register immediately (without waiting for the `load` event) so the SW is guaranteed to register
   // even if the `load` event fired before the component mounted.
   void navigator.serviceWorker
-    .register('/sw.js')
+    .register(resolveAppUrl('/sw.js'), { scope: APP_BASE_PATH })
     .then((reg) => {
       registration = reg
       // A worker can already be waiting from an earlier visit: its `updatefound` fired then, long

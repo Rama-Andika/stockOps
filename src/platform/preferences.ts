@@ -1,5 +1,7 @@
 /** Device preferences configurable by operators/IT on the Settings screen. */
 
+import { getStorageKey } from '~/core/base-path'
+
 export type Theme = 'dark' | 'light'
 
 export interface Preferences {
@@ -41,7 +43,7 @@ export interface Preferences {
   hideScanKeyboard: boolean
 }
 
-const STORAGE_KEY = 'stockops.preferences'
+const STORAGE_KEY = getStorageKey('stockops.preferences')
 
 const DEFAULTS: Preferences = {
   feedbackBeep: true,

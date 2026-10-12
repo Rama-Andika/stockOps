@@ -3,6 +3,7 @@
 // According to TanStack Start SPA mode design:
 // - static assets & SPA shell are served from dist/client
 // - /_serverFn/* and /api/* requests are forwarded to the build fetch handler
+// - supports subpaths (e.g. /stockops-unclejo/, /stockops-coco/) seamlessly
 //
 // Run: npm run build && npm start
 
@@ -11,11 +12,34 @@ import { createServer as createHttpsServer } from 'node:https'
 import { stat, readFile } from 'node:fs/promises'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { normalizeBasePath } from './lib/base-path.mjs'
+import { loadAppEnv } from './lib/load-env.mjs'
+
+// Load environment according to mode (supports staging, production, or default server env)
+const { mode } = loadAppEnv()
 
 const rootDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const clientDir = join(rootDir, 'dist', 'client')
 const serverEntry = pathToFileURL(join(rootDir, 'dist', 'server', 'server.js')).href
 const port = Number.parseInt(process.env.PORT ?? '3000', 10)
+
+// Base path detection: from environment variable STOCKOPS_BASE_PATH,
+// or auto-detected from dist/client/sw.js if stamped during build.
+let basePath = normalizeBasePath(process.env.STOCKOPS_BASE_PATH)
+if (basePath === '/') {
+  try {
+    const swContent = await readFile(join(clientDir, 'sw.js'), 'utf8')
+    const match = swContent.match(/const BASE_PATH = ("[^"]+"|'[^']+')/)
+    if (match?.[1]) {
+      const detected = JSON.parse(match[1])
+      if (detected && detected !== '/') {
+        basePath = normalizeBasePath(detected)
+      }
+    }
+  } catch {
+    // Dist not yet built or sw.js unreadable; stay with '/'
+  }
+}
 
 // This script is the production entry point: enable the production checks in
 // src/server/env.ts (secrets and DB credentials must be explicitly configured).
@@ -61,7 +85,12 @@ function getHandler() {
 }
 
 function isServerRequest(pathname) {
-  return pathname.startsWith('/_serverFn/') || pathname.startsWith('/api/')
+  return (
+    pathname.startsWith(`${basePath}_serverFn/`) ||
+    pathname.startsWith(`${basePath}api/`) ||
+    pathname.startsWith('/_serverFn/') ||
+    pathname.startsWith('/api/')
+  )
 }
 
 function toWebRequest(req) {
@@ -143,13 +172,61 @@ async function serveStatic(res, pathname) {
 async function handleRequest(req, res) {
   try {
     const url = new URL(req.url ?? '/', `${protocol}://${req.headers.host ?? 'localhost'}`)
-    if (isServerRequest(url.pathname)) {
+    const pathname = url.pathname
+
+    // If running under a subpath (e.g. /stockops-unclejo/)
+    if (basePath !== '/') {
+      const subpathWithoutSlash = basePath.slice(0, -1)
+      // Redirect exact subpath without trailing slash to trailing slash (e.g. /stockops-unclejo -> /stockops-unclejo/)
+      if (pathname === subpathWithoutSlash) {
+        res.statusCode = 301
+        res.setHeader('Location', `${basePath}${url.search}`)
+        res.end()
+        return
+      }
+
+      // If the request starts with the base path
+      if (pathname.startsWith(basePath)) {
+        if (isServerRequest(pathname)) {
+          const mod = await getHandler()
+          const response = await mod.default.fetch(toWebRequest(req))
+          await sendWebResponse(res, response)
+          return
+        }
+        // Static asset or SPA route under the subpath:
+        // Strip the base path to locate files inside dist/client/
+        const relativePath = pathname.slice(basePath.length)
+        await serveStatic(res, relativePath)
+        return
+      }
+
+      // Root path '/' redirects to the subpath
+      if (pathname === '/') {
+        res.statusCode = 301
+        res.setHeader('Location', `${basePath}${url.search}`)
+        res.end()
+        return
+      }
+
+      // Allow server functions or existing static assets even if proxy stripped prefix
+      if (isServerRequest(pathname)) {
+        const mod = await getHandler()
+        const response = await mod.default.fetch(toWebRequest(req))
+        await sendWebResponse(res, response)
+        return
+      }
+      await serveStatic(res, pathname)
+      return
+    }
+
+    // Standard root deployment (basePath === '/')
+    if (isServerRequest(pathname)) {
       const mod = await getHandler()
       const response = await mod.default.fetch(toWebRequest(req))
       await sendWebResponse(res, response)
       return
     }
-    await serveStatic(res, url.pathname)
+    await serveStatic(res, pathname)
   } catch (error) {
     // Details stay in the server log; the client only receives a generic message.
     console.error('[serve] request gagal:', error)
@@ -182,9 +259,16 @@ async function loadTlsOptions() {
 const server = useTls ? createHttpsServer(await loadTlsOptions(), listener) : createServer(listener)
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`StockOps berjalan di ${protocol}://localhost:${port}`)
+  console.log(
+    `StockOps [${mode}] berjalan di ${protocol}://localhost:${port}${basePath === '/' ? '' : basePath.slice(0, -1)}`,
+  )
+  if (basePath !== '/') {
+    console.log(`[serve] Subpath aktif: ${basePath}`)
+  }
   if (useTls) {
-    console.log(`Akses dari PDT: https://<IP-komputer-ini>:${port}`)
+    console.log(
+      `Akses dari PDT: https://<IP-komputer-ini>:${port}${basePath === '/' ? '' : basePath.slice(0, -1)}`,
+    )
   } else {
     console.log(
       'PERINGATAN: mode http. PDT yang membuka http://<IP-LAN> tidak bisa login maupun bekerja offline.',

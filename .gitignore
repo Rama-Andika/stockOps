@@ -7,9 +7,20 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.*.example
 .vite/
 .tanstack/
 
 # Internal implementation plans (not committed to repository)
 /plans/
 prompt.txt
+
+# Release packages / archives
+staging/
+staging.rar
+paket-*/
+*.rar
+*.zip
+*.tgz
+*.tar.gz
+

@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie'
+import { getDbName } from '~/core/base-path'
 import type { SessionStatus } from '~/core/contracts/constants'
 import type { DiagCategory, DiagDetail, DiagLevel } from '~/core/contracts/diag-events'
 
@@ -201,7 +202,7 @@ export class StockOpsDb extends Dexie {
   meta!: Table<LocalMeta, string>
   syncLog!: Table<LocalSyncLogEntry, number>
 
-  constructor(name = 'stockops') {
+  constructor(name: string = getDbName()) {
     super(name)
     this.version(1).stores({
       purchases: 'purchaseId, number, vendorName, status',
@@ -286,7 +287,7 @@ let offlineDbInstance: StockOpsDb | undefined
 
 export function getOfflineDb(): StockOpsDb {
   if (!offlineDbInstance) {
-    offlineDbInstance = new StockOpsDb()
+    offlineDbInstance = new StockOpsDb(getDbName())
   }
   return offlineDbInstance
 }
