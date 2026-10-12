@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import dotenv from 'dotenv'
 
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 
@@ -61,15 +60,46 @@ export function resolveMode(defaultMode = 'production') {
 }
 
 /**
+ * Parses a simple key=value env file and populates process.env without overwriting existing entries.
+ * Zero external dependencies: works reliably in minimal production containers without dotenv.
+ *
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+function loadSingleEnvFile(filePath) {
+  try {
+    const content = readFileSync(filePath, 'utf8')
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line || line.startsWith('#')) continue
+      const eqIdx = line.indexOf('=')
+      if (eqIdx === -1) continue
+      const key = line.slice(0, eqIdx).trim()
+      let val = line.slice(eqIdx + 1).trim()
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1)
+      }
+      // Never overwrite existing process.env variables (e.g. injected by Docker, systemd, or shell)
+      if (process.env[key] === undefined) {
+        process.env[key] = val
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Loads environment variables according to mode priority:
  * 1. .env.[mode].local
  * 2. .env.[mode]
  * 3. .env.local
  * 4. .env
  * 5. stockops.env (server environment file if present)
- *
- * Note: By default, dotenv does not overwrite variables already in process.env.
- * Loading higher-priority files first preserves their values over fallbacks.
  *
  * @param {string} [explicitMode]
  * @returns {{ mode: string, loadedFiles: string[] }}
@@ -83,8 +113,9 @@ export function loadAppEnv(explicitMode) {
   for (const candidate of candidates) {
     const fullPath = join(rootDir, candidate)
     if (existsSync(fullPath)) {
-      dotenv.config({ path: fullPath })
-      loadedFiles.push(candidate)
+      if (loadSingleEnvFile(fullPath)) {
+        loadedFiles.push(candidate)
+      }
     }
   }
 

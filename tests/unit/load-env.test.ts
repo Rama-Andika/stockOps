@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error - ESM script without TypeScript declarations
 import { normalizeMode, resolveMode } from '../../scripts/lib/load-env.mjs'
 
 describe('load-env helper', () => {
