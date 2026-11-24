@@ -1,6 +1,6 @@
 {
   "name": "stock-ops",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "description": "StockOps - Aplikasi Penerimaan Barang berbasis PO (Offline-First) untuk perangkat PDT",
@@ -19,6 +19,9 @@
     "serve:prod": "node scripts/serve.mjs production",
     "serve:production": "node scripts/serve.mjs production",
     "serve:staging": "node scripts/serve.mjs staging",
+    "release": "node scripts/release/release.mjs",
+    "release:pack": "node scripts/deploy/package.mjs",
+    "smoke:build": "node scripts/smoke-build.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
@@ -50,6 +53,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
+    "@release-it/conventional-changelog": "12.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -61,6 +65,7 @@
     "@vitest/coverage-v8": "^5.0.2",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
+    "release-it": "21.0.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",

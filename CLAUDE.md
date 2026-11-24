@@ -16,6 +16,9 @@ Stack: TanStack Start in **SPA mode** (router + server functions), React 19, Vit
 npm run dev              # dev server on :3000 (--host, reachable from LAN devices)
 npm run build            # vite build + scripts/generate-precache.mjs (SW precache manifest)
 npm start                # production server (scripts/serve.mjs) serving dist/
+npm run smoke:build      # reads dist/ only: sw.js stamped, precache manifest complete, version and base path agree
+npm run release          # OWNER ONLY: version bump + tag + CHANGELOG.md + push via release-it (see docs/invariants/release-versioning.md)
+npm run release:pack -- production   # .tgz for one environment/tenant, built from an exact release tag; never touches a server
 npm run typecheck        # tsc --noEmit (strict, noUncheckedIndexedAccess)
 npm test                 # all tests
 npm run test:unit        # tests/unit only (pure logic)
@@ -114,8 +117,10 @@ PDT pulls `CHECKED` POs + master data into Dexie → operator scans and enters q
 - **Scan keyboard** — the `hideScanKeyboard` preference (default OFF) sets `inputMode="none"` on the `ScanBar` barcode and qty fields only; those fields must stay focusable, enabled and writable, because the scanner types into them and `readOnly`/`disabled`/`blur()` would drop every scan silently. Details in [docs/invariants/scan-keyboard.md](docs/invariants/scan-keyboard.md).
 - **Diagnostics trail** — `syncLog` is written strictly through `LocalRepository.logEvent` with a 2000-entry ring buffer, never throwing to callers, and exports are local-only CSVs with clipboard fallback. Details in [docs/invariants/diagnostics-trail.md](docs/invariants/diagnostics-trail.md).
 - **Virtualized lists** — row heights are precomputed and forced, below threshold lists render simply, and row identity is measurement identity so all inputs must live inside rows or text lines vanish silently across all rows. Details in [docs/invariants/virtual-lists.md](docs/invariants/virtual-lists.md).
+- **Releases & versioning** — the app version is `package.json`'s `version`, and only `npm run release` (release-it, owner only) changes it: never edit it by hand, never create, move, delete or push a git tag, and (for Claude) never run `npm run release` except with `--dry-run` or `--help`. Tags are `vX.Y.Z` and `vX.Y.Z-rc.N`; a package for a server is built only from an exact tag (production: stable, staging: stable or rc) and never contains an `.env` file. Details in [docs/invariants/release-versioning.md](docs/invariants/release-versioning.md).
 
 ## Repo conventions
 
 - `/plans/` (gitignored) holds internal implementation plans in Indonesian; existing ones show how past features were scoped.
 - `.opencode/agents/react-review.md` defines a read-only React review agent built on `npx react-doctor@latest --verbose`; recent "react-review" fix commits come from its findings.
+- Commit messages follow `type(scope): text` (types feat, fix, perf, refactor, docs, style, test, chore, build, ci, revert); `type!:` or a `BREAKING CHANGE:` footer marks a breaking change (a major bump; while the version is 0.x the minor number bumps instead). `npm run release` stops when a commit since the last stable tag does not follow the pattern.

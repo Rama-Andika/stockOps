@@ -16,6 +16,7 @@ coverage/
 prompt.txt
 
 # Release packages / archives
+release-packages/
 staging/
 staging.rar
 paket-*/

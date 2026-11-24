@@ -8,6 +8,10 @@
 // is the only moment the precache manifest is read. BASE_PATH and TENANT_SLUG scope the caches
 // and precaching URLs to the client subpath.
 //
+// It also writes dist/build-info.json (version, build time, mode, base path, tenant slug), the
+// record that `npm run release:pack` and `npm run smoke:build` use to be sure that dist/ was built
+// for the version, the mode and the base path they expect.
+//
 // Run from `npm run build` (see package.json).
 
 import { readFile, writeFile } from 'node:fs/promises'
@@ -61,6 +65,10 @@ const stamped = source
   .replace(TENANT_SLUG_MARKER, `const TENANT_SLUG = ${JSON.stringify(tenantSlug)}`)
 
 await writeFile(swPath, stamped)
+
+const buildInfo = { version, buildTime, mode, basePath, tenantSlug }
+await writeFile(join(rootDir, 'dist', 'build-info.json'), `${JSON.stringify(buildInfo, null, 2)}\n`)
+
 console.log(
   `[stamp-sw] dist/client/sw.js distamp: ${version} (${buildTime}) mode=${mode} base=${basePath} slug=${tenantSlug || 'root'}`,
 )
